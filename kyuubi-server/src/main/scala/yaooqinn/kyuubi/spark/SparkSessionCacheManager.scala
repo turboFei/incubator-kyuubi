@@ -105,7 +105,7 @@ class SparkSessionCacheManager private(name: String) extends AbstractService(nam
    */
   override def start(): Unit = {
     // at least 1 minutes
-    val interval = math.max(conf.getTimeAsSeconds(BACKEND_SESSION_CHECK_INTERVAL.key), 60)
+    val interval = math.max(conf.getTimeAsSeconds(BACKEND_SESSION_CHECK_INTERVAL.key), 1)
     info(s"Scheduling SparkSession cache cleaning every $interval seconds")
     cacheManager.scheduleAtFixedRate(sessionCleaner, interval, interval, TimeUnit.SECONDS)
     super.start()

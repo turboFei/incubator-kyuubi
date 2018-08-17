@@ -247,6 +247,7 @@ object KyuubiSparkUtil extends Logging {
    * @param conf the default [[SparkConf]]
    */
   def setupCommonConfig(conf: SparkConf): Unit = {
+    conf.setAppName("Kyuubi Server")
     // avoid max port retries reached
     conf.set(SPARK_UI_PORT, SPARK_UI_PORT_DEFAULT)
     conf.set(MULTIPLE_CONTEXTS, MULTIPLE_CONTEXTS_DEFAULT)

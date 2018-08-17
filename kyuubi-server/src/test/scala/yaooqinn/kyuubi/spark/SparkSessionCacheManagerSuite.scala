@@ -17,7 +17,7 @@
 
 package yaooqinn.kyuubi.spark
 
-import org.apache.spark.{KyuubiSparkUtil, SparkConf, SparkContext, SparkFunSuite}
+import org.apache.spark._
 import org.apache.spark.sql.SparkSession
 import org.mockito.Mockito._
 import org.scalatest.Matchers
@@ -61,20 +61,24 @@ class SparkSessionCacheManagerSuite extends SparkFunSuite with Matchers with Moc
     val sc = mock[SparkContext]
     when(ss.sparkContext).thenReturn(sc)
     when(sc.isStopped).thenReturn(false)
+    cache.decrease(userName)
+    cache.getAndIncrease(userName)
     cache.set(userName, ss)
     cache.getAndIncrease(userName)
     cache.decrease(userName)
+    Thread.sleep(2000)
+
     cache.stop()
   }
 
   test("stop cache") {
     val cache = new SparkSessionCacheManager()
-    val conf = new SparkConf()
+    val conf = new SparkConf().set(KyuubiConf.BACKEND_SESSION_CHECK_INTERVAL.key, "1s")
     KyuubiSparkUtil.setupCommonConfig(conf)
     cache.init(conf)
     cache.start()
+    Thread.sleep(2000)
     cache.stop()
-    cache.getStartTime / 100 should be(System.currentTimeMillis() / 100)
     cache.getConf should be(conf)
     cache.getServiceState should be(State.STOPPED)
   }
