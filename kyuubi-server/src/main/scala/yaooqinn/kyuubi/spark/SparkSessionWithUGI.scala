@@ -39,7 +39,10 @@ import yaooqinn.kyuubi.author.AuthzHelper
 import yaooqinn.kyuubi.ui.{KyuubiServerListener, KyuubiServerMonitor}
 import yaooqinn.kyuubi.utils.ReflectUtils
 
-class SparkSessionWithUGI(user: UserGroupInformation, conf: SparkConf) extends Logging {
+class SparkSessionWithUGI(
+    user: UserGroupInformation,
+    conf: SparkConf,
+    cache: SparkSessionCacheManager) extends Logging {
   private[this] var _sparkSession: SparkSession = _
 
   def sparkSession: SparkSession = _sparkSession
@@ -138,7 +141,7 @@ class SparkSessionWithUGI(user: UserGroupInformation, conf: SparkConf) extends L
       info(s"A partially constructed SparkContext for [$userName], $checkRound times countdown.")
     }
 
-    SparkSessionCacheManager.get.getAndIncrease(userName) match {
+    cache.getAndIncrease(userName) match {
       case Some(ss) =>
         _sparkSession = ss.newSession()
         configureSparkSession(sessionConf)
@@ -167,7 +170,7 @@ class SparkSessionWithUGI(user: UserGroupInformation, conf: SparkConf) extends L
             Seq(context)).asInstanceOf[SparkSession]
         }
       })
-      SparkSessionCacheManager.get.set(userName, _sparkSession)
+      cache.set(userName, _sparkSession)
     } catch {
       case ute: UndeclaredThrowableException =>
         stopContext()
@@ -207,7 +210,7 @@ class SparkSessionWithUGI(user: UserGroupInformation, conf: SparkConf) extends L
       }
     } catch {
       case ute: UndeclaredThrowableException =>
-        SparkSessionCacheManager.get.decrease(userName)
+        cache.decrease(userName)
         throw ute.getCause
     }
   }

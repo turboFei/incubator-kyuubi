@@ -89,7 +89,7 @@ class SessionManagerSuite extends SparkFunSuite {
     sessionManager.init(conf)
     assert(sessionManager.getServiceState === State.INITED)
     assert(sessionManager.getOperationMgr.getServiceState === State.INITED)
-    assert(SparkSessionCacheManager.get !== null)
+    assert(sessionManager.getCacheMgr !== null)
     intercept[IllegalStateException](sessionManager.init(conf))
     sessionManager.stop()
   }

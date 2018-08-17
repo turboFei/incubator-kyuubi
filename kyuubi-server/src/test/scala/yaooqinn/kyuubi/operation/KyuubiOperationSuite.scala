@@ -56,12 +56,12 @@ class KyuubiOperationSuite extends SparkFunSuite {
       classOf[SparkSession].getName,
       Seq(classOf[SparkContext]),
       Seq(sc)).asInstanceOf[SparkSession]
-    sparkWithUgi = new SparkSessionWithUGI(user, conf)
-    ReflectUtils.setFieldValue(sparkWithUgi,
-      "yaooqinn$kyuubi$spark$SparkSessionWithUGI$$_sparkSession", spark)
     sessionMgr = new SessionManager()
     sessionMgr.init(conf)
     sessionMgr.start()
+    sparkWithUgi = new SparkSessionWithUGI(user, conf, sessionMgr.getCacheMgr)
+    ReflectUtils.setFieldValue(sparkWithUgi,
+      "yaooqinn$kyuubi$spark$SparkSessionWithUGI$$_sparkSession", spark)
     session = new KyuubiSession(
       proto, userName, passwd, conf, "", false, sessionMgr, sessionMgr.getOperationMgr)
     ReflectUtils.setFieldValue(session, "sparkSessionWithUGI", sparkWithUgi)
