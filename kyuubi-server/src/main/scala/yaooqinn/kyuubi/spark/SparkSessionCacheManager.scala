@@ -108,6 +108,7 @@ class SparkSessionCacheManager private(name: String) extends AbstractService(nam
     val interval = math.max(conf.getTimeAsSeconds(BACKEND_SESSION_CHECK_INTERVAL.key), 60)
     info(s"Scheduling SparkSession cache cleaning every $interval seconds")
     cacheManager.scheduleAtFixedRate(sessionCleaner, interval, interval, TimeUnit.SECONDS)
+    super.start()
   }
 
   override def stop(): Unit = {
@@ -115,5 +116,6 @@ class SparkSessionCacheManager private(name: String) extends AbstractService(nam
     cacheManager.shutdown()
     userToSession.asScala.values.foreach { kv => kv._1.stop() }
     userToSession.clear()
+    super.stop()
   }
 }

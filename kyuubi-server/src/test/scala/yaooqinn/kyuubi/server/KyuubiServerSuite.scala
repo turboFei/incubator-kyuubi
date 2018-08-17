@@ -43,7 +43,7 @@ class KyuubiServerSuite extends SparkFunSuite with BeforeAndAfterEach {
 
   test("test setup common kyuubi config") {
     val conf = new SparkConf(true).set(KyuubiSparkUtil.METASTORE_JARS, "maven")
-    KyuubiServer.setupCommonConfig(conf)
+    KyuubiSparkUtil.setupCommonConfig(conf)
     val name = "spark.app.name"
     assert(conf.get(name) === "KyuubiServer")
     assert(conf.get(KyuubiSparkUtil.SPARK_UI_PORT) === KyuubiSparkUtil.SPARK_UI_PORT_DEFAULT)
@@ -64,7 +64,7 @@ class KyuubiServerSuite extends SparkFunSuite with BeforeAndAfterEach {
       .set(name, "test")
       .set(foo, bar)
       .set(KyuubiSparkUtil.SPARK_UI_PORT, "1234")
-    KyuubiServer.setupCommonConfig(conf2)
+    KyuubiSparkUtil.setupCommonConfig(conf2)
     assert(conf.get(name) === "KyuubiServer") // app name will be overwritten
     assert(conf2.get(KyuubiSparkUtil.SPARK_UI_PORT) === KyuubiSparkUtil.SPARK_UI_PORT_DEFAULT)
     assert(conf2.get(foo) === bar)
@@ -85,7 +85,7 @@ class KyuubiServerSuite extends SparkFunSuite with BeforeAndAfterEach {
 
   test("init KyuubiServer") {
     val conf = new SparkConf(true).set(KyuubiConf.FRONTEND_BIND_PORT.key, "0")
-    KyuubiServer.setupCommonConfig(conf)
+    KyuubiSparkUtil.setupCommonConfig(conf)
     val server = new KyuubiServer()
     server.init(conf)
     assert(server.getServiceState === State.INITED)
@@ -144,7 +144,7 @@ class KyuubiServerSuite extends SparkFunSuite with BeforeAndAfterEach {
     val hadoopConf = SparkHadoopUtil.get.newConfiguration(conf)
     UserGroupInformation.setConfiguration(hadoopConf)
     assert(UserGroupInformation.isSecurityEnabled)
-    KyuubiServer.setupCommonConfig(conf)
+    KyuubiSparkUtil.setupCommonConfig(conf)
     assert(conf.contains(KyuubiSparkUtil.HDFS_CLIENT_CACHE))
     assert(conf.get(KyuubiSparkUtil.HDFS_CLIENT_CACHE) === "true")
     assert(conf.get(KyuubiSparkUtil.HDFS_CLIENT_CACHE) === "true")

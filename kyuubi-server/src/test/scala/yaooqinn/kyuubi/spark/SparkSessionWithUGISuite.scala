@@ -27,7 +27,6 @@ import org.apache.spark.sql.catalyst.analysis.NoSuchDatabaseException
 
 import yaooqinn.kyuubi.KyuubiSQLException
 import yaooqinn.kyuubi.author.AuthzHelper
-import yaooqinn.kyuubi.server.KyuubiServer
 import yaooqinn.kyuubi.ui.KyuubiServerMonitor
 import yaooqinn.kyuubi.utils.ReflectUtils
 
@@ -35,7 +34,7 @@ class SparkSessionWithUGISuite extends SparkFunSuite {
 
   val user = UserGroupInformation.getCurrentUser
   val conf = new SparkConf(loadDefaults = true).setAppName("spark session test")
-  KyuubiServer.setupCommonConfig(conf)
+  KyuubiSparkUtil.setupCommonConfig(conf)
   conf.remove(KyuubiSparkUtil.CATALOG_IMPL)
   conf.setMaster("local")
   val userName = user.getShortUserName
