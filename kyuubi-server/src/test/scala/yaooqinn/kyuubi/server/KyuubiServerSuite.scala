@@ -45,7 +45,7 @@ class KyuubiServerSuite extends SparkFunSuite with BeforeAndAfterEach {
     val conf = new SparkConf(true).set(KyuubiSparkUtil.METASTORE_JARS, "maven")
     KyuubiSparkUtil.setupCommonConfig(conf)
     val name = "spark.app.name"
-    assert(conf.get(name) === "KyuubiServer")
+    assert(conf.get(name) === "Kyuubi Server")
     assert(conf.get(KyuubiSparkUtil.SPARK_UI_PORT) === KyuubiSparkUtil.SPARK_UI_PORT_DEFAULT)
     assert(conf.get(KyuubiSparkUtil.MULTIPLE_CONTEXTS) ===
       KyuubiSparkUtil.MULTIPLE_CONTEXTS_DEFAULT)
@@ -65,7 +65,7 @@ class KyuubiServerSuite extends SparkFunSuite with BeforeAndAfterEach {
       .set(foo, bar)
       .set(KyuubiSparkUtil.SPARK_UI_PORT, "1234")
     KyuubiSparkUtil.setupCommonConfig(conf2)
-    assert(conf.get(name) === "KyuubiServer") // app name will be overwritten
+    assert(conf.get(name) === "Kyuubi Server") // app name will be overwritten
     assert(conf2.get(KyuubiSparkUtil.SPARK_UI_PORT) === KyuubiSparkUtil.SPARK_UI_PORT_DEFAULT)
     assert(conf2.get(foo) === bar)
   }
