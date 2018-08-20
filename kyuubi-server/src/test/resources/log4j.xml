@@ -26,7 +26,7 @@
         <appender-ref ref="console" />
     </logger>
     <root>
-        <level value="WARN" />
+        <level value="ERROR" />
         <appender-ref ref="console" />
     </root>
 </log4j:configuration>
