@@ -100,8 +100,9 @@ class SparkSessionCacheManager private(name: String) extends AbstractService(nam
     idleTimeout = math.max(conf.getTimeAsMs(BACKEND_SESSION_IDLE_TIMEOUT.key), 60 * 1000)
     super.init(conf)
   }
+
   /**
-   * Periodically close idle SparkSessions in 'spark.kyuubi.session.clean.interval(default 5min)'
+   * Periodically close idle SparkSessions in 'spark.kyuubi.session.clean.interval(default 1min)'
    */
   override def start(): Unit = {
     // at least 1 minutes
