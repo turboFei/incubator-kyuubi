@@ -17,7 +17,6 @@
 
 package yaooqinn.kyuubi.rsc.api;
 
-import java.util.List;
 import java.util.concurrent.Future;
 
 /**

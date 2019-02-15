@@ -18,9 +18,6 @@
 package yaooqinn.kyuubi.rsc.api;
 
 import java.io.File;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;

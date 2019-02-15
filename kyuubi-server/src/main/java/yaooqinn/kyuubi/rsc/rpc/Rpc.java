@@ -19,10 +19,6 @@ package yaooqinn.kyuubi.rsc.rpc;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.LinkedList;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;

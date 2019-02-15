@@ -21,7 +21,6 @@ import java.io.File;
 import java.lang.reflect.Method;
 
 import org.apache.spark.SparkContext;
-import org.apache.spark.api.java.JavaFutureAction;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.hive.HiveContext;
@@ -29,7 +28,6 @@ import org.apache.spark.sql.hive.HiveContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.cloudera.livy.rsc.Utils;
 import yaooqinn.kyuubi.rsc.api.JobContext;
 
 class JobContextImpl implements JobContext {

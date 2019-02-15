@@ -30,8 +30,8 @@ import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.util.concurrent.Promise;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import yaooqinn.kyuubi.rsc.Utils;
 
-import com.cloudera.livy.rsc.Utils;
 
 /**
  * An implementation of ChannelInboundHandler that dispatches incoming messages to an instance
