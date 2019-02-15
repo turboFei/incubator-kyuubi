@@ -51,23 +51,6 @@ private[kyuubi] class KyuubiSession(
   private val sparkSessionWithUGI =
     new SparkSessionWithUGI(sessionUGI, conf, sessionManager.getCacheMgr)
 
-  private def acquire(userAccess: Boolean): Unit = {
-    if (userAccess) {
-      lastAccessTime = System.currentTimeMillis
-    }
-  }
-
-  private def release(userAccess: Boolean): Unit = {
-    if (userAccess) {
-      lastAccessTime = System.currentTimeMillis
-    }
-    if (opHandleSet.isEmpty) {
-      lastIdleTime = System.currentTimeMillis
-    } else {
-      lastIdleTime = 0
-    }
-  }
-
   @throws[KyuubiSQLException]
   private def executeStatementInternal(statement: String): OperationHandle = {
     acquire(true)
@@ -84,17 +67,6 @@ private[kyuubi] class KyuubiSession(
         throw e
     } finally {
       release(true)
-    }
-  }
-
-  private def cleanupSessionLogDir(): Unit = {
-    if (_isOperationLogEnabled) {
-      try {
-        FileUtils.forceDelete(sessionLogDir)
-      } catch {
-        case e: Exception =>
-          error("Failed to cleanup session log dir: " + sessionLogDir, e)
-      }
     }
   }
 
