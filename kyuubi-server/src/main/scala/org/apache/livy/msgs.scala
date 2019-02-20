@@ -20,6 +20,7 @@ package org.apache.livy
 sealed trait MsgType
 
 object MsgType {
+  // scalastyle:off
   case object execute_request extends MsgType
   case object execute_reply extends MsgType
 }

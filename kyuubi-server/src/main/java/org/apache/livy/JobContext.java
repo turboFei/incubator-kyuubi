@@ -23,7 +23,6 @@ import java.util.NoSuchElementException;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.hive.HiveContext;
-import org.apache.spark.streaming.api.java.JavaStreamingContext;
 
 /**
  * Holds runtime information about the job execution context.
@@ -47,11 +46,6 @@ public interface JobContext {
    * @return The shared HiveContext instance.
    */
   HiveContext hivectx();
-
-  /**
-   * @return The JavaStreamingContext which has already been created.
-   */
-  JavaStreamingContext streamingctx();
 
   /**
    * Get shared object
@@ -79,17 +73,6 @@ public interface JobContext {
    * @return The object that was removed
    */
   <E> E removeSharedObject(String name);
-
-  /**
-   * Creates the SparkStreaming context.
-   *
-   * @param batchDuration Time interval at which streaming data will be divided into batches,
-   *                      in milliseconds.
-   */
-  void createStreamingContext(long batchDuration);
-
-  /** Stops the SparkStreaming context. */
-  void stopStreamingCtx();
 
   /**
    * @return A local tmp dir specific to the context

@@ -29,6 +29,7 @@ import java.util.Properties;
 import javax.security.sasl.Sasl;
 
 import org.apache.livy.client.common.ClientConf;
+import org.apache.livy.client.common.ClientConf.ConfEntry;
 
 public class RSCConf extends ClientConf<RSCConf> {
 

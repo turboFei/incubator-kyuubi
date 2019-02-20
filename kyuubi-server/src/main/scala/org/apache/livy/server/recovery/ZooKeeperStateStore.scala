@@ -23,10 +23,9 @@ import scala.util.Try
 import org.apache.curator.framework.{CuratorFramework, CuratorFrameworkFactory}
 import org.apache.curator.framework.api.UnhandledErrorListener
 import org.apache.curator.retry.RetryNTimes
-import org.apache.zookeeper.KeeperException.NoNodeException
-
 import org.apache.livy.{LivyConf, Logging}
 import org.apache.livy.LivyConf.Entry
+import org.apache.zookeeper.KeeperException.NoNodeException
 
 object ZooKeeperStateStore {
   val ZK_KEY_PREFIX_CONF = Entry("livy.server.recovery.zk-state-store.key-prefix", "livy")
@@ -62,11 +61,13 @@ class ZooKeeperStateStore(
     CuratorFrameworkFactory.newClient(zkAddress, retryPolicy)
   }
 
+  // scalastyle:off
   Runtime.getRuntime.addShutdownHook(new Thread(new Runnable {
     override def run(): Unit = {
       curatorClient.close()
     }
   }))
+  // scalastyle:on
 
   curatorClient.getUnhandledErrorListenable().addListener(new UnhandledErrorListener {
     def unhandledError(message: String, e: Throwable): Unit = {

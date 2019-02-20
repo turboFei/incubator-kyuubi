@@ -27,7 +27,6 @@ import scala.reflect.ClassTag
 import scala.util.control.NonFatal
 
 import org.apache.livy.{LivyConf, Logging}
-import org.apache.livy.server.batch.{BatchRecoveryMetadata, BatchSession}
 import org.apache.livy.server.interactive.{InteractiveRecoveryMetadata, InteractiveSession, SessionHeartbeatWatchdog}
 import org.apache.livy.server.recovery.SessionStore
 import org.apache.livy.sessions.Session.RecoveryMetadata
@@ -37,12 +36,7 @@ object SessionManager {
   val SESSION_RECOVERY_MODE_RECOVERY = "recovery"
 }
 
-class BatchSessionManager(
-    livyConf: LivyConf,
-    sessionStore: SessionStore,
-    mockSessions: Option[Seq[BatchSession]] = None)
-  extends SessionManager[BatchSession, BatchRecoveryMetadata] (
-    livyConf, BatchSession.recover(_, livyConf, sessionStore), sessionStore, "batch", mockSessions)
+
 
 class InteractiveSessionManager(
   livyConf: LivyConf,
@@ -139,7 +133,9 @@ class SessionManager[S <: Session, R <: RecoveryMetadata : ClassTag](
     val recoveryEnabled = livyConf.get(LivyConf.RECOVERY_MODE) != SESSION_RECOVERY_MODE_OFF
     if (!recoveryEnabled) {
       sessions.values.map(_.stop).foreach { future =>
+        // scalastyle:off
         Await.ready(future, Duration.Inf)
+        // scalastyle:on
       }
     }
   }
@@ -152,8 +148,6 @@ class SessionManager[S <: Session, R <: RecoveryMetadata : ClassTag](
           currentTime - s.time > sessionStateRetainedInSec
         case _ =>
           if (!sessionTimeoutCheck) {
-            false
-          } else if (session.isInstanceOf[BatchSession]) {
             false
           } else {
             val currentTime = System.nanoTime()

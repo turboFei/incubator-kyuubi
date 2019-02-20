@@ -25,8 +25,6 @@ import java.util.NoSuchElementException;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.hive.HiveContext;
-import org.apache.spark.streaming.Duration;
-import org.apache.spark.streaming.api.java.JavaStreamingContext;
 
 import org.apache.livy.JobContext;
 import org.apache.livy.rsc.RSCConf;
@@ -35,7 +33,6 @@ import org.apache.livy.rsc.Utils;
 class JobContextImpl implements JobContext {
 
   private final File localTmpDir;
-  private volatile JavaStreamingContext streamingctx;
   private final RSCDriver driver;
   private final SparkEntries sparkEntries;
 
@@ -77,12 +74,6 @@ class JobContextImpl implements JobContext {
     return sparkEntries.hivectx();
   }
 
-  @Override
-  public synchronized JavaStreamingContext streamingctx(){
-    Utils.checkState(streamingctx != null, "method createStreamingContext must be called first.");
-    return streamingctx;
-  }
-
   @SuppressWarnings("unchecked")
   @Override
   public <E> E getSharedObject(String name) throws NoSuchElementException {
@@ -119,27 +110,11 @@ class JobContextImpl implements JobContext {
   }
 
   @Override
-  public synchronized void createStreamingContext(long batchDuration) {
-    Utils.checkState(streamingctx == null, "Streaming context is not null.");
-    streamingctx = new JavaStreamingContext(sparkEntries.sc(), new Duration(batchDuration));
-  }
-
-  @Override
-  public synchronized void stopStreamingCtx() {
-    Utils.checkState(streamingctx != null, "Streaming Context is null");
-    streamingctx.stop(false);
-    streamingctx = null;
-  }
-
-  @Override
   public File getLocalTmpDir() {
     return localTmpDir;
   }
 
   public synchronized void stop() {
-    if (streamingctx != null) {
-      stopStreamingCtx();
-    }
     sparkEntries.stop();
   }
 

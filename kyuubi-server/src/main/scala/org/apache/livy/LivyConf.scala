@@ -24,7 +24,6 @@ import java.util.{Map => JMap}
 import scala.collection.JavaConverters._
 
 import org.apache.hadoop.conf.Configuration
-
 import org.apache.livy.client.common.ClientConf
 import org.apache.livy.client.common.ClientConf.ConfEntry
 import org.apache.livy.client.common.ClientConf.DeprecatedConf

@@ -20,15 +20,14 @@ import java.util.Date
 
 import scala.concurrent.duration.{Deadline, Duration, FiniteDuration}
 
-import org.apache.livy.sessions.Session.RecoveryMetadata
 import org.apache.livy.LivyConf
-import org.apache.livy.server.SessionServlet
 import org.apache.livy.sessions.{Session, SessionManager}
+import org.apache.livy.sessions.Session.RecoveryMetadata
 
 /**
-  * A session trait to provide heartbeat expiration check.
-  * Note: Session will not expire if heartbeat() was never called.
-  */
+ * A session trait to provide heartbeat expiration check.
+ * Note: Session will not expire if heartbeat() was never called.
+ */
 trait SessionHeartbeat {
   protected val heartbeatTimeout: FiniteDuration
 
@@ -48,40 +47,11 @@ trait SessionHeartbeat {
   def heartbeatExpired: Boolean = synchronized { heartbeatDeadline.exists(_.isOverdue()) }
 }
 
-/**
-  * Servlet can mixin this trait to update session's heartbeat
-  * whenever a /sessions/:id REST call is made. e.g. GET /sessions/:id
-  * Note: GET /sessions doesn't update heartbeats.
-  */
-trait SessionHeartbeatNotifier[S <: Session with SessionHeartbeat, R <: RecoveryMetadata]
-  extends SessionServlet[S, R] {
-
-  abstract override protected def withUnprotectedSession(fn: (S => Any)): Any = {
-    super.withUnprotectedSession { s =>
-      s.heartbeat()
-      fn(s)
-    }
-  }
-
-  abstract override protected def withViewAccessSession(fn: (S => Any)): Any = {
-    super.withViewAccessSession { s =>
-      s.heartbeat()
-      fn(s)
-    }
-  }
-
-  abstract override protected def withModifyAccessSession(fn: (S) => Any): Any = {
-    super.withModifyAccessSession { s =>
-      s.heartbeat()
-      fn(s)
-    }
-  }
-}
 
 /**
-  * A SessionManager trait.
-  * It will create a thread that periodically deletes sessions with expired heartbeat.
-  */
+ * A SessionManager trait.
+ * It will create a thread that periodically deletes sessions with expired heartbeat.
+ */
 trait SessionHeartbeatWatchdog[S <: Session with SessionHeartbeat, R <: RecoveryMetadata] {
   self: SessionManager[S, R] =>
 

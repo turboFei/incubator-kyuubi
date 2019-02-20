@@ -21,12 +21,12 @@ import java.net.InetAddress
 import javax.servlet.ServletContextListener
 
 import org.apache.hadoop.conf.Configuration
+import org.apache.livy.{LivyConf, Logging}
 import org.eclipse.jetty.server._
 import org.eclipse.jetty.server.handler.{HandlerCollection, RequestLogHandler}
 import org.eclipse.jetty.servlet.{DefaultServlet, ServletContextHandler}
 import org.eclipse.jetty.util.ssl.SslContextFactory
 
-import org.apache.livy.{LivyConf, Logging}
 
 class WebServer(livyConf: LivyConf, var host: String, var port: Int) extends Logging {
   val server = new Server()
