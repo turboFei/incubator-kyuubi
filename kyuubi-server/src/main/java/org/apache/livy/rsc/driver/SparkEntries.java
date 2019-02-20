@@ -18,6 +18,7 @@
 package org.apache.livy.rsc.driver;
 
 import java.lang.reflect.Method;
+import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.spark.SparkConf;
@@ -93,6 +94,35 @@ public class SparkEntries {
       }
     }
 
+    return sparksession;
+  }
+
+  // TODO: config conf with check prefix
+  public SparkSession newSession(HashMap<String, String> newConf) throws Exception {
+    if (sparksession == null) {
+      synchronized (this) {
+        if (sparksession == null) {
+          for (String confKey : newConf.keySet()) {
+            conf.set(confKey, newConf.get(confKey));
+          }
+          sparkSession();
+        } else {
+          sparksession = sparksession.newSession();
+          for (String confKey : newConf.keySet()) {
+            sparksession.conf().set(confKey, newConf.get(confKey));
+          }
+        }
+      }
+    } else {
+      synchronized (this) {
+        if (sparksession != null) {
+          sparksession = sparksession.newSession();
+          for (String confKey : newConf.keySet()) {
+            sparksession.conf().set(confKey, newConf.get(confKey));
+          }
+        }
+      }
+    }
     return sparksession;
   }
 

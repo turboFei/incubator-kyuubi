@@ -54,6 +54,7 @@ import org.slf4j.LoggerFactory;
 
 import org.apache.livy.client.common.Serializer;
 import org.apache.livy.rsc.BaseProtocol;
+import org.apache.livy.rsc.BaseProtocol.*;
 import org.apache.livy.rsc.BypassJobStatus;
 import org.apache.livy.rsc.FutureListener;
 import org.apache.livy.rsc.RSCConf;
