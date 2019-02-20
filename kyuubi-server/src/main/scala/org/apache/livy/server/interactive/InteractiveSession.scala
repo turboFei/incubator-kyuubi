@@ -31,10 +31,7 @@ import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.util.{Random, Try}
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
-import com.google.common.annotations.VisibleForTesting
 import org.apache.hadoop.fs.Path
-import org.apache.spark.launcher.SparkLauncher
-
 import org.apache.livy._
 import org.apache.livy.client.common.HttpMessages._
 import org.apache.livy.rsc.{PingJob, RSCClient, RSCConf}
@@ -45,6 +42,7 @@ import org.apache.livy.sessions._
 import org.apache.livy.sessions.Session._
 import org.apache.livy.sessions.SessionState.Dead
 import org.apache.livy.utils._
+import org.apache.spark.launcher.SparkLauncher
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 case class InteractiveRecoveryMetadata(
@@ -155,7 +153,6 @@ object InteractiveSession extends Logging {
       mockApp)
   }
 
-  @VisibleForTesting
   private[interactive] def prepareBuilderProp(
     conf: Map[String, String],
     kind: Kind,
