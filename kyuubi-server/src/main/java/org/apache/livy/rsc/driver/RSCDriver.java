@@ -49,6 +49,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.SparkConf;
 import org.apache.spark.SparkContext;
+import org.apache.spark.scheduler.SparkListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -476,6 +477,10 @@ public class RSCDriver extends BaseProtocol {
 
   protected void addFile(String path) {
     jc.sc().addFile(path);
+  }
+
+  protected void addListener(SparkListener listener) {
+    jc.sc().sc().addSparkListener(listener);
   }
 
   protected void addJarOrPyFile(String path) throws Exception {

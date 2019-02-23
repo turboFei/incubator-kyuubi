@@ -20,6 +20,8 @@ package org.apache.livy.rsc;
 import org.apache.livy.Job;
 import org.apache.livy.rsc.rpc.RpcDispatcher;
 
+import java.util.UUID;
+
 public abstract class BaseProtocol extends RpcDispatcher {
 
   protected static class CancelJob {
@@ -181,6 +183,20 @@ public abstract class BaseProtocol extends RpcDispatcher {
     }
 
     public ReplJobRequest() {
+      this(null, null);
+    }
+  }
+
+  public static class SQLReplJobRequest {
+    public final UUID uuid;
+    public final String code;
+
+    public SQLReplJobRequest(UUID uuid, String code) {
+      this.uuid = uuid;
+      this.code = code;
+    }
+
+    public SQLReplJobRequest() {
       this(null, null);
     }
   }

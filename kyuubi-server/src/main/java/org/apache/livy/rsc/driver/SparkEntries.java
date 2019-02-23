@@ -19,6 +19,8 @@ package org.apache.livy.rsc.driver;
 
 import java.lang.reflect.Method;
 import java.util.HashMap;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.spark.SparkConf;
@@ -40,9 +42,12 @@ public class SparkEntries {
   private volatile SQLContext sqlctx;
   private volatile HiveContext hivectx;
   private volatile SparkSession sparksession;
+  private final ConcurrentHashMap<UUID, SparkSession> uuid2Sessions;
+
 
   public SparkEntries(SparkConf conf) {
     this.conf = conf;
+    this.uuid2Sessions = new ConcurrentHashMap<>();
   }
 
   public JavaSparkContext sc() {
@@ -97,33 +102,38 @@ public class SparkEntries {
     return sparksession;
   }
 
+  public SparkSession getSparkSession4UUID(UUID uuid) throws Exception {
+    if (uuid2Sessions.containsKey(uuid)) {
+      return uuid2Sessions.get(uuid);
+    } else {
+      uuid2Sessions.put(uuid, newSession());
+      return uuid2Sessions.get(uuid);
+    }
+  }
+
+  public void removeSparkSession(UUID uuid) throws Exception {
+      uuid2Sessions.remove(uuid);
+  }
+
   // TODO: config conf with check prefix
-  public SparkSession newSession(HashMap<String, String> newConf) throws Exception {
+  public SparkSession newSession() throws Exception {
     if (sparksession == null) {
       synchronized (this) {
         if (sparksession == null) {
-          for (String confKey : newConf.keySet()) {
-            conf.set(confKey, newConf.get(confKey));
-          }
-          sparkSession();
+          return sparkSession();
         } else {
-          sparksession = sparksession.newSession();
-          for (String confKey : newConf.keySet()) {
-            sparksession.conf().set(confKey, newConf.get(confKey));
+          return sparksession.newSession();
           }
         }
-      }
-    } else {
+      } else {
       synchronized (this) {
         if (sparksession != null) {
-          sparksession = sparksession.newSession();
-          for (String confKey : newConf.keySet()) {
-            sparksession.conf().set(confKey, newConf.get(confKey));
-          }
+          return sparksession.newSession();
+        } else {
+          return sparksession;
         }
       }
     }
-    return sparksession;
   }
 
   public SQLContext sqlctx() {

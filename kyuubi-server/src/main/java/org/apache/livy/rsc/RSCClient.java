@@ -34,6 +34,8 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.util.concurrent.GenericFutureListener;
 import io.netty.util.concurrent.ImmediateEventExecutor;
 import io.netty.util.concurrent.Promise;
+import org.apache.livy.rsc.driver.*;
+import org.apache.spark.scheduler.SparkListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,8 +43,6 @@ import org.apache.livy.Job;
 import org.apache.livy.JobHandle;
 import org.apache.livy.LivyClient;
 import org.apache.livy.client.common.BufferUtils;
-import org.apache.livy.rsc.driver.AddFileJob;
-import org.apache.livy.rsc.driver.AddJarJob;
 import org.apache.livy.rsc.rpc.Rpc;
 
 import static org.apache.livy.rsc.RSCConf.Entry.*;
@@ -270,6 +270,17 @@ public class RSCClient implements LivyClient {
     return submit(new AddFileJob(uri.toString()));
   }
 
+  public Future<?> addListener(SparkListener listener) {
+    return submit(new AddListenerJob(listener));
+  }
+
+  public Future<?> configSessionConf(UUID uuid, Map<String, String> sessionConf) {
+    return submit(new ConfigSessionConfJob(sessionConf, uuid));
+  }
+
+  public Future<?> removeSparkSession(UUID uuid) {
+    return submit(new RemoveSparkSessionJob(uuid));
+  }
   public String bypass(ByteBuffer serializedJob, String jobType, boolean sync) {
     return protocol.bypass(serializedJob, jobType, sync);
   }
@@ -288,6 +299,10 @@ public class RSCClient implements LivyClient {
 
   public Future<Integer> submitReplCode(String code, String codeType) throws Exception {
     return deferredCall(new BaseProtocol.ReplJobRequest(code, codeType), Integer.class);
+  }
+
+  public Future<Integer> submitSQLReplCode(UUID uuid, String code) throws Exception {
+    return deferredCall(new BaseProtocol.SQLReplJobRequest(uuid, code), Integer.class);
   }
 
   public void cancelReplCode(int statementId) throws Exception {

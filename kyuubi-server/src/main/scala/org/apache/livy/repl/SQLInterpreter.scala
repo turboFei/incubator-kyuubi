@@ -18,9 +18,9 @@
 package org.apache.livy.repl
 
 import java.lang.reflect.InvocationTargetException
+import java.util.UUID
 
 import scala.util.control.NonFatal
-
 import org.apache.livy.Logging
 import org.apache.livy.rsc.RSCConf
 import org.apache.livy.rsc.driver.SparkEntries
@@ -81,6 +81,38 @@ class SQLInterpreter(
   override protected[repl] def execute(code: String): Interpreter.ExecuteResponse = {
     try {
       val result = spark.sql(code)
+      val schema = parse(result.schema.json)
+
+      // Get the row data
+      val rows = result.take(maxResult)
+        .map {
+          _.toSeq.map {
+            // Convert java BigDecimal type to Scala BigDecimal, because current version of
+            // Json4s doesn't support java BigDecimal as a primitive type (LIVY-455).
+            case i: java.math.BigDecimal => BigDecimal(i)
+            case e => e
+          }
+        }
+
+      val jRows = Extraction.decompose(rows)
+
+      Interpreter.ExecuteSuccess(
+        APPLICATION_JSON -> (("schema" -> schema) ~ ("data" -> jRows)))
+    } catch {
+      case e: InvocationTargetException =>
+        warn(s"Fail to execute query $code", e.getTargetException)
+        val cause = e.getTargetException
+        Interpreter.ExecuteError("Error", cause.getMessage, cause.getStackTrace.map(_.toString))
+
+      case NonFatal(f) =>
+        warn(s"Fail to execute query $code", f)
+        Interpreter.ExecuteError("Error", f.getMessage, f.getStackTrace.map(_.toString))
+    }
+  }
+
+  def execute(uuid: UUID, code: String): Interpreter.ExecuteResponse = {
+    try {
+      val result = sparkEntries.getSparkSession4UUID(uuid).sql(code)
       val schema = parse(result.schema.json)
 
       // Get the row data

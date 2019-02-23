@@ -41,44 +41,9 @@ class SessionWithUGI(
     user: UserGroupInformation,
     conf: SparkConf,
     cache: SessionCacheManager) extends Logging {
-  private var _session: Session = _
+  private var _session: AbstractSession = _
   private val userName: String = user.getShortUserName
-  private val promisedSparkContext = Promise[SparkContext]()
   private var initialDatabase: Option[String] = None
-  private var sparkException: Option[Throwable] = None
-
-  private lazy val newContext: Thread = {
-    val threadName = "SparkContext-Starter-" + userName
-    new Thread(threadName) {
-      override def run(): Unit = {
-        try {
-          promisedSparkContext.trySuccess {
-            new SparkContext(conf)
-          }
-        } catch {
-          case e: Exception =>
-            sparkException = Some(e)
-            throw e
-        }
-      }
-    }
-  }
-
-  /**
-   * Invoke SparkContext.stop() if not succeed initializing it
-   */
-  private def stopContext(): Unit = {
-    promisedSparkContext.future.map { sc =>
-      warn(s"Error occurred during initializing SparkContext for $userName, stopping")
-      try {
-        sc.stop
-      } catch {
-        case NonFatal(e) => error(s"Error Stopping $userName's SparkContext", e)
-      } finally {
-        System.setProperty("SPARK_YARN_MODE", "true")
-      }
-    }
-  }
 
   /**
    * Setting configuration from connection strings before SparkContext init.
@@ -124,6 +89,7 @@ class SessionWithUGI(
       }
     }
   }
+
 
 
 

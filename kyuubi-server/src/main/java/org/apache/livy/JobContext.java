@@ -19,9 +19,11 @@ package org.apache.livy;
 
 import java.io.File;
 import java.util.NoSuchElementException;
+import java.util.UUID;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
+import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.hive.HiveContext;
 
 /**
@@ -86,4 +88,6 @@ public interface JobContext {
    * @throws Exception If SparkSession does not exist
    */
   <E> E sparkSession() throws Exception;
+
+  SparkSession getSparkSession4UUID(UUID uuid) throws Exception;
 }

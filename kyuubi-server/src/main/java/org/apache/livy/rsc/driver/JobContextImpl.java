@@ -18,12 +18,13 @@
 package org.apache.livy.rsc.driver;
 
 import java.io.File;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.NoSuchElementException;
+import java.util.*;
+import java.util.regex.Pattern;
 
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.scheduler.SparkListener;
 import org.apache.spark.sql.SQLContext;
+import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.hive.HiveContext;
 
 import org.apache.livy.JobContext;
@@ -62,6 +63,10 @@ class JobContextImpl implements JobContext {
   @Override
   public <E> E sparkSession() throws Exception {
     return (E) sparkEntries.sparkSession();
+  }
+
+  public SparkSession getSparkSession4UUID(UUID uuid) throws Exception {
+    return sparkEntries.getSparkSession4UUID(uuid);
   }
 
   @Override
@@ -124,5 +129,21 @@ class JobContextImpl implements JobContext {
 
   public void addJarOrPyFile(String path) throws Exception {
     driver.addJarOrPyFile(path);
+  }
+
+  public void addListener(SparkListener listener) {
+    driver.addListener(listener);
+
+  }
+
+  public void configSessionConf(UUID uuid, Map<String, String> conf) throws Exception{
+    SparkSession session = sparkEntries.getSparkSession4UUID(uuid);
+    for (String key: conf.keySet()) {
+     session.conf().set(key, conf.get(key));
+    }
+  }
+
+  public void removeSparkSession(UUID uuid) throws Exception {
+    sparkEntries.removeSparkSession(uuid);
   }
 }

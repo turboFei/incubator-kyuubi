@@ -17,6 +17,8 @@
 
 package org.apache.livy;
 
+import org.apache.spark.scheduler.SparkListener;
+
 import java.io.File;
 import java.net.URI;
 import java.util.concurrent.Future;
@@ -106,5 +108,7 @@ public interface LivyClient {
    * @return A future that can be used to monitor the operation.
    */
   Future<?> addFile(URI uri);
+
+  Future<?> addListener(SparkListener listener);
 
 }

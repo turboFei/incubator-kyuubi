@@ -38,10 +38,10 @@ import org.apache.spark.sql.types._
 import yaooqinn.kyuubi.{KyuubiSQLException, Logging}
 import yaooqinn.kyuubi.cli.FetchOrientation
 import yaooqinn.kyuubi.schema.{RowSet, RowSetBuilder}
-import yaooqinn.kyuubi.session.KyuubiSession
+import yaooqinn.kyuubi.session.ClusterSession
 import yaooqinn.kyuubi.ui.KyuubiServerMonitor
 
-class KyuubiOperation(session: KyuubiSession, statement: String) extends
+class KyuubiClusterOperation(session: ClusterSession, statement: String) extends
   Operation with Logging {
 
   private var state: OperationState = INITIALIZED
@@ -75,7 +75,7 @@ class KyuubiOperation(session: KyuubiSession, statement: String) extends
     this.backgroundHandle = backgroundHandle
   }
 
-  def getSession: KyuubiSession = session
+  def getSession: ClusterSession = session
 
   def getHandle: OperationHandle = opHandle
 

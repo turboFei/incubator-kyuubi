@@ -17,7 +17,7 @@
 
 package org.apache.livy.repl
 
-import java.util.{LinkedHashMap => JLinkedHashMap}
+import java.util.{UUID, LinkedHashMap => JLinkedHashMap}
 import java.util.Map.Entry
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
@@ -27,7 +27,6 @@ import scala.collection.mutable
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 import scala.util.control.NonFatal
-
 import org.apache.livy.Logging
 import org.apache.livy.rsc.RSCConf
 import org.apache.livy.rsc.driver.{SparkEntries, Statement, StatementState}
@@ -175,6 +174,28 @@ class Session(
     statementId
   }
 
+  def executeSql(uuid: UUID, code: String): Int = {
+    val statementId = newStatementId.getAndIncrement()
+    val statement = new Statement(statementId, code, StatementState.Waiting, null)
+    _statements.synchronized { _statements(statementId) = statement }
+
+    Future {
+      setJobGroup(SQL, statementId)
+      statement.compareAndTransit(StatementState.Waiting, StatementState.Running)
+
+      if (statement.state.get() == StatementState.Running) {
+        statement.output = executeSqlCode(
+          interpreter(SQL).asInstanceOf[Option[SQLInterpreter]], statementId, uuid, code)
+      }
+
+      statement.compareAndTransit(StatementState.Running, StatementState.Available)
+      statement.compareAndTransit(StatementState.Cancelling, StatementState.Cancelled)
+      statement.updateProgress(1.0)
+    }(interpreterExecutor)
+
+    statementId
+  }
+
   def complete(code: String, codeType: String, cursor: Int): Array[String] = {
     val tpe = Kind(codeType)
     interpreter(tpe).map { _.complete(code, cursor) }.getOrElse(Array.empty)
@@ -271,6 +292,80 @@ class Session(
     val resultInJson = interp.map { i =>
       try {
         i.execute(code) match {
+          case Interpreter.ExecuteSuccess(data) =>
+            transitToIdle()
+
+            (STATUS -> OK) ~
+              (EXECUTION_COUNT -> executionCount) ~
+              (DATA -> data)
+
+          case Interpreter.ExecuteIncomplete() =>
+            transitToIdle()
+
+            (STATUS -> ERROR) ~
+              (EXECUTION_COUNT -> executionCount) ~
+              (ENAME -> "Error") ~
+              (EVALUE -> "incomplete statement") ~
+              (TRACEBACK -> Seq.empty[String])
+
+          case Interpreter.ExecuteError(ename, evalue, traceback) =>
+            transitToIdle()
+
+            (STATUS -> ERROR) ~
+              (EXECUTION_COUNT -> executionCount) ~
+              (ENAME -> ename) ~
+              (EVALUE -> evalue) ~
+              (TRACEBACK -> traceback)
+
+          case Interpreter.ExecuteAborted(message) =>
+            changeState(SessionState.Error())
+
+            (STATUS -> ERROR) ~
+              (EXECUTION_COUNT -> executionCount) ~
+              (ENAME -> "Error") ~
+              (EVALUE -> f"Interpreter died:\n$message") ~
+              (TRACEBACK -> Seq.empty[String])
+        }
+      } catch {
+        case e: Throwable =>
+          error("Exception when executing code", e)
+
+          transitToIdle()
+
+          (STATUS -> ERROR) ~
+            (EXECUTION_COUNT -> executionCount) ~
+            (ENAME -> f"Internal Error: ${e.getClass.getName}") ~
+            (EVALUE -> e.getMessage) ~
+            (TRACEBACK -> Seq.empty[String])
+      }
+    }.getOrElse {
+      transitToIdle()
+      (STATUS -> ERROR) ~
+        (EXECUTION_COUNT -> executionCount) ~
+        (ENAME -> "InterpreterError") ~
+        (EVALUE -> "Fail to start interpreter") ~
+        (TRACEBACK -> Seq.empty[String])
+    }
+
+    compact(render(resultInJson))
+  }
+
+  private def executeSqlCode(interp: Option[SQLInterpreter],
+                          executionCount: Int,
+                          uuid: UUID,
+                          code: String): String = {
+    changeState(SessionState.Busy)
+
+    def transitToIdle() = {
+      val executingLastStatement = executionCount == newStatementId.intValue() - 1
+      if (_statements.isEmpty || executingLastStatement) {
+        changeState(SessionState.Idle)
+      }
+    }
+
+    val resultInJson = interp.map { i =>
+      try {
+        i.execute(uuid, code) match {
           case Interpreter.ExecuteSuccess(data) =>
             transitToIdle()
 

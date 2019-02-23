@@ -21,15 +21,15 @@ import java.io.{File, InputStream}
 import java.net.URI
 import java.nio.ByteBuffer
 import java.nio.file.{Files, Paths}
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable
+import scala.collection.{JavaConverters, mutable}
 import scala.concurrent.{Future, Promise}
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.util.{Random, Try}
-
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import org.apache.hadoop.fs.Path
 import org.apache.livy._
@@ -43,6 +43,7 @@ import org.apache.livy.sessions.Session._
 import org.apache.livy.sessions.SessionState.Dead
 import org.apache.livy.utils._
 import org.apache.spark.launcher.SparkLauncher
+import org.apache.spark.scheduler.SparkListener
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 case class KyuubiInteractiveRecoveryMetadata(
@@ -69,13 +70,13 @@ object KyuubiInteractiveSession extends Logging {
       owner: String,
       proxyUser: Option[String],
       livyConf: LivyConf,
-      accessManager: AccessManager,
       request: CreateInteractiveRequest,
       sessionStore: SessionStore,
       mockApp: Option[SparkApp] = None,
       mockClient: Option[RSCClient] = None): KyuubiInteractiveSession = {
     val appTag = s"livy-session-$id-${Random.alphanumeric.take(8).mkString}"
-    val impersonatedUser = accessManager.checkImpersonation(proxyUser, owner)
+//    val impersonatedUser = accessManager.checkImpersonation(proxyUser, owner)
+    val impersonatedUser = proxyUser
 
     val client = mockClient.orElse {
       val conf = SparkApp.prepareSparkConf(appTag, livyConf, prepareConf(
@@ -495,11 +496,11 @@ class KyuubiInteractiveSession(
     stop()
   }
 
-  def executeStatement(content: ExecuteRequest): Statement = {
+  def executeStatement(content: ExecuteSqlRequest): Statement = {
     ensureRunning()
     recordActivity()
 
-    val id = client.get.submitReplCode(content.code, content.kind.orNull).get
+    val id = client.get.submitSQLReplCode(content.uuid, content.code).get
     client.get.getReplJobResults(id, 1).get().statements(0)
   }
 
@@ -544,6 +545,25 @@ class KyuubiInteractiveSession(
     ensureActive()
     recordActivity()
     client.get.addJar(resolveURI(uri, livyConf)).get()
+  }
+
+  def addSparkListener(listener: SparkListener): Unit = {
+    ensureActive()
+    recordActivity()
+    client.get.addListener(listener).get()
+  }
+
+  def configSessionConf(uuid: UUID, sessionConf: Map[String, String]): Unit = {
+    ensureActive()
+    recordActivity()
+    client.get.configSessionConf(uuid,
+      JavaConverters.mapAsJavaMapConverter(sessionConf).asJava).get()
+  }
+
+  def removeSparkSession(uuid: UUID): Unit = {
+    ensureActive()
+    recordActivity()
+    client.get.removeSparkSession(uuid).get
   }
 
   def jobStatus(id: Long): Any = {

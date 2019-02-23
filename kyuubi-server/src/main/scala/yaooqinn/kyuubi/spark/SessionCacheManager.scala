@@ -41,7 +41,7 @@ class SessionCacheManager private(name: String) extends AbstractService(name) wi
       new ThreadFactoryBuilder()
         .setDaemon(true).setNameFormat(getClass.getSimpleName + "-%d").build())
 
-  protected val userToSession = new ConcurrentHashMap[String, (Session, AtomicInteger)]
+  protected val userToSession = new ConcurrentHashMap[String, (AbstractSession, AtomicInteger)]
   protected val userLatestLogout = new ConcurrentHashMap[String, Long]
   protected var idleTimeout: Long = _
 
@@ -77,11 +77,11 @@ class SessionCacheManager private(name: String) extends AbstractService(name) wi
     KyuubiServerMonitor.detachUITab(user)
   }
 
-  def set(user: String, session: Session): Unit = {
+  def set(user: String, session: AbstractSession): Unit = {
     userToSession.put(user, (session, new AtomicInteger(1)))
   }
 
-  def getAndIncrease(user: String): Option[Session] = {
+  def getAndIncrease(user: String): Option[AbstractSession] = {
     Option(userToSession.get(user)) match {
       case Some((ss, times)) if !ss.isStopped =>
         val currentTime = times.incrementAndGet()

@@ -17,12 +17,15 @@
 
 package org.apache.livy
 
+import java.util.UUID
+
 sealed trait MsgType
 
 object MsgType {
   // scalastyle:off
   case object execute_request extends MsgType
   case object execute_reply extends MsgType
+  case object execute_sql_request extends MsgType
 }
 
 case class Msg[T <: Content](msg_type: MsgType, content: T)
@@ -32,6 +35,12 @@ sealed trait Content
 case class ExecuteRequest(code: String, kind: Option[String]) extends Content {
   val msg_type = MsgType.execute_request
 }
+
+case class ExecuteSqlRequest(uuid: UUID, code: String) extends Content {
+  val msg_type = MsgType.execute_sql_request
+}
+
+
 
 sealed trait ExecutionStatus
 object ExecutionStatus {
