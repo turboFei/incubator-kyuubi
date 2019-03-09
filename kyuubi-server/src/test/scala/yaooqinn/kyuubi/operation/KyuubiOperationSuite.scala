@@ -130,7 +130,7 @@ class KyuubiOperationSuite extends SparkFunSuite {
 
   test("testGetSession") {
     val op = sessionMgr.getOperationMgr.newExecuteStatementOperation(session, statement)
-    val s = op.getSession
+    val s = op.getSession.asInstanceOf[KyuubiSession]
     assert(s.sparkSession === spark)
     assert(s == session)
     assert(s.getUserName === userName)
