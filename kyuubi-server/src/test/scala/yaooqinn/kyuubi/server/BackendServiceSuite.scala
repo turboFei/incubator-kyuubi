@@ -105,6 +105,6 @@ class BackendServiceSuite extends SparkFunSuite {
     backendService.cancelOperation(op1)
     assert(backendService.getOperationStatus(op1).getState === CANCELED)
 
-    backendService.getSessionManager.getSession(session).sparkSession.stop()
+    backendService.getSessionManager.getSession(session).stopShared()
   }
 }
