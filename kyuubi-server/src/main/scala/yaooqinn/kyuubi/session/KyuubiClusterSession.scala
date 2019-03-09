@@ -49,7 +49,7 @@ import yaooqinn.kyuubi.utils.KyuubiHadoopUtil
  * One [[SparkContext]], multi [[SparkSession]]s
  *
  */
-private[kyuubi] class KyuubiSession(
+private[kyuubi] class KyuubiClusterSession(
     protocol: TProtocolVersion,
     username: String,
     password: String,
@@ -67,51 +67,15 @@ private[kyuubi] class KyuubiSession(
     sessionManager,
     operationManager) with Logging {
 
-  private val sparkSessionWithUGI =
-    new SparkSessionWithUGI(sessionUGI, conf, sessionManager.getCacheMgr)
-
-  @throws[KyuubiSQLException]
-  def executeStatementInternal(statement: String): OperationHandle = {
-    acquire(true)
-    val operation =
-      operationManager.newExecuteStatementOperation(this, statement)
-    val opHandle = operation.getHandle
-    try {
-      operation.run()
-      opHandleSet.add(opHandle)
-      opHandle
-    } catch {
-      case e: KyuubiSQLException =>
-        operationManager.closeOperation(opHandle)
-        throw e
-    } finally {
-      release(true)
-    }
+  override def executeStatementInternal(statement: String): OperationHandle = {
+    null
   }
 
-  def sparkSession: SparkSession = this.sparkSessionWithUGI.sparkSession
+  override def open(sessionConf: Map[String, String]): Unit = {
 
-  @throws[KyuubiSQLException]
-  def open(sessionConf: Map[String, String]): Unit = {
-    sparkSessionWithUGI.init(sessionConf)
-    lastAccessTime = System.currentTimeMillis
-    lastIdleTime = lastAccessTime
   }
 
-  def getInfo(getInfoType: GetInfoType): GetInfoValue = {
-    acquire(true)
-    try {
-      getInfoType match {
-        case GetInfoType.SERVER_NAME => new GetInfoValue("Kyuubi Server")
-        case GetInfoType.DBMS_NAME => new GetInfoValue("Spark SQL")
-        case GetInfoType.DBMS_VERSION =>
-          new GetInfoValue(this.sparkSessionWithUGI.sparkSession.version)
-        case _ =>
-          throw new KyuubiSQLException("Unrecognized GetInfoType value " + getInfoType.toString)
-      }
-    } finally {
-      release(true)
-    }
+  override def getInfo(getInfoType: GetInfoType): GetInfoValue = {
+    null
   }
-
 }

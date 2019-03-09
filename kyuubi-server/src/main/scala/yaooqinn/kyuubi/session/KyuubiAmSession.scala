@@ -49,7 +49,7 @@ import yaooqinn.kyuubi.utils.KyuubiHadoopUtil
  * One [[SparkContext]], multi [[SparkSession]]s
  *
  */
-private[kyuubi] class KyuubiSession(
+private[kyuubi] class KyuubiAmSession(
     protocol: TProtocolVersion,
     username: String,
     password: String,
@@ -115,3 +115,4 @@ private[kyuubi] class KyuubiSession(
   }
 
 }
+

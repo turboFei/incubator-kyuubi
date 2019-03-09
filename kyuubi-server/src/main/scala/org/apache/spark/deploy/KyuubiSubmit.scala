@@ -19,11 +19,11 @@ package org.apache.spark.deploy
 
 import java.io.{File, PrintStream}
 
-import scala.collection.mutable.{ArrayBuffer, HashMap, Map}
-
 import org.apache.hadoop.security.UserGroupInformation
+import org.apache.hadoop.yarn.api.records.ApplicationId
 import org.apache.spark._
 import org.apache.spark.util.{MutableURLClassLoader, Utils}
+import scala.collection.mutable.{ArrayBuffer, HashMap, Map}
 
 import yaooqinn.kyuubi.Logging
 import yaooqinn.kyuubi.server.KyuubiServer
@@ -81,6 +81,41 @@ object KyuubiSubmit extends Logging {
     } catch {
       case t: Throwable =>
         printErrorAndExit(s"Starting Kyuubi by ${appArgs.deployMode} " + t)
+    }
+  }
+
+  def startAppMaster(args: Array[String]): ApplicationId = {
+    val appArgs = new SparkSubmitArguments(args)
+    if (appArgs.verbose) {
+      // scalastyle:off println
+      printStream.println(appArgs)
+      // scalastyle:on println
+    }
+    val (childClasspath, sysProps) = prepareSubmitEnvironment(appArgs)
+    if (appArgs.verbose) {
+      // scalastyle:off println
+      // sysProps may contain sensitive information, so redact before printing
+      printStream.println(s"System properties:\n${Utils.redact(sysProps).mkString("\n")}")
+      printStream.println(s"Classpath elements:\n${childClasspath.mkString("\n")}")
+      printStream.println("\n")
+    }
+    // scalastyle:on println
+
+    val loader = KyuubiSparkUtil.getAndSetKyuubiFirstClassLoader
+
+    for (jar <- childClasspath) {
+      addJarToClasspath(jar, loader)
+    }
+
+    for ((key, value) <- sysProps) {
+      System.setProperty(key, value)
+    }
+
+    try {
+      KyuubiYarnClient.startKyuubiAppMasterWithAppId()
+    } catch {
+      case t: Throwable =>
+        throw t
     }
   }
 

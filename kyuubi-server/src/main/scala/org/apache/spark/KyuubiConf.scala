@@ -79,6 +79,13 @@ object KyuubiConf {
       .stringConf
       .createWithDefault("kyuubiserver")
 
+  val HA_AM_ZOOKEEPER_NAMESPACE: ConfigEntry[String] =
+    KyuubiConfigBuilder("spark.kyuubi.ha.am.zk.namespace")
+    .doc("The parent node in ZooKeeper used by KyuubiAppMaster when supporting dynamic service" +
+        " discovery.")
+    .stringConf
+    .createWithDefault("kyuubiappmaster")
+
   val HA_ZOOKEEPER_CLIENT_PORT: ConfigEntry[String] =
     KyuubiConfigBuilder("spark.kyuubi.ha.zk.client.port")
       .doc("The port of ZooKeeper servers to talk to. If the list of Zookeeper servers specified" +
@@ -410,6 +417,24 @@ object KyuubiConf {
       .doc("Timeout for client to wait Kyuubi successfully initialising itself")
       .timeConf(TimeUnit.MILLISECONDS)
       .createWithDefault(TimeUnit.SECONDS.toMillis(60L))
+
+  val YARN_KYUUBI_APP_MASTER_MODE: ConfigEntry[Boolean] =
+    KyuubiConfigBuilder("spark.kyuubi.yarn.appmaster.mode")
+      .doc("Is kyuubi running on app master now")
+      .booleanConf
+      .createWithDefault(false)
+
+  val YARN_KYUUBI_APP_MASTER_USERNAME: ConfigEntry[String] =
+    KyuubiConfigBuilder("spark.kyuubi.yarn.appmaster.user")
+      .doc("The owner for the kyuubi app master")
+      .stringConf
+      .createWithDefault("")
+
+  val YARN_KYUUBI_APP_MASTER_PUBLISH_WAIT_TIME: ConfigEntry[Long] =
+    KyuubiConfigBuilder("spark.kyuubi.yarn.appmaster.publish.timeout")
+    .doc("The timeout to wait KyuubiAppMaster publish server")
+    .timeConf(TimeUnit.SECONDS)
+    .createWithDefault(60L)
 
   /**
    * Return all the configuration definitions that have been defined in [[KyuubiConf]]. Each

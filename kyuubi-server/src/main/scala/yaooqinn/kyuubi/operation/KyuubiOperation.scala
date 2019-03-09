@@ -47,80 +47,23 @@ import yaooqinn.kyuubi.session.KyuubiSession
 import yaooqinn.kyuubi.ui.KyuubiServerMonitor
 import yaooqinn.kyuubi.utils.ReflectUtils
 
-class KyuubiOperation(session: KyuubiSession, statement: String) extends Logging {
+class KyuubiOperation(session: KyuubiSession, statement: String)
+  extends Operation(session, statement) with Logging {
 
   import KyuubiOperation._
-
-  private var state: OperationState = INITIALIZED
-  private val opHandle: OperationHandle =
-    new OperationHandle(EXECUTE_STATEMENT, session.getProtocolVersion)
 
   private val sparkSession = session.sparkSession
   private val conf = sparkSession.conf
 
-  private val operationTimeout =
+  protected val operationTimeout =
     KyuubiSparkUtil.timeStringAsMs(conf.get(OPERATION_IDLE_TIMEOUT))
-  private var lastAccessTime = System.currentTimeMillis()
-
-  private var hasResultSet: Boolean = false
-  private var operationException: KyuubiSQLException = _
-  private var backgroundHandle: Future[_] = _
-  private var operationLog: OperationLog = _
-  private var isOperationLogEnabled: Boolean = false
 
   private var result: DataFrame = _
   private var iter: Iterator[Row] = _
-  private var statementId: String = _
-
-  private val DEFAULT_FETCH_ORIENTATION_SET: Set[FetchOrientation] =
-    Set(FetchOrientation.FETCH_NEXT, FetchOrientation.FETCH_FIRST)
 
   private val incrementalCollect: Boolean = conf.get(OPERATION_INCREMENTAL_COLLECT).toBoolean
 
-  def getBackgroundHandle: Future[_] = backgroundHandle
-
-  def setBackgroundHandle(backgroundHandle: Future[_]): Unit = {
-    this.backgroundHandle = backgroundHandle
-  }
-
-  def getSession: KyuubiSession = session
-
-  def getHandle: OperationHandle = opHandle
-
-  def getProtocolVersion: TProtocolVersion = opHandle.getProtocolVersion
-
-  def getStatus: OperationStatus = new OperationStatus(state, operationException)
-
-  def getOperationLog: OperationLog = operationLog
-
-  private def setOperationException(opEx: KyuubiSQLException): Unit = {
-    this.operationException = opEx
-  }
-
-  @throws[KyuubiSQLException]
-  private def setState(newState: OperationState): Unit = {
-    state.validateTransition(newState)
-    this.state = newState
-    this.lastAccessTime = System.currentTimeMillis()
-  }
-
-  private def checkState(state: OperationState): Boolean = {
-    this.state == state
-  }
-  
-  def isClosedOrCanceled: Boolean = {
-    checkState(CLOSED) || checkState(CANCELED)
-  }
-
-  @throws[KyuubiSQLException]
-  private def assertState(state: OperationState): Unit = {
-    if (this.state ne state) {
-      throw new KyuubiSQLException("Expected state " + state + ", but found " + this.state)
-    }
-    this.lastAccessTime = System.currentTimeMillis()
-  }
-
-  private def createOperationLog(): Unit = {
+  def createOperationLog(): Unit = {
     if (session.isOperationLogEnabled) {
       val logFile =
         new File(session.getSessionLogDir, opHandle.getHandleIdentifier.toString)
@@ -169,7 +112,7 @@ class KyuubiOperation(session: KyuubiSession, statement: String) extends Logging
     }
   }
 
-  private def registerCurrentOperationLog(): Unit = {
+   def registerCurrentOperationLog(): Unit = {
     if (isOperationLogEnabled) {
       if (operationLog == null) {
         warn("Failed to get current OperationLog object of Operation: "
@@ -182,7 +125,7 @@ class KyuubiOperation(session: KyuubiSession, statement: String) extends Logging
     }
   }
 
-  private def unregisterOperationLog(): Unit = {
+  def unregisterOperationLog(): Unit = {
     if (isOperationLogEnabled) {
       session.getSessionMgr.getOperationMgr
         .unregisterOperationLog(session.getUserName)
@@ -190,23 +133,12 @@ class KyuubiOperation(session: KyuubiSession, statement: String) extends Logging
   }
 
   @throws[KyuubiSQLException]
-  def run(): Unit = {
+  override def run(): Unit = {
     createOperationLog()
     try {
       runInternal()
     } finally {
       unregisterOperationLog()
-    }
-  }
-
-  private[this] def cleanupOperationLog(): Unit = {
-    if (isOperationLogEnabled) {
-      if (operationLog == null) {
-        error("Operation [ " + opHandle.getHandleIdentifier + " ] " +
-          "logging is enabled, but its OperationLog object cannot be found.")
-      } else {
-        operationLog.close()
-      }
     }
   }
 
@@ -216,11 +148,6 @@ class KyuubiOperation(session: KyuubiSession, statement: String) extends Logging
     cleanup(CLOSED)
     cleanupOperationLog()
     sparkSession.sparkContext.clearJobGroup()
-  }
-
-  def cancel(): Unit = {
-    info(s"Cancel '$statement' with $statementId")
-    cleanup(CANCELED)
   }
 
   def getResultSetSchema: StructType = if (result == null || result.schema.isEmpty) {
@@ -241,74 +168,7 @@ class KyuubiOperation(session: KyuubiSession, statement: String) extends Logging
     RowSetBuilder.create(getResultSetSchema, taken.toSeq, session.getProtocolVersion)
   }
 
-  private def setHasResultSet(hasResultSet: Boolean): Unit = {
-    this.hasResultSet = hasResultSet
-    opHandle.setHasResultSet(hasResultSet)
-  }
-
-  /**
-   * Verify if the given fetch orientation is part of the default orientation types.
-   */
-  @throws[KyuubiSQLException]
-  private def validateDefaultFetchOrientation(orientation: FetchOrientation): Unit = {
-    validateFetchOrientation(orientation, DEFAULT_FETCH_ORIENTATION_SET)
-  }
-
-  /**
-   * Verify if the given fetch orientation is part of the supported orientation types.
-   */
-  @throws[KyuubiSQLException]
-  private def validateFetchOrientation(
-      orientation: FetchOrientation,
-      supportedOrientations: Set[FetchOrientation]): Unit = {
-    if (!supportedOrientations.contains(orientation)) {
-      throw new KyuubiSQLException(
-        "The fetch type " + orientation.toString + " is not supported for this resultset", "HY106")
-    }
-  }
-
-  private def runInternal(): Unit = {
-    setState(PENDING)
-    setHasResultSet(true)
-
-    // Runnable impl to call runInternal asynchronously, from a different thread
-    val backgroundOperation = new Runnable() {
-      override def run(): Unit = {
-        try {
-          session.ugi.doAs(new PrivilegedExceptionAction[Unit]() {
-            registerCurrentOperationLog()
-            override def run(): Unit = {
-              try {
-                execute()
-              } catch {
-                case e: KyuubiSQLException => setOperationException(e)
-              }
-            }
-          })
-        } catch {
-          case e: Exception => setOperationException(new KyuubiSQLException(e))
-        }
-      }
-    }
-
-    try {
-      // This submit blocks if no background threads are available to run this operation
-      val backgroundHandle =
-        session.getSessionMgr.submitBackgroundOperation(backgroundOperation)
-      setBackgroundHandle(backgroundHandle)
-    } catch {
-      case rejected: RejectedExecutionException =>
-        setState(ERROR)
-        throw new KyuubiSQLException("The background threadpool cannot accept" +
-          " new task for execution, please retry the operation", rejected)
-      case NonFatal(e) =>
-        error(s"Error executing query in background", e)
-        setState(ERROR)
-        throw e
-    }
-  }
-
-  private def localizeAndAndResource(path: String): Unit = try {
+   private def localizeAndAndResource(path: String): Unit = try {
     if (isResourceDownloadable(path)) {
       val src = new Path(path)
       val destFileName = src.getName
@@ -323,7 +183,7 @@ class KyuubiOperation(session: KyuubiSession, statement: String) extends Logging
     case e: Exception => throw new KyuubiSQLException(s"Failed to read external resource: $path", e)
   }
 
-  private def execute(): Unit = {
+   def execute(): Unit = {
     try {
       statementId = UUID.randomUUID().toString
       info(s"Running query '$statement' with $statementId")
@@ -414,20 +274,7 @@ class KyuubiOperation(session: KyuubiSession, statement: String) extends Logging
     }
   }
 
-  private def onStatementError(id: String, message: String, trace: String): Unit = {
-    error(
-      s"""
-         |Error executing query as ${session.getUserName},
-         |$statement
-         |Current operation state ${this.state},
-         |$trace
-       """.stripMargin)
-    setState(ERROR)
-    KyuubiServerMonitor.getListener(session.getUserName)
-      .foreach(_.onStatementError(id, message, trace))
-  }
-
-  private def cleanup(state: OperationState) {
+  def cleanup(state: OperationState) {
     if (this.state != CLOSED) {
       setState(state)
     }
@@ -437,15 +284,6 @@ class KyuubiOperation(session: KyuubiSession, statement: String) extends Logging
     }
     if (statementId != null) {
       sparkSession.sparkContext.cancelJobGroup(statementId)
-    }
-  }
-
-  def isTimedOut: Boolean = {
-    if (operationTimeout <= 0) {
-      false
-    } else {
-      // check only when it's in terminal state
-      state.isTerminal && lastAccessTime + operationTimeout <= System.currentTimeMillis()
     }
   }
 }

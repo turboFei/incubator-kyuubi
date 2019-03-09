@@ -522,6 +522,8 @@ private[yarn] class KyuubiYarnClient(conf: SparkConf) extends Logging {
     }
   }
 
+  def getAppId: ApplicationId = appId
+
 }
 
 object KyuubiYarnClient {
@@ -623,4 +625,15 @@ object KyuubiYarnClient {
     val conf = new SparkConf()
     new KyuubiYarnClient(conf).submit()
   }
+
+  /**
+   * Start KyuubiAm and Return AppID
+   */
+  def startKyuubiAppMasterWithAppId(): ApplicationId = {
+    val conf = new SparkConf()
+    val client = new KyuubiYarnClient(conf)
+    client.submit()
+    client.getAppId
+  }
+
 }

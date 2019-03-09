@@ -20,13 +20,13 @@ package yaooqinn.kyuubi.utils
 import java.lang.reflect.UndeclaredThrowableException
 import java.security.PrivilegedExceptionAction
 
-import scala.collection.JavaConverters._
-
 import org.apache.hadoop.security.UserGroupInformation
-import org.apache.hadoop.yarn.api.records.ApplicationReport
+import org.apache.hadoop.yarn.api.records.{ApplicationId, ApplicationReport, YarnApplicationState}
 import org.apache.hadoop.yarn.api.records.YarnApplicationState._
 import org.apache.hadoop.yarn.client.api.YarnClient
 import org.apache.hadoop.yarn.conf.YarnConfiguration
+import org.apache.hadoop.yarn.util.ConverterUtils
+import scala.collection.JavaConverters._
 
 import yaooqinn.kyuubi.Logging
 
@@ -59,6 +59,27 @@ private[kyuubi] object KyuubiHadoopUtil extends Logging {
 
   def killYarnAppByName(appName: String): Unit = {
     getApplications.filter(app => app.getName.equals(appName)).foreach(killYarnApp)
+  }
+
+  def getAppIdFromString(appIdStr: String): ApplicationId = {
+    ConverterUtils.toApplicationId(appIdStr)
+  }
+
+  def killYarnAppById(appId: ApplicationId): Unit = {
+    try {
+      yarnClient.killApplication(appId)
+    } catch {
+      case e: Exception => error("Failed to kill Application: " + appId, e)
+    }
+  }
+
+  def getYarnAppState(appId: ApplicationId): YarnApplicationState = {
+    try {
+      yarnClient.getApplicationReport(appId).getYarnApplicationState
+    } catch {
+      case e: Exception => error("Failed to get application state:" + appId, e)
+        null
+    }
   }
 
   def doAs[T](user: UserGroupInformation)(f: => T): T = {
