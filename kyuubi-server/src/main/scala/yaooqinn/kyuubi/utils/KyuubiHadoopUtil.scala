@@ -20,13 +20,12 @@ package yaooqinn.kyuubi.utils
 import java.lang.reflect.UndeclaredThrowableException
 import java.security.PrivilegedExceptionAction
 
-import scala.collection.JavaConverters._
-
 import org.apache.hadoop.security.UserGroupInformation
-import org.apache.hadoop.yarn.api.records.ApplicationReport
+import org.apache.hadoop.yarn.api.records.{ApplicationId, ApplicationReport}
 import org.apache.hadoop.yarn.api.records.YarnApplicationState._
 import org.apache.hadoop.yarn.client.api.YarnClient
 import org.apache.hadoop.yarn.conf.YarnConfiguration
+import scala.collection.JavaConverters._
 
 import yaooqinn.kyuubi.Logging
 
@@ -59,6 +58,22 @@ private[kyuubi] object KyuubiHadoopUtil extends Logging {
 
   def killYarnAppByName(appName: String): Unit = {
     getApplications.filter(app => app.getName.equals(appName)).foreach(killYarnApp)
+  }
+
+  def isYarnAppRunning(appId: ApplicationId): Boolean = {
+    if (appId != null) {
+      yarnClient.getApplicationReport(appId).getYarnApplicationState == RUNNING
+    } else {
+      false
+    }
+  }
+
+  def killYarnAppByAppId(appId: ApplicationId): Unit = {
+    try {
+      yarnClient.killApplication(appId)
+    } catch {
+      case e: Exception => error("Failed to kill Application: " + appId, e)
+    }
   }
 
   def doAs[T](user: UserGroupInformation)(f: => T): T = {

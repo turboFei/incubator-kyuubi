@@ -96,6 +96,10 @@
             <artifactId>hive-service</artifactId>
         </dependency>
         <dependency>
+            <groupId>${hive.group}</groupId>
+            <artifactId>hive-jdbc</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.apache.curator</groupId>
             <artifactId>curator-framework</artifactId>
         </dependency>

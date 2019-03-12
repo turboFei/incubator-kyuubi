@@ -245,34 +245,40 @@ private[kyuubi] class SessionManager private(
       password: String,
       ipAddress: String,
       sessionConf: Map[String, String],
-      withImpersonation: Boolean): SessionHandle = {
-    val kyuubiSession = new KyuubiSession(
-      protocol,
-      username,
-      password,
-      conf.clone(),
-      ipAddress,
-      withImpersonation,
-      this,
-      operationManager)
-    info(s"Opening session for $username")
-    kyuubiSession.open(sessionConf)
+      withImpersonation: Boolean,
+      clusterMode: Boolean = false): SessionHandle = {
+    if (!clusterMode) {
+      val kyuubiSession = new KyuubiSession(
+        protocol,
+        username,
+        password,
+        conf.clone(),
+        ipAddress,
+        withImpersonation,
+        this,
+        operationManager)
+      info(s"Opening session for $username")
+      kyuubiSession.open(sessionConf)
 
-    kyuubiSession.setResourcesSessionDir(resourcesRootDir)
-    if (isOperationLogEnabled) {
-      kyuubiSession.setOperationLogSessionDir(operationLogRootDir)
+      kyuubiSession.setResourcesSessionDir(resourcesRootDir)
+      if (isOperationLogEnabled) {
+        kyuubiSession.setOperationLogSessionDir(operationLogRootDir)
+      }
+
+      val sessionHandle = kyuubiSession.getSessionHandle
+      handleToSession.put(sessionHandle, kyuubiSession)
+      KyuubiServerMonitor.getListener(kyuubiSession.getUserName).foreach {
+        _.onSessionCreated(
+          kyuubiSession.getIpAddress,
+          sessionHandle.getSessionId.toString,
+          kyuubiSession.getUserName)
+      }
+
+      sessionHandle
+    } else {
+      // TODO: KyuubiClusterSession
+      null
     }
-
-    val sessionHandle = kyuubiSession.getSessionHandle
-    handleToSession.put(sessionHandle, kyuubiSession)
-    KyuubiServerMonitor.getListener(kyuubiSession.getUserName).foreach {
-      _.onSessionCreated(
-        kyuubiSession.getIpAddress,
-        sessionHandle.getSessionId.toString,
-        kyuubiSession.getUserName)
-    }
-
-    sessionHandle
   }
 
   @throws[KyuubiSQLException]
