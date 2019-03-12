@@ -60,6 +60,8 @@ private[kyuubi] class KyuubiClusterSession(
   private var _jdbcUrl: String = _
   private var _connection: HiveConnection = _
 
+  def getConf: SparkConf = conf
+
   def getHiveConnection(): HiveConnection = {
     if (_connection == null || _connection.isClosed) {
       try {
