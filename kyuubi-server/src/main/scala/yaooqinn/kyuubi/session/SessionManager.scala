@@ -268,7 +268,15 @@ private[kyuubi] class SessionManager private(
         withImpersonation,
         this,
         operationManager)
-      case _ => null
+      case _ => new KyuubiClusterSession(
+        protocol,
+        username,
+        password,
+        conf.clone(),
+        ipAddress,
+        withImpersonation,
+        this,
+        operationManager)
     }
 
     info(s"Opening session for $username")
