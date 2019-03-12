@@ -21,20 +21,21 @@ import java.io.{File, IOException}
 import java.util.Date
 import java.util.concurrent._
 
-import scala.collection.JavaConverters._
-
 import org.apache.commons.io.FileUtils
 import org.apache.hive.service.cli.thrift.TProtocolVersion
 import org.apache.spark.KyuubiConf._
 import org.apache.spark.SparkConf
+import org.apache.spark.sql.SparkSession
+import scala.collection.JavaConverters._
 
 import yaooqinn.kyuubi.{KyuubiSQLException, Logging}
 import yaooqinn.kyuubi.operation.OperationManager
 import yaooqinn.kyuubi.server.KyuubiServer
 import yaooqinn.kyuubi.service.{CompositeService, ServiceException}
-import yaooqinn.kyuubi.spark.SparkSessionCacheManager
+import yaooqinn.kyuubi.spark.{KyuubiAmSparkSessionCacheManager, SparkSessionCacheManager}
 import yaooqinn.kyuubi.ui.KyuubiServerMonitor
 import yaooqinn.kyuubi.utils.NamedThreadFactory
+import yaooqinn.kyuubi.yarn.KyuubiAppMaster
 
 /**
  * A SessionManager for managing [[Session]]s
@@ -42,7 +43,8 @@ import yaooqinn.kyuubi.utils.NamedThreadFactory
 private[kyuubi] class SessionManager private(
     name: String) extends CompositeService(name) with Logging {
   private val operationManager = new OperationManager()
-  private val cacheManager = new SparkSessionCacheManager()
+  private var cacheManager: SparkSessionCacheManager = _
+  private var kyuubiAmSessionManager: KyuubiAmSparkSessionCacheManager = _
   private val handleToSession = new ConcurrentHashMap[SessionHandle, Session]
   private var execPool: ThreadPoolExecutor = _
   private var isOperationLogEnabled = false
@@ -53,7 +55,14 @@ private[kyuubi] class SessionManager private(
   private var checkOperation: Boolean = false
   private var shutdown: Boolean = false
 
+  private[this] var kyuubiAppMaster: Option[KyuubiAppMaster] = None
+
   def this() = this(classOf[SessionManager].getSimpleName)
+
+  def this(kyuubiAm: Option[KyuubiAppMaster]) = {
+    this()
+    this.kyuubiAppMaster = kyuubiAm
+  }
 
   private def createExecPool(): Unit = {
     val poolSize = conf.get(ASYNC_EXEC_THREADS).toInt
@@ -202,7 +211,19 @@ private[kyuubi] class SessionManager private(
     }
     createExecPool()
     addService(operationManager)
-    addService(cacheManager)
+    if (conf.getBoolean(YARN_KYUUBIAPPMASTER_MODE.key, false)) {
+      kyuubiAmSessionManager = new KyuubiAmSparkSessionCacheManager(kyuubiAppMaster)
+      addService(kyuubiAmSessionManager)
+    } else {
+      val clientMode = conf.get(YARN_KYUUBISERVER_SESSION_MODE.key).toLowerCase match {
+        case "cluster" => false
+        case _ => true
+      }
+      if (clientMode) {
+        cacheManager = new SparkSessionCacheManager()
+        addService(cacheManager)
+      }
+    }
     super.init(conf)
   }
 
@@ -294,7 +315,12 @@ private[kyuubi] class SessionManager private(
     KyuubiServerMonitor.getListener(sessionUser).foreach {
       _.onSessionClosed(sessionHandle.getSessionId.toString)
     }
-    cacheManager.decrease(sessionUser)
+    if (cacheManager != null) {
+      cacheManager.decrease(sessionUser)
+    }
+    if (kyuubiAmSessionManager != null) {
+      kyuubiAmSessionManager.decrease(sessionUser)
+    }
     session.close()
   }
 
@@ -305,4 +331,6 @@ private[kyuubi] class SessionManager private(
   def getOpenSessionCount: Int = handleToSession.size
 
   def submitBackgroundOperation(r: Runnable): Future[_] = execPool.submit(r)
+
+  def getAmSessionCacheMgr: KyuubiAmSparkSessionCacheManager = kyuubiAmSessionManager
 }

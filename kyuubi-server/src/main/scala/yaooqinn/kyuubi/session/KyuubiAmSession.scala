@@ -28,16 +28,16 @@ import yaooqinn.kyuubi.spark.SparkSessionWithUGI
 
 /**
  * An Execution Session with [[SparkSession]] instance inside, which shares [[SparkContext]]
- * with other sessions create by the same user.
+ * with other sessions create by an only user.
  *
  * One user, one [[SparkContext]]
- * One user, multi [[KyuubiSession]]s
+ * One user, multi [[KyuubiAmSession]]s
  *
- * One [[KyuubiSession]], one [[SparkSession]]
+ * One [[KyuubiAmSession]], one [[SparkSession]]
  * One [[SparkContext]], multi [[SparkSession]]s
  *
  */
-private[kyuubi] class KyuubiSession(
+private[kyuubi] class KyuubiAmSession(
     protocol: TProtocolVersion,
     username: String,
     password: String,
@@ -46,7 +46,7 @@ private[kyuubi] class KyuubiSession(
     withImpersonation: Boolean,
     sessionManager: SessionManager,
     operationManager: OperationManager)
-  extends Session(protocol,
+  extends KyuubiSession(protocol,
     username,
     password,
     conf,
@@ -55,36 +55,16 @@ private[kyuubi] class KyuubiSession(
     sessionManager,
     operationManager) {
 
-  private val sparkSessionWithUGI =
-    new SparkSessionWithUGI(sessionUGI, conf, sessionManager.getCacheMgr)
+  private val amSessionWithUGI =
+    new SparkSessionWithUGI(sessionUGI, conf, sessionManager.getAmSessionCacheMgr)
 
-  def sparkSession: SparkSession = this.sparkSessionWithUGI.sparkSession
+  override def sparkSession: SparkSession = this.amSessionWithUGI.sparkSession
 
   @throws[KyuubiSQLException]
-  def open(sessionConf: Map[String, String]): Unit = {
-    sparkSessionWithUGI.init(sessionConf)
+  override def open(sessionConf: Map[String, String]): Unit = {
+    amSessionWithUGI.init(sessionConf)
     lastAccessTime = System.currentTimeMillis
     lastIdleTime = lastAccessTime
-  }
-
-  def getInfo(getInfoType: GetInfoType): GetInfoValue = {
-    acquire(true)
-    try {
-      getInfoType match {
-        case GetInfoType.SERVER_NAME => new GetInfoValue("Kyuubi Server")
-        case GetInfoType.DBMS_NAME => new GetInfoValue("Spark SQL")
-        case GetInfoType.DBMS_VERSION =>
-          new GetInfoValue(sparkSession.version)
-        case _ =>
-          throw new KyuubiSQLException("Unrecognized GetInfoType value " + getInfoType.toString)
-      }
-    } finally {
-      release(true)
-    }
-  }
-
-  override def stopShared(): Unit = {
-    sparkSession.stop()
   }
 
 }
