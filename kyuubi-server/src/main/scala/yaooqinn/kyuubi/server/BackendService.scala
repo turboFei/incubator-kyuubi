@@ -20,7 +20,6 @@ package yaooqinn.kyuubi.server
 import org.apache.hive.service.cli.thrift.TProtocolVersion
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.types.StructType
-
 import yaooqinn.kyuubi.{KyuubiSQLException, Logging}
 import yaooqinn.kyuubi.auth.KyuubiAuthFactory
 import yaooqinn.kyuubi.author.AuthzHelper
@@ -29,6 +28,7 @@ import yaooqinn.kyuubi.operation.{OperationHandle, OperationStatus}
 import yaooqinn.kyuubi.schema.RowSet
 import yaooqinn.kyuubi.service.CompositeService
 import yaooqinn.kyuubi.session.{SessionHandle, SessionManager}
+import yaooqinn.kyuubi.yarn.KyuubiAppMaster
 
 /**
  * [[BackendService]] holds an instance of [[SessionManager]] which manages
@@ -40,12 +40,19 @@ private[server] class BackendService private(name: String)
   private[this] var sessionManager: SessionManager = _
   def getSessionManager: SessionManager = sessionManager
 
+  private[this] var kyuubiAppMaster: Option[KyuubiAppMaster] = None
+
   def this() = this(classOf[BackendService].getSimpleName)
+
+  def this(kyuubiAm: Option[KyuubiAppMaster]) = {
+    this()
+    this.kyuubiAppMaster = kyuubiAm
+  }
 
   override def init(conf: SparkConf): Unit = synchronized {
     this.conf = conf
     AuthzHelper.init(conf)
-    sessionManager = new SessionManager()
+    sessionManager = new SessionManager(kyuubiAppMaster)
     addService(sessionManager)
     super.init(conf)
   }

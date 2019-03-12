@@ -48,7 +48,7 @@ class KyuubiAppMaster private(name: String) extends CompositeService(name)
   private lazy val amRMClient = AMRMClient.createAMRMClient()
 
   private[this] var yarnConf: YarnConfiguration = _
-  private[this] val server: KyuubiServer = new KyuubiServer()
+  private[this] var server: KyuubiServer = _
   private[this] var interval: Int = _
   private[this] var amMaxAttempts: Int = _
 
@@ -118,10 +118,22 @@ class KyuubiAppMaster private(name: String) extends CompositeService(name)
     System.exit(-1)
   }
 
+  def offlineHaServiceFirst(): Unit = {
+    if (server != null) {
+      server.offlineHaServiceFirst()
+    }
+  }
+
+  def stopForIdleTimeOut(msg: String): Unit = {
+    stop()
+    stop(FinalApplicationStatus.SUCCEEDED, msg)
+  }
+
   override def init(conf: SparkConf): Unit = {
     try {
       info(s"Service: [$name] is initializing.")
       this.conf = conf
+      server = new KyuubiServer(Some(this))
       yarnConf = new YarnConfiguration(KyuubiSparkUtil.newConfiguration(conf))
       amMaxAttempts = yarnConf.getInt(RM_AM_MAX_ATTEMPTS, DEFAULT_RM_AM_MAX_ATTEMPTS)
       amRMClient.init(yarnConf)
