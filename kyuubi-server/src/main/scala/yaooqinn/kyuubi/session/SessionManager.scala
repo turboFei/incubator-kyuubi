@@ -54,6 +54,8 @@ private[kyuubi] class SessionManager private(
   private var sessionTimeout: Long = _
   private var checkOperation: Boolean = false
   private var shutdown: Boolean = false
+  private var amModeEnable: Boolean = false
+  private var clientMode: Boolean = false
 
   private[this] var kyuubiAppMaster: Option[KyuubiAppMaster] = None
 
@@ -204,6 +206,11 @@ private[kyuubi] class SessionManager private(
 
   override def init(conf: SparkConf): Unit = synchronized {
     this.conf = conf
+    amModeEnable = conf.getBoolean(YARN_KYUUBIAPPMASTER_MODE.key, false)
+    clientMode = conf.get(YARN_KYUUBISERVER_SESSION_MODE.key).toLowerCase match {
+      case "cluster" => false
+      case _ => true
+    }
     initResourcesRootDir()
     // Create operation log root directory, if operation logging is enabled
     if (conf.get(LOGGING_OPERATION_ENABLED).toBoolean) {
@@ -211,18 +218,12 @@ private[kyuubi] class SessionManager private(
     }
     createExecPool()
     addService(operationManager)
-    if (conf.getBoolean(YARN_KYUUBIAPPMASTER_MODE.key, false)) {
+    if (amModeEnable) {
       kyuubiAmSessionManager = new KyuubiAmSparkSessionCacheManager(kyuubiAppMaster)
       addService(kyuubiAmSessionManager)
-    } else {
-      val clientMode = conf.get(YARN_KYUUBISERVER_SESSION_MODE.key).toLowerCase match {
-        case "cluster" => false
-        case _ => true
-      }
-      if (clientMode) {
-        cacheManager = new SparkSessionCacheManager()
-        addService(cacheManager)
-      }
+    } else if (clientMode) {
+      cacheManager = new SparkSessionCacheManager()
+      addService(cacheManager)
     }
     super.init(conf)
   }
@@ -266,10 +267,9 @@ private[kyuubi] class SessionManager private(
       password: String,
       ipAddress: String,
       sessionConf: Map[String, String],
-      withImpersonation: Boolean,
-      clusterMode: Boolean = false): SessionHandle = {
-    if (!clusterMode) {
-      val kyuubiSession = new KyuubiSession(
+      withImpersonation: Boolean): SessionHandle = {
+    val kyuubiSession = (amModeEnable, clientMode) match {
+      case (true, _) => new KyuubiAmSession(
         protocol,
         username,
         password,
@@ -278,28 +278,44 @@ private[kyuubi] class SessionManager private(
         withImpersonation,
         this,
         operationManager)
-      info(s"Opening session for $username")
-      kyuubiSession.open(sessionConf)
-
-      kyuubiSession.setResourcesSessionDir(resourcesRootDir)
-      if (isOperationLogEnabled) {
-        kyuubiSession.setOperationLogSessionDir(operationLogRootDir)
-      }
-
-      val sessionHandle = kyuubiSession.getSessionHandle
-      handleToSession.put(sessionHandle, kyuubiSession)
-      KyuubiServerMonitor.getListener(kyuubiSession.getUserName).foreach {
-        _.onSessionCreated(
-          kyuubiSession.getIpAddress,
-          sessionHandle.getSessionId.toString,
-          kyuubiSession.getUserName)
-      }
-
-      sessionHandle
-    } else {
-      // TODO: KyuubiClusterSession
-      null
+      case (false, true) => new KyuubiSession(
+        protocol,
+        username,
+        password,
+        conf.clone(),
+        ipAddress,
+        withImpersonation,
+        this,
+        operationManager)
+      case _ => new KyuubiClusterSession(
+        protocol,
+        username,
+        password,
+        conf.clone(),
+        ipAddress,
+        withImpersonation,
+        this,
+        operationManager)
     }
+
+    info(s"Opening session for $username")
+    kyuubiSession.open(sessionConf)
+
+    kyuubiSession.setResourcesSessionDir(resourcesRootDir)
+    if (isOperationLogEnabled) {
+      kyuubiSession.setOperationLogSessionDir(operationLogRootDir)
+    }
+
+    val sessionHandle = kyuubiSession.getSessionHandle
+    handleToSession.put(sessionHandle, kyuubiSession)
+    KyuubiServerMonitor.getListener(kyuubiSession.getUserName).foreach {
+      _.onSessionCreated(
+        kyuubiSession.getIpAddress,
+        sessionHandle.getSessionId.toString,
+        kyuubiSession.getUserName)
+    }
+
+    sessionHandle
   }
 
   @throws[KyuubiSQLException]
