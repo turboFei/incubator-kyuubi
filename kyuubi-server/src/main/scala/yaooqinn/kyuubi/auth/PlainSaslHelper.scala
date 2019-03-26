@@ -20,14 +20,13 @@ import java.io.IOException
 import java.security.Security
 import javax.security.auth.callback._
 import javax.security.auth.login.LoginException
-import javax.security.sasl.{AuthenticationException, AuthorizeCallback}
-
-import scala.collection.JavaConverters._
+import javax.security.sasl.{AuthenticationException, AuthorizeCallback, SaslException}
 
 import org.apache.hive.service.cli.thrift.TCLIService.Iface
 import org.apache.spark.SparkConf
 import org.apache.thrift.{TProcessor, TProcessorFactory}
-import org.apache.thrift.transport.{TSaslServerTransport, TTransport, TTransportFactory}
+import org.apache.thrift.transport.{TSaslClientTransport, TSaslServerTransport, TTransport, TTransportFactory}
+import scala.collection.JavaConverters._
 
 import yaooqinn.kyuubi.auth.AuthMethods.AuthMethods
 import yaooqinn.kyuubi.auth.PlainSaslServer.SaslPlainProvider
@@ -54,6 +53,36 @@ object PlainSaslHelper {
         throw new LoginException("Error setting callback handler" + e);
     }
     saslFactory
+  }
+
+  @throws[SaslException]
+  def getPlainTransport(username: String, passwd: String, transport: TTransport): TTransport = {
+    new TSaslClientTransport("PLAIN", null, null, null, Map.empty[String, String].asJava,
+      new PlainCallbackHandler(username, passwd), transport)
+  }
+
+  private class PlainCallbackHandler(username: String, passwd: String)
+    extends CallbackHandler {
+
+    @throws[IOException]
+    @throws[UnsupportedCallbackException]
+    override def handle(callbacks: Array[Callback]): Unit = {
+      val var2 = callbacks
+      val var3 = callbacks.length
+      for (var4 <- (0 until var3)) {
+        val callback = var2(var4)
+        if (callback.isInstanceOf[NameCallback]) {
+          val nameCallback = callback.asInstanceOf[NameCallback]
+          nameCallback.setName(this.username)
+        } else {
+          if (!callback.isInstanceOf[PasswordCallback]) {
+            throw new UnsupportedCallbackException(callback)
+          }
+          val passCallback = callback.asInstanceOf[PasswordCallback]
+          passCallback.setPassword(this.passwd.toCharArray)
+        }
+      }
+    }
   }
 
   private class PlainServerCallbackHandler private(authMethod: AuthMethods, conf: SparkConf)
