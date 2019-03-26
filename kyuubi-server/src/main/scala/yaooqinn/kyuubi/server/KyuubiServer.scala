@@ -25,6 +25,7 @@ import org.apache.spark.KyuubiConf._
 import yaooqinn.kyuubi._
 import yaooqinn.kyuubi.ha.{FailoverService, HighAvailableService, LoadBalanceService}
 import yaooqinn.kyuubi.service.{CompositeService, ServiceException}
+import yaooqinn.kyuubi.yarn.KyuubiAppMaster
 
 /**
  * Main entrance of Kyuubi Server
@@ -40,11 +41,18 @@ private[kyuubi] class KyuubiServer private(name: String)
 
   private[this] val started = new AtomicBoolean(false)
 
+  private[this] var kyuubiAppMaster: Option[KyuubiAppMaster] = None
+
   def this() = this(classOf[KyuubiServer].getSimpleName)
+
+  def this(kyuubiAm: Option[KyuubiAppMaster]) = {
+    this()
+    this.kyuubiAppMaster = kyuubiAm
+  }
 
   override def init(conf: SparkConf): Unit = synchronized {
     this.conf = conf
-    _beService = new BackendService()
+    _beService = new BackendService(kyuubiAppMaster)
     _feService = new FrontendService(_beService)
 
     addService(_beService)
@@ -69,6 +77,12 @@ private[kyuubi] class KyuubiServer private(name: String)
     info("Shutting down " + name)
     if (started.getAndSet(false)) {
       super.stop()
+    }
+  }
+
+  def offlineHaServiceFirst(): Unit = {
+    if (_haService != null) {
+      _haService.stop()
     }
   }
 }

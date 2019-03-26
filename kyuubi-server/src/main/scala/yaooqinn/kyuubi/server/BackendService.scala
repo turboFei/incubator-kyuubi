@@ -29,6 +29,7 @@ import yaooqinn.kyuubi.operation.{KyuubiClusterOperation, OperationHandle, Opera
 import yaooqinn.kyuubi.schema.RowSet
 import yaooqinn.kyuubi.service.CompositeService
 import yaooqinn.kyuubi.session.{KyuubiClusterSession, SessionHandle, SessionManager}
+import yaooqinn.kyuubi.yarn.KyuubiAppMaster
 
 /**
  * [[BackendService]] holds an instance of [[SessionManager]] which manages
@@ -40,12 +41,19 @@ private[server] class BackendService private(name: String)
   private[this] var sessionManager: SessionManager = _
   def getSessionManager: SessionManager = sessionManager
 
+  private[this] var kyuubiAppMaster: Option[KyuubiAppMaster] = None
+
   def this() = this(classOf[BackendService].getSimpleName)
+
+  def this(kyuubiAm: Option[KyuubiAppMaster]) = {
+    this()
+    this.kyuubiAppMaster = kyuubiAm
+  }
 
   override def init(conf: SparkConf): Unit = synchronized {
     this.conf = conf
     AuthzHelper.init(conf)
-    sessionManager = new SessionManager()
+    sessionManager = new SessionManager(kyuubiAppMaster)
     addService(sessionManager)
     super.init(conf)
   }

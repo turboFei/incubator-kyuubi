@@ -18,6 +18,7 @@
 package yaooqinn.kyuubi.session
 
 import java.io.{File, IOException}
+import java.security.AccessControlException
 import java.util.Date
 import java.util.concurrent._
 
@@ -31,9 +32,10 @@ import yaooqinn.kyuubi.{KyuubiSQLException, Logging}
 import yaooqinn.kyuubi.operation.OperationManager
 import yaooqinn.kyuubi.server.KyuubiServer
 import yaooqinn.kyuubi.service.{CompositeService, ServiceException}
-import yaooqinn.kyuubi.spark.SparkSessionCacheManager
+import yaooqinn.kyuubi.spark.{KyuubiAmSparkSessionCacheManager, SparkSessionCacheManager}
 import yaooqinn.kyuubi.ui.KyuubiServerMonitor
 import yaooqinn.kyuubi.utils.NamedThreadFactory
+import yaooqinn.kyuubi.yarn.KyuubiAppMaster
 
 /**
  * A SessionManager for managing [[Session]]s
@@ -42,6 +44,7 @@ private[kyuubi] class SessionManager private(
     name: String) extends CompositeService(name) with Logging {
   private val operationManager = new OperationManager()
   private var cacheManager: SparkSessionCacheManager = _
+  private var kyuubiAmSessionManager: KyuubiAmSparkSessionCacheManager = _
   private val handleToSession = new ConcurrentHashMap[SessionHandle, Session]
   private var execPool: ThreadPoolExecutor = _
   private var isOperationLogEnabled = false
@@ -54,7 +57,14 @@ private[kyuubi] class SessionManager private(
   private var amModeEnable: Boolean = false
   private var clientMode: Boolean = true
 
+  private[this] var kyuubiAppMaster: Option[KyuubiAppMaster] = None
+
   def this() = this(classOf[SessionManager].getSimpleName)
+
+  def this(kyuubiAm: Option[KyuubiAppMaster]) = {
+    this()
+    this.kyuubiAppMaster = kyuubiAm
+  }
 
   private def createExecPool(): Unit = {
     val poolSize = conf.get(ASYNC_EXEC_THREADS).toInt
@@ -209,6 +219,8 @@ private[kyuubi] class SessionManager private(
     createExecPool()
     addService(operationManager)
     if (amModeEnable) {
+      kyuubiAmSessionManager = new KyuubiAmSparkSessionCacheManager(kyuubiAppMaster)
+      addService(kyuubiAmSessionManager)
     } else if (clientMode) {
       cacheManager = new SparkSessionCacheManager()
       addService(cacheManager)
@@ -257,7 +269,24 @@ private[kyuubi] class SessionManager private(
       sessionConf: Map[String, String],
       withImpersonation: Boolean): SessionHandle = {
     val kyuubiSession = (amModeEnable, clientMode) match {
-      case (true, _) => null
+      case (true, _) =>
+        val owner = conf.get(YARN_KYUUBIAPPMASTER_USERNAME.key, "")
+        if (!username.equals(owner)) {
+          warn(s"Reject the request of $username, the owner of this KyuubiAppMaster is $owner.")
+          val accessException = new AccessControlException(s"Permission denied: user [$username] " +
+            s"does not have [access] privilege on this KyuubiAppMaster, whose owner is [$owner].")
+          throw new KyuubiSQLException(s"Error occured when opening session for $username.",
+            accessException)
+        }
+        new KyuubiAmSession(
+        protocol,
+        username,
+        password,
+        conf.clone(),
+        ipAddress,
+        withImpersonation,
+        this,
+        operationManager)
       case (false, true) => new KyuubiSession(
         protocol,
         username,
@@ -319,6 +348,9 @@ private[kyuubi] class SessionManager private(
     if (cacheManager != null) {
       cacheManager.decrease(sessionUser)
     }
+    if (kyuubiAmSessionManager != null) {
+      kyuubiAmSessionManager.decrease(sessionUser)
+    }
     session.close()
   }
 
@@ -329,4 +361,6 @@ private[kyuubi] class SessionManager private(
   def getOpenSessionCount: Int = handleToSession.size
 
   def submitBackgroundOperation(r: Runnable): Future[_] = execPool.submit(r)
+
+  def getAmSessionCacheMgr: KyuubiAmSparkSessionCacheManager = kyuubiAmSessionManager
 }
