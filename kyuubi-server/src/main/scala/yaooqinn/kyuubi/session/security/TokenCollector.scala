@@ -18,7 +18,9 @@
 package yaooqinn.kyuubi.session.security
 
 import org.apache.hadoop.security.UserGroupInformation
-import org.apache.spark.SparkConf
+import org.apache.spark.{KyuubiSparkUtil, SparkConf}
+
+import yaooqinn.kyuubi.utils.KyuubiHadoopUtil
 
 /**
  * An interface for secured service token collectors
@@ -40,7 +42,7 @@ private[security] trait TokenCollector {
 
 }
 
-private[session] object TokenCollector {
+private[kyuubi] object TokenCollector {
 
   /**
    * Obtain tokens from all secured services if required.
@@ -49,6 +51,30 @@ private[session] object TokenCollector {
   def obtainTokenIfRequired(conf: SparkConf): Unit = {
     Seq(HiveTokenCollector, HDFSTokenCollector).foreach { co =>
       if (co.tokensRequired(conf)) co.obtainTokens(conf)
+    }
+  }
+
+  /**
+   * Get ugi for a user.
+   */
+  def getUserUGI(username: String, conf: SparkConf,
+      withImpersonation: Boolean = true): UserGroupInformation = {
+    val currentUser = UserGroupInformation.getLoginUser
+    if (withImpersonation) {
+      if (UserGroupInformation.isSecurityEnabled) {
+        if (conf.contains(KyuubiSparkUtil.PRINCIPAL) && conf.contains(KyuubiSparkUtil.KEYTAB)) {
+          // If principal and keytab are configured, do re-login in case of token expiry.
+          // Do not check keytab file existing as spark-submit has it done
+          currentUser.reloginFromKeytab()
+        }
+        val user = UserGroupInformation.createProxyUser(username, currentUser)
+        KyuubiHadoopUtil.doAs(user)(TokenCollector.obtainTokenIfRequired(conf))
+        user
+      } else {
+        UserGroupInformation.createRemoteUser(username)
+      }
+    } else {
+      currentUser
     }
   }
 }
