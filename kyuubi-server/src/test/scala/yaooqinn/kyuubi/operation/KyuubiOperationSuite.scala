@@ -137,7 +137,7 @@ class KyuubiOperationSuite extends SparkFunSuite with MockitoSugar {
 
   test("testGetSession") {
     val op = sessionMgr.getOperationMgr.newExecuteStatementOperation(session, statement)
-    val s = op.getSession
+    val s = op.getSession.asInstanceOf[KyuubiSession]
     assert(s.sparkSession === spark)
     assert(s == session)
     assert(s.getUserName === userName)
@@ -161,6 +161,7 @@ class KyuubiOperationSuite extends SparkFunSuite with MockitoSugar {
 
   test("transform plan") {
     val op = sessionMgr.getOperationMgr.newExecuteStatementOperation(session, statement)
+      .asInstanceOf[KyuubiOperation]
 
     val parser = new SparkSqlParser(new SQLConf)
     val plan0 = parser.parsePlan("create temporary function a as 'a.b.c'")
