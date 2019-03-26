@@ -20,20 +20,19 @@ package yaooqinn.kyuubi.operation
 import java.sql.SQLException
 import java.util.concurrent.ConcurrentHashMap
 
-import scala.collection.JavaConverters._
-
 import org.apache.hadoop.hive.ql.session.OperationLog
 import org.apache.log4j.Logger
 import org.apache.spark.{KyuubiSparkUtil, SparkConf}
 import org.apache.spark.KyuubiConf._
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.StructType
+import scala.collection.JavaConverters._
 
 import yaooqinn.kyuubi.{KyuubiSQLException, Logging}
 import yaooqinn.kyuubi.cli.FetchOrientation
 import yaooqinn.kyuubi.schema.{RowSet, RowSetBuilder}
 import yaooqinn.kyuubi.service.AbstractService
-import yaooqinn.kyuubi.session.KyuubiSession
+import yaooqinn.kyuubi.session.{KyuubiSession, Session}
 
 private[kyuubi] class OperationManager private(name: String)
   extends AbstractService(name) with Logging {
@@ -41,7 +40,7 @@ private[kyuubi] class OperationManager private(name: String)
   def this() = this(classOf[OperationManager].getSimpleName)
 
   private[this] lazy val logSchema: StructType = new StructType().add("operation_log", "string")
-  private[this] val handleToOperation = new ConcurrentHashMap[OperationHandle, KyuubiOperation]
+  private[this] val handleToOperation = new ConcurrentHashMap[OperationHandle, Operation]
   private[this] val userToOperationLog = new ConcurrentHashMap[String, OperationLog]()
 
   override def init(conf: SparkConf): Unit = synchronized {
@@ -84,14 +83,18 @@ private[kyuubi] class OperationManager private(name: String)
   }
 
   def newExecuteStatementOperation(
-      parentSession: KyuubiSession,
-      statement: String): KyuubiOperation = synchronized {
-    val operation = new KyuubiOperation(parentSession, statement)
+      parentSession: Session,
+      statement: String): Operation = synchronized {
+    val operation = parentSession match {
+      case ks: KyuubiSession =>
+        new KyuubiOperation(parentSession.asInstanceOf[KyuubiSession], statement)
+      case _ => null
+    }
     addOperation(operation)
     operation
   }
 
-  def getOperation(operationHandle: OperationHandle): KyuubiOperation = {
+  def getOperation(operationHandle: OperationHandle): Operation = {
     val operation = getOperationInternal(operationHandle)
     if (operation == null) {
       throw new KyuubiSQLException("Invalid OperationHandle " + operationHandle)
@@ -102,7 +105,7 @@ private[kyuubi] class OperationManager private(name: String)
   private[this] def getOperationInternal(operationHandle: OperationHandle) =
     handleToOperation.get(operationHandle)
 
-  private[this] def addOperation(operation: KyuubiOperation): Unit = {
+  private[this] def addOperation(operation: Operation): Unit = {
     handleToOperation.put(operation.getHandle, operation)
   }
 
@@ -110,7 +113,7 @@ private[kyuubi] class OperationManager private(name: String)
     handleToOperation.remove(opHandle)
 
   private def removeTimedOutOperation(
-      operationHandle: OperationHandle): Option[KyuubiOperation] = synchronized {
+      operationHandle: OperationHandle): Option[Operation] = synchronized {
     Some(handleToOperation.get(operationHandle))
       .filter(_.isTimedOut)
       .map(_ => handleToOperation.remove(operationHandle))
@@ -176,7 +179,7 @@ private[kyuubi] class OperationManager private(name: String)
     fetchOrientation == FetchOrientation.FETCH_FIRST
   }
 
-  def removeExpiredOperations(handles: Seq[OperationHandle]): Seq[KyuubiOperation] = {
+  def removeExpiredOperations(handles: Seq[OperationHandle]): Seq[Operation] = {
     handles.flatMap(removeTimedOutOperation).map { op =>
       warn("Operation " + op.getHandle + " is timed-out and will be closed")
       op

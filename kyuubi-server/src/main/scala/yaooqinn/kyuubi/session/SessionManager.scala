@@ -21,12 +21,11 @@ import java.io.{File, IOException}
 import java.util.Date
 import java.util.concurrent._
 
-import scala.collection.JavaConverters._
-
 import org.apache.commons.io.FileUtils
 import org.apache.hive.service.cli.thrift.TProtocolVersion
 import org.apache.spark.KyuubiConf._
 import org.apache.spark.SparkConf
+import scala.collection.JavaConverters._
 
 import yaooqinn.kyuubi.{KyuubiSQLException, Logging}
 import yaooqinn.kyuubi.operation.OperationManager
@@ -37,13 +36,13 @@ import yaooqinn.kyuubi.ui.KyuubiServerMonitor
 import yaooqinn.kyuubi.utils.NamedThreadFactory
 
 /**
- * A SessionManager for managing [[KyuubiSession]]s
+ * A SessionManager for managing [[Session]]s
  */
 private[kyuubi] class SessionManager private(
     name: String) extends CompositeService(name) with Logging {
   private val operationManager = new OperationManager()
-  private val cacheManager = new SparkSessionCacheManager()
-  private val handleToSession = new ConcurrentHashMap[SessionHandle, KyuubiSession]
+  private var cacheManager: SparkSessionCacheManager = _
+  private val handleToSession = new ConcurrentHashMap[SessionHandle, Session]
   private var execPool: ThreadPoolExecutor = _
   private var isOperationLogEnabled = false
   private var operationLogRootDir: File = _
@@ -52,6 +51,8 @@ private[kyuubi] class SessionManager private(
   private var sessionTimeout: Long = _
   private var checkOperation: Boolean = false
   private var shutdown: Boolean = false
+  private var amModeEnable: Boolean = false
+  private var clientMode: Boolean = true
 
   def this() = this(classOf[SessionManager].getSimpleName)
 
@@ -195,6 +196,11 @@ private[kyuubi] class SessionManager private(
 
   override def init(conf: SparkConf): Unit = synchronized {
     this.conf = conf
+    amModeEnable = conf.getBoolean(YARN_KYUUBIAPPMASTER_MODE.key, false)
+    clientMode = conf.get(YARN_KYUUBISERVER_SESSION_MODE.key, "client").toLowerCase match {
+      case "cluster" => false
+      case _ => true
+    }
     initResourcesRootDir()
     // Create operation log root directory, if operation logging is enabled
     if (conf.get(LOGGING_OPERATION_ENABLED).toBoolean) {
@@ -202,7 +208,11 @@ private[kyuubi] class SessionManager private(
     }
     createExecPool()
     addService(operationManager)
-    addService(cacheManager)
+    if (amModeEnable) {
+    } else if (clientMode) {
+      cacheManager = new SparkSessionCacheManager()
+      addService(cacheManager)
+    }
     super.init(conf)
   }
 
@@ -246,15 +256,19 @@ private[kyuubi] class SessionManager private(
       ipAddress: String,
       sessionConf: Map[String, String],
       withImpersonation: Boolean): SessionHandle = {
-    val kyuubiSession = new KyuubiSession(
-      protocol,
-      username,
-      password,
-      conf.clone(),
-      ipAddress,
-      withImpersonation,
-      this,
-      operationManager)
+    val kyuubiSession = (amModeEnable, clientMode) match {
+      case (true, _) => null
+      case (false, true) => new KyuubiSession(
+        protocol,
+        username,
+        password,
+        conf.clone(),
+        ipAddress,
+        withImpersonation,
+        this,
+        operationManager)
+      case _ => null
+    }
     info(s"Opening session for $username")
     kyuubiSession.open(sessionConf)
 
@@ -276,7 +290,7 @@ private[kyuubi] class SessionManager private(
   }
 
   @throws[KyuubiSQLException]
-  def getSession(sessionHandle: SessionHandle): KyuubiSession = {
+  def getSession(sessionHandle: SessionHandle): Session = {
     val session = handleToSession.get(sessionHandle)
     if (session == null) {
       throw new KyuubiSQLException("Invalid SessionHandle " + sessionHandle)
@@ -294,7 +308,9 @@ private[kyuubi] class SessionManager private(
     KyuubiServerMonitor.getListener(sessionUser).foreach {
       _.onSessionClosed(sessionHandle.getSessionId.toString)
     }
-    cacheManager.decrease(sessionUser)
+    if (cacheManager != null) {
+      cacheManager.decrease(sessionUser)
+    }
     session.close()
   }
 

@@ -52,6 +52,7 @@ class KyuubiOperationWithHDFSSuite extends KyuubiOperationSuite {
 
   test("transform logical plan") {
     val op = sessionMgr.getOperationMgr.newExecuteStatementOperation(session, statement)
+      .asInstanceOf[KyuubiOperation]
     val parser = new SparkSqlParser(new SQLConf)
     val plan0 = parser.parsePlan(
       s"create temporary function a as 'a.b.c' using file '$remoteUDFFile'")
