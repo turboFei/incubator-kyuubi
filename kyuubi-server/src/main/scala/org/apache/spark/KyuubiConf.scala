@@ -411,6 +411,80 @@ object KyuubiConf {
       .timeConf(TimeUnit.MILLISECONDS)
       .createWithDefault(TimeUnit.SECONDS.toMillis(60L))
 
+  val YARN_KYUUBISERVER_SESSION_MODE: ConfigEntry[String] =
+    KyuubiConfigBuilder("spark.kyuubi.yarn.seesion.mode")
+      .doc("The mode of kyuubiServer session, client or cluster")
+      .stringConf
+      .createWithDefault("client")
+
+  val YARN_KYUUBIAPPMASTER_MODE: ConfigEntry[Boolean] =
+    KyuubiConfigBuilder("spark.kyuubi.yarn.am.enable")
+      .doc("Whether the kyuubi is running in appMaster mode ")
+      .booleanConf
+      .createWithDefault(false)
+
+  val YARN_KYUUBIAPPMASTER_NAMESPACE: ConfigEntry[String] =
+    KyuubiConfigBuilder("spark.kyuubi.yarn.am.namespace")
+      .doc("The parent node in ZooKeeper used by KyuubiAppMaster when supporting dynamic service" +
+        " discovery and should be different witht that of kyuubiServer.")
+      .stringConf
+      .createWithDefault("kyuubiappmaster")
+
+  val YARN_KYUUBIAPPMASTER_USERNAME: ConfigEntry[String] =
+    KyuubiConfigBuilder("spark.kyuubi.yarn.am.user")
+      .doc("The relative user name for the kyuubiAppMaster and it must be specified.")
+      .stringConf
+      .createWithDefault("")
+
+  val YARN_KYUUBIAPPMASTER_SUBMIT_WAITTIME: ConfigEntry[Long] =
+    KyuubiConfigBuilder("spark.kyuubi.yarn.am.submit.timeout")
+      .doc("Timeout for kyuubiServer to submit KyuubiAppMaster and to running State")
+      .timeConf(TimeUnit.SECONDS)
+      .createWithDefault(60L)
+
+  val YARN_KYUUBIAPPMASTER_PUBLISH_WAITTIME: ConfigEntry[Long] =
+    KyuubiConfigBuilder("spark.kyuubi.yarn.am.publish.timeout")
+      .doc("Timeout for kyuubiServer to wait kyuubiAppMaster publish service")
+      .timeConf(TimeUnit.SECONDS)
+      .createWithDefault(60L)
+
+  val YARN_KYUUBIAPPMASTER_IDLE_TIMEOUT: ConfigEntry[Long] =
+    KyuubiConfigBuilder("spark.kyuubi.yarn.am.idle.timeout")
+      .doc("KyuubiAppMaster will be closed when idle for more than the timeout.")
+      .timeConf(TimeUnit.SECONDS)
+      .createWithDefault(TimeUnit.MINUTES.toSeconds(60L))
+
+  val YARN_KYUUBIAPPMASTER_MEMORY: ConfigEntry[String] =
+    KyuubiConfigBuilder("spark.kyuubi.yarn.am.memory")
+      .doc("Amount of memory to use for the KyuubiAppMaster process.")
+      .stringConf
+      .createWithDefault("10g")
+
+  val YARN_KYUUBIAPPMASTER_CORES: ConfigEntry[Long] =
+    KyuubiConfigBuilder("spark.kyuubi.yarn.am.cores")
+      .doc("Number of cores to use for the KyuubiAppMaster process.")
+      .longConf
+      .createWithDefault(4L)
+
+  val YARN_KYUUBIAPPMASTER_EXTRA_JAVAOPTIONS: ConfigEntry[String] =
+    KyuubiConfigBuilder("spark.kyuubi.yarn.am.extraJavaOptions")
+      .doc("A string of extra JVM options to pass to the KyuubiAppMaster.")
+      .stringConf
+      .createWithDefault("-XX:+PrintGCDetails -XX:+PrintGCDateStamps")
+
+  val YARN_KYUUBIAPPMASTER_MAX_RESULTSIZE: ConfigEntry[String] =
+    KyuubiConfigBuilder("spark.kyuubi.yarn.am.maxResultSize")
+      .doc("Limit of total size of serialized results of all partitions " +
+        "for each Spark action (e.g. collect) in bytes  for the KyuubiAppMaster.")
+      .stringConf
+      .createWithDefault("1g")
+
+  val YARN_KYUUBIAPPMASTER_MEMORY_OVERHEAD: ConfigEntry[String] =
+    KyuubiConfigBuilder("spark.kyuubi.yarn.am.memoryOverhead")
+      .doc("The amount of off-heap memory to be allocated for the KyuubiAppMaster.")
+      .stringConf
+      .createWithDefault("1g")
+
   /**
    * Return all the configuration definitions that have been defined in [[KyuubiConf]]. Each
    * definition contains key, defaultValue.
