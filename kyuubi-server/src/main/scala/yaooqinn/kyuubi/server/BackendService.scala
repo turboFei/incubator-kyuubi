@@ -17,7 +17,7 @@
 
 package yaooqinn.kyuubi.server
 
-import org.apache.hive.service.cli.thrift.TProtocolVersion
+import org.apache.hive.service.cli.thrift.{TFetchResultsResp, TGetInfoReq, TGetInfoResp, TGetResultSetMetadataResp, TProtocolVersion}
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.types.StructType
 
@@ -25,10 +25,10 @@ import yaooqinn.kyuubi.{KyuubiSQLException, Logging}
 import yaooqinn.kyuubi.auth.KyuubiAuthFactory
 import yaooqinn.kyuubi.author.AuthzHelper
 import yaooqinn.kyuubi.cli.{FetchOrientation, FetchType, GetInfoType, GetInfoValue}
-import yaooqinn.kyuubi.operation.{OperationHandle, OperationStatus}
+import yaooqinn.kyuubi.operation.{KyuubiClusterOperation, OperationHandle, OperationStatus}
 import yaooqinn.kyuubi.schema.RowSet
 import yaooqinn.kyuubi.service.CompositeService
-import yaooqinn.kyuubi.session.{SessionHandle, SessionManager}
+import yaooqinn.kyuubi.session.{KyuubiClusterSession, SessionHandle, SessionManager}
 
 /**
  * [[BackendService]] holds an instance of [[SessionManager]] which manages
@@ -83,6 +83,10 @@ private[server] class BackendService private(name: String)
 
   def getInfo(sessionHandle: SessionHandle, infoType: GetInfoType): GetInfoValue = {
     sessionManager.getSession(sessionHandle).getInfo(infoType)
+  }
+
+  def getInfoResp(sessionHandle: SessionHandle, req: TGetInfoReq): TGetInfoResp = {
+    sessionManager.getSession(sessionHandle).asInstanceOf[KyuubiClusterSession].getInfoResp(req)
   }
 
   def executeStatement(
@@ -143,6 +147,11 @@ private[server] class BackendService private(name: String)
     sessionManager.getOperationMgr.getOperation(opHandle).getSession.getResultSetMetadata(opHandle)
   }
 
+  def getResultSetMetadataResp(opHadnle: OperationHandle): TGetResultSetMetadataResp = {
+    sessionManager.getOperationMgr.getOperation(opHadnle).asInstanceOf[KyuubiClusterOperation]
+      .getResultSetMetaDataResp()
+  }
+
   def fetchResults(
       opHandle: OperationHandle,
       orientation: FetchOrientation,
@@ -150,6 +159,15 @@ private[server] class BackendService private(name: String)
       fetchType: FetchType): RowSet = {
     sessionManager.getOperationMgr.getOperation(opHandle)
       .getSession.fetchResults(opHandle, orientation, maxRows, fetchType)
+  }
+
+  def fetchResultsResp(
+      opHandle: OperationHandle,
+      orientation: FetchOrientation,
+      maxRows: Long,
+      fetchType: FetchType): TFetchResultsResp = {
+    sessionManager.getOperationMgr.getOperation(opHandle).asInstanceOf[KyuubiClusterOperation]
+      .getResultResp(orientation, maxRows, fetchType)
   }
 
   def getDelegationToken(

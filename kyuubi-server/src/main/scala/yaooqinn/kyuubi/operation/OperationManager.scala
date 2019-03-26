@@ -32,7 +32,7 @@ import yaooqinn.kyuubi.{KyuubiSQLException, Logging}
 import yaooqinn.kyuubi.cli.FetchOrientation
 import yaooqinn.kyuubi.schema.{RowSet, RowSetBuilder}
 import yaooqinn.kyuubi.service.AbstractService
-import yaooqinn.kyuubi.session.{KyuubiSession, Session}
+import yaooqinn.kyuubi.session.{KyuubiClusterSession, KyuubiSession, Session}
 
 private[kyuubi] class OperationManager private(name: String)
   extends AbstractService(name) with Logging {
@@ -88,7 +88,8 @@ private[kyuubi] class OperationManager private(name: String)
     val operation = parentSession match {
       case ks: KyuubiSession =>
         new KyuubiOperation(parentSession.asInstanceOf[KyuubiSession], statement)
-      case _ => null
+      case _ =>
+        new KyuubiClusterOperation(parentSession.asInstanceOf[KyuubiClusterSession], statement)
     }
     addOperation(operation)
     operation
