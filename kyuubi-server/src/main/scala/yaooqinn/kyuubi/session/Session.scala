@@ -57,25 +57,7 @@ private[kyuubi] abstract class Session(
   @volatile protected var lastAccessTime: Long = System.currentTimeMillis()
   protected var lastIdleTime = 0L
 
-  protected val sessionUGI: UserGroupInformation = {
-    val currentUser = UserGroupInformation.getLoginUser
-    if (withImpersonation) {
-      if (UserGroupInformation.isSecurityEnabled) {
-        if (conf.contains(KyuubiSparkUtil.PRINCIPAL) && conf.contains(KyuubiSparkUtil.KEYTAB)) {
-          // If principal and keytab are configured, do re-login in case of token expiry.
-          // Do not check keytab file existing as spark-submit has it done
-          currentUser.reloginFromKeytab()
-        }
-        val user = UserGroupInformation.createProxyUser(username, currentUser)
-        KyuubiHadoopUtil.doAs(user)(TokenCollector.obtainTokenIfRequired(conf))
-        user
-      } else {
-        UserGroupInformation.createRemoteUser(username)
-      }
-    } else {
-      currentUser
-    }
-  }
+  protected val sessionUGI = TokenCollector.userUGI(conf, username, withImpersonation)
 
   protected def acquire(userAccess: Boolean): Unit = {
     if (userAccess) {

@@ -33,7 +33,7 @@ import yaooqinn.kyuubi.Logging
 import yaooqinn.kyuubi.service.AbstractService
 import yaooqinn.kyuubi.ui.KyuubiServerMonitor
 
-class SparkSessionCacheManager private(name: String) extends AbstractService(name) with Logging {
+class SparkSessionCacheManager(name: String) extends AbstractService(name) with Logging {
 
   def this() = this(classOf[SparkSessionCacheManager].getSimpleName)
 

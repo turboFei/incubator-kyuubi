@@ -17,26 +17,29 @@
 
 package yaooqinn.kyuubi.yarn
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder
 import java.io.{File, IOException}
 import java.util.concurrent.{Executors, TimeUnit}
-
-import scala.util.control.NonFatal
-
-import com.google.common.util.concurrent.ThreadFactoryBuilder
 import org.apache.hadoop.fs.Path
+import org.apache.hadoop.io.Text
 import org.apache.hadoop.security.UserGroupInformation
+import org.apache.hadoop.security.token.{Token, TokenIdentifier}
 import org.apache.hadoop.yarn.api.ApplicationConstants
 import org.apache.hadoop.yarn.api.records.{ApplicationAttemptId, FinalApplicationStatus}
 import org.apache.hadoop.yarn.client.api.AMRMClient
 import org.apache.hadoop.yarn.conf.YarnConfiguration
 import org.apache.hadoop.yarn.conf.YarnConfiguration._
 import org.apache.hadoop.yarn.exceptions.ApplicationAttemptNotFoundException
+import org.apache.hadoop.yarn.security.AMRMTokenIdentifier
 import org.apache.hadoop.yarn.util.ConverterUtils
 import org.apache.spark.{KyuubiConf, KyuubiSparkUtil, SparkConf}
+import scala.util.control.NonFatal
 
 import yaooqinn.kyuubi.Logging
 import yaooqinn.kyuubi.server.KyuubiServer
 import yaooqinn.kyuubi.service.CompositeService
+import yaooqinn.kyuubi.session.security.TokenCollector
+import yaooqinn.kyuubi.utils.KyuubiHadoopUtil
 
 /**
  * The ApplicationMaster which runs Kyuubi Server inside it.
@@ -48,10 +51,12 @@ class KyuubiAppMaster private(name: String) extends CompositeService(name)
   private lazy val amRMClient = AMRMClient.createAMRMClient()
 
   private[this] var yarnConf: YarnConfiguration = _
-  private[this] val server: KyuubiServer = new KyuubiServer()
+  private[this] var server: KyuubiServer = _
   private[this] var interval: Int = _
   private[this] var amMaxAttempts: Int = _
+  private[this] var username: String = _
 
+  @volatile private[this] var yarnAMRmToken: Token[TokenIdentifier] = _
   @volatile private[this] var amStatus = FinalApplicationStatus.SUCCEEDED
   @volatile private[this] var finalMsg = ""
 
@@ -60,7 +65,15 @@ class KyuubiAppMaster private(name: String) extends CompositeService(name)
   private[this] val heartbeatTask = new Runnable {
     override def run(): Unit = {
       try {
-        amRMClient.allocate(0.1f)
+        val amrmResponse = amRMClient.allocate(0.1f)
+        if (amrmResponse != null && amrmResponse.getAMRMToken != null) {
+          val amrmToken = amrmResponse.getAMRMToken
+          yarnAMRmToken = new Token[TokenIdentifier](amrmToken.getIdentifier.array(),
+            amrmToken.getPassword.array(),
+            new Text(amrmToken.getKind),
+            new Text(amrmToken.getService))
+          info(s"Renew YARN_AM_RM_TOKEN:$yarnAMRmToken.")
+        }
         failureCount = 0
       } catch {
         case _: InterruptedException =>
@@ -106,35 +119,73 @@ class KyuubiAppMaster private(name: String) extends CompositeService(name)
     }
   }
 
-  private[this] def stop(stat: FinalApplicationStatus, msg: String): Unit = {
+  def userUGI: UserGroupInformation = {
+    val ugi = TokenCollector.userUGI(conf, username)
+    ugi.addToken(yarnAMRmToken)
+    ugi
+  }
+
+  def stop(stat: FinalApplicationStatus, msg: String): Unit = {
     amStatus = stat
     finalMsg = msg
     executor.shutdownNow()
-    if (getAppAttemptId.getAttemptId >= amMaxAttempts) {
-      amRMClient.unregisterApplicationMaster(amStatus, finalMsg, "")
-      cleanupStagingDir()
+    if (amStatus == FinalApplicationStatus.SUCCEEDED ||
+      getAppAttemptId.getAttemptId >= amMaxAttempts) {
+      KyuubiHadoopUtil.doAs(userUGI) {
+        amRMClient.unregisterApplicationMaster(amStatus, finalMsg, "")
+        cleanupStagingDir()
+      }
     }
     amRMClient.stop()
     System.exit(-1)
+  }
+
+  def offlineHaServiceFirst(): Unit = {
+    if (server != null) {
+      server.offlineHaServiceFirst()
+    }
+  }
+
+  def getPrincipal(principal: String): String = {
+    try {
+      val splitArr = principal.split("@")
+      val realm = splitArr.apply(1)
+      val name = splitArr.apply(0).substring(0, splitArr.apply(0).indexOf('/'))
+      name + "/_HOST@" + realm
+    } catch {
+      case e: Exception =>
+      throw new Exception(s"The $principal should has 3 parts, such as hive/hostname@realm.")
+    }
   }
 
   override def init(conf: SparkConf): Unit = {
     try {
       info(s"Service: [$name] is initializing.")
       this.conf = conf
+      username = conf.get(KyuubiConf.YARN_KYUUBIAPPMASTER_USERNAME.key)
       yarnConf = new YarnConfiguration(KyuubiSparkUtil.newConfiguration(conf))
       amMaxAttempts = yarnConf.getInt(RM_AM_MAX_ATTEMPTS, DEFAULT_RM_AM_MAX_ATTEMPTS)
       amRMClient.init(yarnConf)
       amRMClient.start()
 
+      val submitUser = UserGroupInformation.getCurrentUser
+      for (tok <- submitUser.getCredentials.getAllTokens.toArray()) {
+        val token = tok.asInstanceOf[Token[TokenIdentifier]]
+        if (token.getKind == AMRMTokenIdentifier.KIND_NAME) {
+          info(s"Save token ${token.toString} to Yarn AmRmToken. ")
+          yarnAMRmToken = token
+        }
+      }
+
       val principal = conf.get(KyuubiSparkUtil.PRINCIPAL, "")
       val keytab = conf.get(KyuubiSparkUtil.KEYTAB, "")
       if (principal.nonEmpty && keytab.nonEmpty && new File(keytab).exists()) {
         conf.set(KyuubiSparkUtil.METASTORE_KEYTAB, keytab)
-        conf.set(KyuubiSparkUtil.METASTORE_PRINCIPAL, principal)
+        conf.set(KyuubiSparkUtil.METASTORE_PRINCIPAL, getPrincipal(principal))
         UserGroupInformation.loginUserFromKeytab(principal, keytab)
       }
 
+      server = new KyuubiServer(Some(this))
       addService(server)
       super.init(conf)
     } catch {
@@ -150,9 +201,11 @@ class KyuubiAppMaster private(name: String) extends CompositeService(name)
       info(s"Service: [$name] is starting.")
       // TODO:(Kent) Add App tracking url
       val feService = server.feService
-      amRMClient.registerApplicationMaster(
-        feService.getServerIPAddress.getHostName,
-        feService.getPortNumber, "")
+      KyuubiHadoopUtil.doAs(userUGI) {
+        amRMClient.registerApplicationMaster(
+          feService.getServerIPAddress.getHostName,
+          feService.getPortNumber, "")
+      }
       val expiryInterval = yarnConf.getInt(RM_AM_EXPIRY_INTERVAL_MS, 120000)
       interval = math.max(100, math.min(expiryInterval / 2, 3000))
       info(s"Scheduling ApplicationMaster heartbeat in every $interval ms")
