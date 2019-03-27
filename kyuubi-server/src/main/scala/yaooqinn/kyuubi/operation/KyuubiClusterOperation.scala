@@ -39,7 +39,6 @@ import yaooqinn.kyuubi.ui.KyuubiServerMonitor
 class KyuubiClusterOperation(session: KyuubiClusterSession, statement: String)
   extends Operation(session, statement) {
 
-  import KyuubiClusterOperation._
   import KyuubiClusterSession._
 
   private val conf = session.getConf
@@ -68,7 +67,6 @@ class KyuubiClusterOperation(session: KyuubiClusterSession, statement: String)
       transportLock.unlock()
     }
     stmtHandle = null
-
   }
 
   override def getResultSetSchema: StructType = {
@@ -169,54 +167,7 @@ class KyuubiClusterOperation(session: KyuubiClusterSession, statement: String)
     stmtHandle.isHasResultSet
   }
 
-  private def getQueryLog(incremental: Boolean = true,
-      fetchSize: Int = DEFAULT_FETCH_MAX_ROWS): List[String] = {
-    if (!isClosedOrCanceled) {
-      var successFlag = true
-      val logs = new ListBuffer[String]
-      var fetchLogResp: TFetchResultsResp = null
-      transportLock.lock()
-      try {
-        if (stmtHandle != null) {
-          val fetchLogReq = new TFetchResultsReq(
-            stmtHandle, getFetchOrientation(incremental), fetchSize)
-          fetchLogReq.setFetchType(1)
-          fetchLogResp = client.FetchResults(fetchLogReq)
-          verifySuccess(fetchLogResp.getStatus)
-        } else {
-          if (isClosedOrCanceled) {
-            throw new KyuubiSQLException(s"Method getQueryLog() failed. " +
-              s"The statement:$statementId has been closed or cancelled.", "08S01")
-          } else if (checkState(ERROR)) {
-            throw new KyuubiSQLException(s"Method getQueryLog() failed. " +
-              s"Because the stmtHandle of  statement:$statementId is null and " +
-              s"the statement execution might fail.", "08S01")
-          } else {
-            successFlag = false
-          }
-        }
-      } catch {
-        case e: Exception =>
-          throw new KyuubiSQLException(e.toString, "08S01", e)
-      } finally {
-        transportLock.unlock()
-      }
-      if (successFlag) {
-        val logRows = fetchLogResp.getResults.getRows.asScala
-        for (log <- logRows) {
-          logs += String.valueOf(log.getColVals.get(0))
-        }
-        logs.toList
-      } else {
-        logs.toList
-      }
-    } else {
-      List.empty[String]
-    }
-  }
-
   def execute(): Unit = {
-   var logThread: Thread = null
    try {
      statementId = UUID.randomUUID().toString
      info(s"Running query '$statement' with $statementId")
@@ -234,10 +185,6 @@ class KyuubiClusterOperation(session: KyuubiClusterSession, statement: String)
      setHasResultSet(executeQuery(statement))
      setState(FINISHED)
      KyuubiServerMonitor.getListener(session.getUserName).foreach(_.onStatementFinish(statementId))
-     // Get log after the execution complete, avoid conflict with client-get-log-thread
-     logThread = createLogThread()
-     logThread.start()
-     logThread.join(DEFAULT_QUERY_PROGRESS_THREAD_TIMEOUT)
    } catch {
      case e: KyuubiSQLException =>
        if (!isClosedOrCanceled) {
@@ -245,69 +192,6 @@ class KyuubiClusterOperation(session: KyuubiClusterSession, statement: String)
          onStatementError(statementId, e.getMessage, err)
          throw e
        }
-   } finally {
-     if (logThread != null && !logThread.isInterrupted) {
-       logThread.interrupt()
-       logThread.join(DEFAULT_QUERY_PROGRESS_THREAD_TIMEOUT)
-       showRemainingLogsIfAny()
-     }
    }
-  }
-
-  def createLogThread(): Thread = {
-    val threadName = s"KyuubiCluster-Operation-RunnableLog-$userName-$statementId"
-    new Thread(threadName) {
-      override def run(): Unit = {
-        // Reset the offset of log file
-        try {
-          var logs = getQueryLog(false)
-          while (logs.size > 0) {
-            // fetch the log periodically and ouput to logging
-            for (log <- logs) {
-              info(log)
-            }
-            Thread.sleep(DEFAULT_QUERY_PROGRESS_INTERVAL)
-            logs = getQueryLog()
-          }
-        } catch {
-          case e: KyuubiSQLException =>
-            error(e.getMessage)
-          case e: InterruptedException =>
-            debug("Getting log thread is interrupted, since query is done!")
-            showRemainingLogsIfAny()
-        }
-      }
-    }
-  }
-
-  def showRemainingLogsIfAny(): Unit = {
-    var logs: List[String] = List.empty
-    do {
-      try {
-        logs = getQueryLog()
-      } catch {
-        case e: Exception =>
-          error(e.toString)
-      }
-      for (log <- logs) {
-        info(log)
-      }
-    } while (logs.size > 0)
-  }
-}
-
-object KyuubiClusterOperation {
-  val DEFAULT_FETCH_ORIENTATION: FetchOrientation = FetchOrientation.FETCH_NEXT
-  val DEFAULT_FETCH_MAX_ROWS = 100
-
-  private val DEFAULT_QUERY_PROGRESS_INTERVAL = 1000
-  private val DEFAULT_QUERY_PROGRESS_THREAD_TIMEOUT = 10 * 1000
-
-  private def getFetchOrientation(incremental: Boolean): TFetchOrientation = {
-    if (incremental) {
-      TFetchOrientation.FETCH_NEXT
-    } else {
-      TFetchOrientation.FETCH_FIRST
-    }
   }
 }
