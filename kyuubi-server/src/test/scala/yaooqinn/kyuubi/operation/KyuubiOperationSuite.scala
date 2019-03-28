@@ -17,19 +17,16 @@
 
 package yaooqinn.kyuubi.operation
 
-import scala.collection.JavaConverters._
-
-import org.apache.hadoop.security.UserGroupInformation
-import org.apache.hive.service.cli.thrift.TProtocolVersion
-import org.apache.spark.{KyuubiSparkUtil, SparkConf, SparkContext, SparkFunSuite}
+import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.catalog.FunctionResource
 import org.apache.spark.sql.execution.SparkSqlParser
 import org.apache.spark.sql.execution.command.CreateFunctionCommand
 import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.types.StructType
 import org.mockito.Mockito.when
-import org.scalatest.mock.MockitoSugar
 
+import scala.collection.JavaConverters._
 import yaooqinn.kyuubi.KyuubiSQLException
 import yaooqinn.kyuubi.cli.FetchOrientation.FETCH_NEXT
 import yaooqinn.kyuubi.schema.ColumnBasedSet
@@ -37,19 +34,8 @@ import yaooqinn.kyuubi.session.{KyuubiSession, SessionManager}
 import yaooqinn.kyuubi.spark.SparkSessionWithUGI
 import yaooqinn.kyuubi.utils.ReflectUtils
 
-class KyuubiOperationSuite extends SparkFunSuite with MockitoSugar {
+class KyuubiOperationSuite extends OperationSuite {
 
-  val conf = new SparkConf(loadDefaults = true).setAppName("operation test")
-  KyuubiSparkUtil.setupCommonConfig(conf)
-  conf.remove(KyuubiSparkUtil.CATALOG_IMPL)
-  conf.setMaster("local")
-  var sessionMgr: SessionManager = _
-  val proto = TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V8
-  val user = UserGroupInformation.getCurrentUser
-  val userName = user.getShortUserName
-  val passwd = ""
-  val statement = "show tables"
-  var session: KyuubiSession = _
   var spark: SparkSession = _
   var sparkWithUgi: SparkSessionWithUGI = _
 
@@ -61,51 +47,19 @@ class KyuubiOperationSuite extends SparkFunSuite with MockitoSugar {
       classOf[SparkSession].getName,
       Seq(classOf[SparkContext]),
       Seq(sc)).asInstanceOf[SparkSession]
-    sessionMgr = new SessionManager()
-    sessionMgr.init(conf)
-    sessionMgr.start()
+    super.beforeAll()
     sparkWithUgi = new SparkSessionWithUGI(user, conf, sessionMgr.getCacheMgr)
     ReflectUtils.setFieldValue(sparkWithUgi,
       "yaooqinn$kyuubi$spark$SparkSessionWithUGI$$_sparkSession", spark)
     session = new KyuubiSession(
       proto, userName, passwd, conf, "", false, sessionMgr, sessionMgr.getOperationMgr)
+    sessionMgr.getCacheMgr.set(userName, spark)
     ReflectUtils.setFieldValue(session, "sparkSessionWithUGI", sparkWithUgi)
   }
 
   protected override def afterAll(): Unit = {
-    session.close()
-    session = null
-    sessionMgr.stop()
     spark.stop()
-  }
-
-  test("testCancel") {
-    val op = sessionMgr.getOperationMgr.newExecuteStatementOperation(session, statement)
-    assert(op.getStatus.getState === INITIALIZED)
-    op.cancel()
-    assert(op.getStatus.getState === CANCELED)
-  }
-
-  test("testGetHandle") {
-    val op = sessionMgr.getOperationMgr.newExecuteStatementOperation(session, statement)
-    assert(!op.getHandle.isHasResultSet)
-    assert(!op.getHandle.toTOperationHandle.isHasResultSet)
-    op.getHandle.setHasResultSet(true)
-    assert(op.getHandle.isHasResultSet)
-    assert(op.getHandle.toTOperationHandle.isHasResultSet)
-    assert(op.getHandle.getProtocolVersion === TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V8)
-    assert(op.getHandle.getOperationType === EXECUTE_STATEMENT)
-  }
-
-  test("testGetStatus") {
-    val op = sessionMgr.getOperationMgr.newExecuteStatementOperation(session, statement)
-    assert(op.getStatus.getState === INITIALIZED)
-    assert(op.getStatus.getOperationException === null)
-  }
-
-  test("testIsTimedOut") {
-    val op = sessionMgr.getOperationMgr.newExecuteStatementOperation(session, statement)
-    assert(!op.isTimedOut)
+    super.afterAll()
   }
 
   test("testGetNextRowSet") {
@@ -117,29 +71,14 @@ class KyuubiOperationSuite extends SparkFunSuite with MockitoSugar {
       "iter", ds.toLocalIterator().asScala)
     val rowSet = op.getNextRowSet(FETCH_NEXT, 10)
     assert(rowSet.isInstanceOf[ColumnBasedSet])
-  }
-
-  test("testGetProtocolVersion") {
-    val op = sessionMgr.getOperationMgr.newExecuteStatementOperation(session, statement)
-    assert(op.getProtocolVersion === proto)
-  }
-
-  test("testGetOperationLog") {
-    // TODO
-  }
-
-  test("testClose") {
-    val op = sessionMgr.getOperationMgr.newExecuteStatementOperation(session, statement)
-    assert(op.getStatus.getState === INITIALIZED)
-    op.close()
-    assert(op.getStatus.getState === CLOSED)
+    val schema = op.getResultSetSchema
+    assert(schema.isInstanceOf[StructType])
   }
 
   test("testGetSession") {
     val op = sessionMgr.getOperationMgr.newExecuteStatementOperation(session, statement)
     val s = op.getSession.asInstanceOf[KyuubiSession]
     assert(s.sparkSession === spark)
-    assert(s == session)
     assert(s.getUserName === userName)
   }
 
@@ -190,22 +129,5 @@ class KyuubiOperationSuite extends SparkFunSuite with MockitoSugar {
 
     val e3 = intercept[KyuubiSQLException](op.transform(plan5))
     assert(e3.getMessage.startsWith("Resource Type"))
-  }
-
-  test("is closed or canceled") {
-    val op = sessionMgr.getOperationMgr.newExecuteStatementOperation(session, statement)
-    assert(!op.isClosedOrCanceled)
-    op.cancel()
-    assert(op.isClosedOrCanceled)
-    op.close()
-    assert(op.isClosedOrCanceled)
-    val op2 = sessionMgr.getOperationMgr.newExecuteStatementOperation(session, statement)
-    op2.close()
-    assert(op2.isClosedOrCanceled)
-    val op3 = sessionMgr.getOperationMgr.newExecuteStatementOperation(session, null)
-    op3.cancel()
-    op3.close()
-    assert(op3.isClosedOrCanceled)
-
   }
 }

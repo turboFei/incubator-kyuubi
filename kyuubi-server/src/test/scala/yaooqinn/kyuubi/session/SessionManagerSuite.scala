@@ -178,4 +178,58 @@ class SessionManagerSuite extends SparkFunSuite {
     val e2 = intercept[KyuubiSQLException](sessionManager.getSession(sessionHandle))
     assert(e2.getMessage.contains(sessionHandle.toString))
   }
+
+  test("test sessionManager with amMode") {
+    val conf = new SparkConf()
+      .setMaster("local")
+      .set(KyuubiConf.YARN_KYUUBIAPPMASTER_MODE.key, "true")
+      .set(KyuubiConf.YARN_KYUUBISERVER_SESSION_MODE, "cluster")
+    KyuubiSparkUtil.setupCommonConfig(conf)
+
+    val sessionMgr = new SessionManager()
+    assert(ReflectUtils.getFieldValue(sessionMgr, "cacheManager") === null)
+    assert(ReflectUtils.getFieldValue(sessionMgr, "amModeEnable") === false)
+    assert(ReflectUtils.getFieldValue(sessionMgr, "clientMode") === true)
+    sessionMgr.init(conf)
+    assert(ReflectUtils.getFieldValue(sessionMgr, "cacheManager") === null)
+    assert(ReflectUtils.getFieldValue(sessionMgr, "amModeEnable") === true)
+    assert(ReflectUtils.getFieldValue(sessionMgr, "clientMode") === false)
+  }
+
+  test("test sessionManager withOut amMode") {
+    val conf = new SparkConf()
+      .setMaster("local")
+      .set(KyuubiConf.YARN_KYUUBIAPPMASTER_MODE.key, "false")
+      .set(KyuubiConf.YARN_KYUUBISERVER_SESSION_MODE, "client")
+    KyuubiSparkUtil.setupCommonConfig(conf)
+
+    val sessionMgr = new SessionManager()
+    sessionMgr.init(conf)
+    assert(ReflectUtils.getFieldValue(sessionMgr, "cacheManager") != null)
+    assert(ReflectUtils.getFieldValue(sessionMgr, "amModeEnable") === false)
+    assert(ReflectUtils.getFieldValue(sessionMgr, "clientMode") === true)
+  }
+
+  test("open session with amMode false  and clientMode true") {
+    val conf = new SparkConf()
+      .setMaster("local")
+      .set(KyuubiConf.YARN_KYUUBIAPPMASTER_MODE.key, "false")
+      .set(KyuubiConf.YARN_KYUUBISERVER_SESSION_MODE, "client")
+
+    KyuubiSparkUtil.setupCommonConfig(conf)
+    val sessionManager = new SessionManager()
+
+    sessionManager.init(conf)
+    sessionManager.start()
+    val sessionHandle = sessionManager.openSession(
+      TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V8,
+      KyuubiSparkUtil.getCurrentUserName,
+      "",
+      "",
+      Map.empty[String, String],
+      withImpersonation = true)
+    assert(sessionManager.getSession(sessionHandle).isInstanceOf[KyuubiSession])
+    sessionManager.closeSession(sessionHandle)
+    assert(sessionManager.getCacheMgr != null)
+  }
 }

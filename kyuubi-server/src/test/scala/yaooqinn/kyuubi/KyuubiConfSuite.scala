@@ -37,6 +37,31 @@ class KyuubiConfSuite extends SparkFunSuite {
 
     assert(conf.getOption(AUTHENTICATION_METHOD).nonEmpty)
     assert(conf.get(AUTHENTICATION_METHOD) === "NONE")
+
+    assert(conf.getOption(YARN_KYUUBISERVER_SESSION_MODE).nonEmpty)
+    assert(conf.get(YARN_KYUUBISERVER_SESSION_MODE) == "client")
+
+    assert(conf.getOption(YARN_KYUUBIAPPMASTER_MODE).nonEmpty)
+    assert(conf.get(YARN_KYUUBIAPPMASTER_MODE) == "false")
+
+    assert(conf.getOption(YARN_KYUUBIAPPMASTER_PUBLISH_WAITTIME).nonEmpty)
+    assert(conf.get(YARN_KYUUBIAPPMASTER_PUBLISH_WAITTIME) == "60000ms")
+
+    assert(conf.getOption(YARN_KYUUBIAPPMASTER_IDLE_TIMEOUT).nonEmpty)
+    assert(conf.get(YARN_KYUUBIAPPMASTER_IDLE_TIMEOUT) == "3600000ms")
+
+    assert(conf.getOption(YARN_KYUUBIAPPMASTER_MEMORY).nonEmpty)
+    assert(conf.get(YARN_KYUUBIAPPMASTER_MEMORY) == "2g")
+
+    assert(conf.getOption(YARN_KYUUBIAPPMASTER_CORES).nonEmpty)
+    assert(conf.get(YARN_KYUUBIAPPMASTER_CORES) == "2")
+
+    assert(conf.getOption(YARN_KYUUBIAPPMASTER_MAX_RESULTSIZE).nonEmpty)
+    assert(conf.get(YARN_KYUUBIAPPMASTER_MAX_RESULTSIZE) == "1g")
+
+    assert(conf.getOption(YARN_KYUUBIAPPMASTER_MEMORY_OVERHEAD).nonEmpty)
+    assert(conf.get(YARN_KYUUBIAPPMASTER_MEMORY_OVERHEAD) == "384m")
+
   }
 
 }
