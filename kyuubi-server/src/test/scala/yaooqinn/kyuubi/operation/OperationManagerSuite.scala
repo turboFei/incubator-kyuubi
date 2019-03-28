@@ -18,18 +18,17 @@
 package yaooqinn.kyuubi.operation
 
 import scala.collection.mutable.ArrayBuffer
-
 import org.apache.hadoop.hive.ql.session.OperationLog
 import org.apache.spark.{KyuubiConf, KyuubiSparkUtil, SparkConf, SparkFunSuite}
 import org.apache.spark.sql.SparkSession
 import org.mockito.Mockito._
 import org.scalatest.Matchers
 import org.scalatest.mock.MockitoSugar
-
 import yaooqinn.kyuubi.KyuubiSQLException
 import yaooqinn.kyuubi.cli.FetchOrientation
 import yaooqinn.kyuubi.service.State
-import yaooqinn.kyuubi.session.{KyuubiSession, SessionManager}
+import yaooqinn.kyuubi.session.{KyuubiSession, Session, SessionManager}
+import yaooqinn.kyuubi.utils.ReflectUtils
 
 class OperationManagerSuite extends SparkFunSuite with Matchers with MockitoSugar {
 
@@ -194,6 +193,40 @@ class OperationManagerSuite extends SparkFunSuite with Matchers with MockitoSuga
       operationMgr.getOperationLogRowSet(op1.getHandle, FetchOrientation.FETCH_NEXT, 5))
     e.getMessage should startWith("Couldn't find log associated with operation handle:")
     ss.stop()
+  }
+
+  test("test newExecuteStatementOperation") {
+    val operationMgr = new OperationManager()
+    conf.remove(KyuubiSparkUtil.CATALOG_IMPL)
+    operationMgr.init(conf)
+    val statement = "show tables"
+
+    val kyuubiSession = mock[KyuubiSession]
+    val ss =
+      SparkSession.builder()
+        .config(KyuubiSparkUtil.SPARK_UI_PORT, KyuubiSparkUtil.SPARK_UI_PORT_DEFAULT)
+        .config(conf)
+        .getOrCreate()
+    when(kyuubiSession.sparkSession).thenReturn(ss)
+
+    val kyuubiOperation = operationMgr.newExecuteStatementOperation(kyuubiSession, statement)
+    assert(kyuubiOperation.isInstanceOf[KyuubiOperation])
+
+    // TOOD: other type kyuubiSession
+    val session = mock[Session]
+    val e = intercept[Exception](operationMgr.newExecuteStatementOperation(session, statement))
+    assert(e.isInstanceOf[NullPointerException])
+  }
+
+  test("test isFetchFirst") {
+    val operationMgr = new OperationManager()
+    conf.remove(KyuubiSparkUtil.CATALOG_IMPL)
+    operationMgr.init(conf)
+
+    assert(ReflectUtils.invokeMethod(operationMgr, "isFetchFirst",
+      List(classOf[FetchOrientation]), List(FetchOrientation.FETCH_FIRST)) === true)
+    assert(ReflectUtils.invokeMethod(operationMgr, "isFetchFirst",
+      List(classOf[FetchOrientation]), List(FetchOrientation.FETCH_NEXT)) === false)
   }
 
 }

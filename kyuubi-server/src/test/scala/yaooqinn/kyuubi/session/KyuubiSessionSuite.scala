@@ -17,33 +17,24 @@
 
 package yaooqinn.kyuubi.session
 
-import java.io.File
-
-import org.apache.hadoop.security.UserGroupInformation.AuthenticationMethod
 import org.apache.hive.service.cli.thrift.TProtocolVersion
-import org.apache.spark.{KyuubiConf, KyuubiSparkUtil, SparkFunSuite}
+import org.apache.spark.KyuubiSparkUtil
 import org.apache.spark.sql.SparkSession
-
+import org.scalatest.mock.MockitoSugar
 import yaooqinn.kyuubi.KyuubiSQLException
-import yaooqinn.kyuubi.auth.KyuubiAuthFactory
-import yaooqinn.kyuubi.cli.GetInfoType
-import yaooqinn.kyuubi.server.KyuubiServer
+import yaooqinn.kyuubi.cli.{FetchOrientation, FetchType, GetInfoType}
+import yaooqinn.kyuubi.operation.{CLOSED, KyuubiOperation, OperationManager}
+import yaooqinn.kyuubi.schema.ColumnBasedSet
 import yaooqinn.kyuubi.ui.KyuubiServerMonitor
 import yaooqinn.kyuubi.utils.ReflectUtils
 
-class KyuubiSessionSuite extends SparkFunSuite {
+class KyuubiSessionSuite extends SessionSuite with MockitoSugar {
 
-  import KyuubiConf._
-
-  var server: KyuubiServer = _
-  var session: KyuubiSession = _
   var spark: SparkSession = _
 
   override def beforeAll(): Unit = {
-    System.setProperty(KyuubiConf.FRONTEND_BIND_PORT.key, "0")
     System.setProperty("spark.master", "local")
-
-    server = KyuubiServer.startKyuubiServer()
+    super.beforeAll()
     val be = server.beService
     val sessionMgr = be.getSessionManager
     val operationMgr = sessionMgr.getOperationMgr
@@ -58,32 +49,17 @@ class KyuubiSessionSuite extends SparkFunSuite {
     KyuubiServerMonitor.getListener(user)
       .foreach(_.onSessionCreated(
         session.getIpAddress, session.getSessionHandle.getSessionId.toString, user))
-    spark = session.sparkSession
-    super.beforeAll()
+    spark = session.asInstanceOf[KyuubiSession].sparkSession
   }
 
   override def afterAll(): Unit = {
-    System.clearProperty(KyuubiConf.FRONTEND_BIND_PORT.key)
     System.clearProperty("spark.master")
-    if (session != null) {
-      if (session.sparkSession != null) session.sparkSession.stop()
-      session.close()
-    }
-    if (server != null) server.stop()
+    if (spark != null) spark.stop()
     super.afterAll()
   }
 
-  test("test session ugi") {
-    assert(session.ugi.getAuthenticationMethod === AuthenticationMethod.SIMPLE)
-  }
-
   test("spark session") {
-    assert(!session.sparkSession.sparkContext.isStopped)
-  }
-
-  test("session handle") {
-    val handle = session.getSessionHandle
-    assert(handle.getProtocolVersion === TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V8)
+    assert(!spark.sparkContext.isStopped)
   }
 
   test("get info") {
@@ -96,89 +72,53 @@ class KyuubiSessionSuite extends SparkFunSuite {
     assert(e.getMessage.startsWith("Unrecognized GetInfoType value"))
   }
 
-  test("get last access time") {
-    session.getInfo(GetInfoType.SERVER_NAME)
-    assert(session.getLastAccessTime !== 0L)
+  test("test new ExecuteStatementOperation") {
+    val statement = "show databases"
+    val operationMgr = new OperationManager()
+    assert(operationMgr.newExecuteStatementOperation(session, statement)
+      .isInstanceOf[KyuubiOperation])
   }
 
-  test("get password") {
-    assert(session.getPassword === "")
+  test("test executeStatement") {
+    if (session != null) {
+      session.close()
+    }
+    val sessionHadnle = server.beService.getSessionManager.openSession(
+      session.getProtocolVersion,
+      session.getUserName,
+      "",
+      session.getIpAddress,
+      Map.empty,
+      true)
+    session = server.beService.getSessionManager.getSession(sessionHadnle)
+    session.getSessionMgr.getCacheMgr.set(session.getUserName, spark)
+
+    var opHandle = session.executeStatement("wrong statement")
+    Thread.sleep(5000)
+    var opException = session.getSessionMgr.getOperationMgr.getOperation(opHandle)
+      .getStatus.getOperationException
+    assert(opException.getSQLState === "ParseException")
+
+    opHandle = session.executeStatement("select * from tablea")
+    Thread.sleep(5000)
+    opException = session.getSessionMgr.getOperationMgr.getOperation(opHandle)
+      .getStatus.getOperationException
+    assert(opException.getSQLState === "AnalysisException")
+
+    opHandle = session.executeStatement("show tables")
+    Thread.sleep(5000)
+    val results = session.fetchResults(opHandle, FetchOrientation.FETCH_FIRST,
+      10, FetchType.QUERY_OUTPUT)
+    val logs = session.fetchResults(opHandle, FetchOrientation.FETCH_FIRST,
+      10, FetchType.LOG)
+    assert(results.isInstanceOf[ColumnBasedSet] && logs.isInstanceOf[ColumnBasedSet])
+
+    // Just let server to stop all.
+    session = null
   }
 
-  test("set operation log session dir") {
-    val operationLogRootDir = new File(server.getConf.get(LOGGING_OPERATION_LOG_DIR))
-    operationLogRootDir.mkdirs()
-    session.setOperationLogSessionDir(operationLogRootDir)
-    assert(session.isOperationLogEnabled)
-    assert(operationLogRootDir.exists())
-    assert(operationLogRootDir.listFiles().exists(_.getName == KyuubiSparkUtil.getCurrentUserName))
-    assert(operationLogRootDir.listFiles().filter(_.getName == KyuubiSparkUtil.getCurrentUserName)
-      .head.listFiles().exists(_.getName === session.getSessionHandle.getHandleIdentifier.toString))
-    session.setOperationLogSessionDir(operationLogRootDir)
-    assert(session.isOperationLogEnabled)
-    operationLogRootDir.delete()
-    operationLogRootDir.setExecutable(false)
-    operationLogRootDir.setReadable(false)
-    operationLogRootDir.setWritable(false)
-    session.setOperationLogSessionDir(operationLogRootDir)
-    assert(!session.isOperationLogEnabled)
-    operationLogRootDir.setReadable(true)
-    operationLogRootDir.setWritable(true)
-    operationLogRootDir.setExecutable(true)
-  }
-
-  test("set resources session dir") {
-    val resourceRoot = new File(server.getConf.get(OPERATION_DOWNLOADED_RESOURCES_DIR))
-    resourceRoot.mkdirs()
-    resourceRoot.deleteOnExit()
-    assert(resourceRoot.isDirectory)
-    session.setResourcesSessionDir(resourceRoot)
-    val subDir = resourceRoot.listFiles().head
-    assert(subDir.getName === KyuubiSparkUtil.getCurrentUserName)
-    val resourceDir = subDir.listFiles().head
-    assert(resourceDir.getName === session.getSessionHandle.getSessionId + "_resources")
-    session.setResourcesSessionDir(resourceRoot)
-    assert(subDir.listFiles().length === 1, "directory should already exists")
-    assert(resourceDir.delete())
-    resourceDir.createNewFile()
-    assert(resourceDir.isFile)
-    val e1 = intercept[RuntimeException](session.setResourcesSessionDir(resourceRoot))
-    assert(e1.getMessage.startsWith("The resources directory exists but is not a directory"))
-    resourceDir.delete()
-    subDir.setWritable(false)
-    val e2 = intercept[RuntimeException](session.setResourcesSessionDir(resourceRoot))
-    assert(e2.getMessage.startsWith("Couldn't create session resources directory"))
-    subDir.setWritable(true)
-  }
-
-  test("get no operation time") {
-    assert(session.getNoOperationTime !== 0L)
-  }
-
-  test("get delegation token for non secured") {
-    val authFactory =
-      ReflectUtils.getFieldValue(server.feService, "authFactory").asInstanceOf[KyuubiAuthFactory]
-    val e = intercept[KyuubiSQLException](
-      session.getDelegationToken(authFactory, session.getUserName, session.getUserName))
-    assert(e.getMessage === "Delegation token only supported over kerberos authentication")
-    assert(e.toTStatus.getSqlState === "08S01")
-  }
-
-  test("cancel delegation token for non secured") {
-    val authFactory =
-      ReflectUtils.getFieldValue(server.feService, "authFactory").asInstanceOf[KyuubiAuthFactory]
-    val e = intercept[KyuubiSQLException](
-      session.cancelDelegationToken(authFactory, ""))
-    assert(e.getMessage === "Delegation token only supported over kerberos authentication")
-    assert(e.toTStatus.getSqlState === "08S01")
-  }
-
-  test("renew delegation token for non secured") {
-    val authFactory =
-      ReflectUtils.getFieldValue(server.feService, "authFactory").asInstanceOf[KyuubiAuthFactory]
-    val e = intercept[KyuubiSQLException](
-      session.renewDelegationToken(authFactory, ""))
-    assert(e.getMessage === "Delegation token only supported over kerberos authentication")
-    assert(e.toTStatus.getSqlState === "08S01")
+  test("test getNoOperationTime") {
+    val mockSession = mock[KyuubiSession]
+    assert(mockSession.getNoOperationTime === 0L)
   }
 }
