@@ -154,6 +154,7 @@ private[kyuubi] abstract class HighAvailableService(name: String, server: Kyuubi
     }
   }
 
+  def getServiceNameSpace: String = serviceRootNamespace
 }
 
 object HighAvailableService {

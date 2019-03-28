@@ -196,18 +196,25 @@ class SessionManagerSuite extends SparkFunSuite {
     assert(ReflectUtils.getFieldValue(sessionMgr, "clientMode") === false)
   }
 
-  test("test sessionManager withOut amMode") {
+  test("test sessionManager with amMode false and clientMode false") {
     val conf = new SparkConf()
       .setMaster("local")
       .set(KyuubiConf.YARN_KYUUBIAPPMASTER_MODE.key, "false")
-      .set(KyuubiConf.YARN_KYUUBISERVER_SESSION_MODE, "client")
+      .set(KyuubiConf.YARN_KYUUBISERVER_SESSION_MODE, "cluster")
     KyuubiSparkUtil.setupCommonConfig(conf)
 
     val sessionMgr = new SessionManager()
     sessionMgr.init(conf)
-    assert(ReflectUtils.getFieldValue(sessionMgr, "cacheManager") != null)
+    assert(ReflectUtils.getFieldValue(sessionMgr, "cacheManager") === null)
     assert(ReflectUtils.getFieldValue(sessionMgr, "amModeEnable") === false)
-    assert(ReflectUtils.getFieldValue(sessionMgr, "clientMode") === true)
+    assert(ReflectUtils.getFieldValue(sessionMgr, "clientMode") === false)
+    intercept[Exception](sessionMgr.openSession(
+      TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V8,
+      KyuubiSparkUtil.getCurrentUserName,
+      "",
+      "",
+      Map.empty[String, String],
+      withImpersonation = true))
   }
 
   test("open session with amMode false  and clientMode true") {
@@ -221,6 +228,7 @@ class SessionManagerSuite extends SparkFunSuite {
 
     sessionManager.init(conf)
     sessionManager.start()
+    assert(ReflectUtils.getFieldValue(sessionManager, "cacheManager") !== null)
     val sessionHandle = sessionManager.openSession(
       TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V8,
       KyuubiSparkUtil.getCurrentUserName,

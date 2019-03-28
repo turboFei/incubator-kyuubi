@@ -148,4 +148,16 @@ class HighAvailableServiceSuite extends SparkFunSuite
     watcher.process(nodeDel)
     watcher.process(new WatchedEvent(NodeCreated, KeeperState.Expired, ""))
   }
+
+  test("NameSpace for KyuubiAppMaster mode with true") {
+    conf.set(KyuubiConf.YARN_KYUUBIAPPMASTER_MODE.key, "true")
+    haService.init(conf)
+    assert(haService.getServiceNameSpace.split("/").length == 4)
+  }
+
+  test("NameSpace for KyuubiAppMaster mode with false") {
+    conf.set(KyuubiConf.YARN_KYUUBIAPPMASTER_MODE.key, "false")
+    haService.init(conf)
+    assert(haService.getServiceNameSpace.split("/").length == 2)
+  }
 }

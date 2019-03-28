@@ -21,12 +21,12 @@ import org.apache.hive.service.cli.thrift.TProtocolVersion
 import org.apache.spark.KyuubiSparkUtil
 import org.apache.spark.sql.SparkSession
 import org.scalatest.mock.MockitoSugar
+
 import yaooqinn.kyuubi.KyuubiSQLException
 import yaooqinn.kyuubi.cli.{FetchOrientation, FetchType, GetInfoType}
-import yaooqinn.kyuubi.operation.{CLOSED, KyuubiOperation, OperationManager}
+import yaooqinn.kyuubi.operation.{KyuubiOperation, OperationManager}
 import yaooqinn.kyuubi.schema.ColumnBasedSet
 import yaooqinn.kyuubi.ui.KyuubiServerMonitor
-import yaooqinn.kyuubi.utils.ReflectUtils
 
 class KyuubiSessionSuite extends SessionSuite with MockitoSugar {
 
@@ -54,7 +54,6 @@ class KyuubiSessionSuite extends SessionSuite with MockitoSugar {
 
   override def afterAll(): Unit = {
     System.clearProperty("spark.master")
-    if (spark != null) spark.stop()
     super.afterAll()
   }
 

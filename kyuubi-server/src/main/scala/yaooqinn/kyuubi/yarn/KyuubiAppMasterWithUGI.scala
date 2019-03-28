@@ -209,8 +209,8 @@ class KyuubiAppMasterWithUGI(
 
   private def isIntanceExists(): Boolean = {
     try {
-      zookeeperClient.getChildren.forPath(instanceParentPath) != null &&
-      !zookeeperClient.getChildren.forPath(instanceParentPath).isEmpty
+      val instanceNode = zookeeperClient.getChildren.forPath(instanceParentPath)
+      instanceNode != null && !instanceNode.isEmpty
     } catch {
       case e: Exception =>
         warn(s"Failed to getChildren for $instanceParentPath.")

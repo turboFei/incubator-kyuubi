@@ -17,11 +17,9 @@
 
 package yaooqinn.kyuubi.yarn
 
-
-import java.io.IOException
+import com.google.common.io.Files
+import java.io.{File, IOException}
 import java.net.URI
-
-import scala.collection.mutable
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
@@ -32,15 +30,19 @@ import org.apache.hadoop.yarn.api.records._
 import org.apache.hadoop.yarn.client.api.{YarnClient, YarnClientApplication}
 import org.apache.hadoop.yarn.conf.YarnConfiguration
 import org.apache.hadoop.yarn.exceptions.ApplicationNotFoundException
-import org.apache.spark.{KyuubiConf, KyuubiSparkUtil, SparkConf, SparkFunSuite}
+import org.apache.hadoop.yarn.server.MiniYARNCluster
+import org.apache.spark.{KyuubiSparkUtil, SparkConf, SparkFunSuite}
 import org.mockito.Mockito.{doNothing, when}
 import org.scalatest.Matchers
 import org.scalatest.mock.MockitoSugar
+import scala.collection.mutable
 
 import yaooqinn.kyuubi.KYUUBI_JAR_NAME
-import yaooqinn.kyuubi.utils.ReflectUtils
+import yaooqinn.kyuubi.utils.{KyuubiHadoopUtil, ReflectUtils}
 
 class KyuubiYarnClientSuite extends SparkFunSuite with Matchers with MockitoSugar {
+
+  import KyuubiYarnClientSuite._
 
   private val yarnDefCP = YarnConfiguration.DEFAULT_YARN_APPLICATION_CLASSPATH.toSeq
   private val mrDefCP = MRJobConfig.DEFAULT_MAPREDUCE_APPLICATION_CLASSPATH.split(",").toSeq
@@ -232,6 +234,18 @@ class KyuubiYarnClientSuite extends SparkFunSuite with Matchers with MockitoSuga
     }
   }
 
+  test("test startKyuubiAppMasterReturnAppId") {
+    withTempDir { dir =>
+      withTempJarsDir(dir) { (_, _, _) =>
+        withMiniCluster(dir) { _ =>
+          val appId = KyuubiYarnClient.startKyuubiAppMasterReturnAppId()
+          assert(appId.isInstanceOf[ApplicationId])
+          KyuubiHadoopUtil.killYarnAppByAppId(appId)
+        }
+      }
+    }
+  }
+
   def withConf(map: Map[String, String] = Map.empty)(testCode: Configuration => Any): Unit = {
     val conf = new Configuration()
     map.foreach { case (k, v) => conf.set(k, v) }
@@ -289,4 +303,73 @@ class KyuubiYarnClientSuite extends SparkFunSuite with Matchers with MockitoSuga
 
   def classpath(env: mutable.HashMap[String, String]): Array[String] =
     env(Environment.CLASSPATH.name).split(":|;|<CPS>")
+}
+
+private[yarn] object KyuubiYarnClientSuite {
+
+  def withMiniCluster(dir: File)(f: Any => Unit): Unit = {
+    val hadoopConfDir = Option(System.getenv("HADOOP_CONF_DIR"))
+    setEnv("HADOOP_CONF_DIR", Some(dir.getAbsolutePath))
+    val cluster: MiniYARNCluster =
+      new MiniYARNCluster(this.getClass.getSimpleName, 1, 1, 1, 1)
+    val yarnConf = new YarnConfiguration()
+    yarnConf.set(YarnConfiguration.IS_MINI_YARN_CLUSTER, "true")
+    cluster.init(yarnConf)
+    cluster.start()
+    System.setProperty("spark.hadoop.yarn.is.minicluster", "true")
+    System.setProperty(KyuubiSparkUtil.DRIVER_MEM, "10m")
+    System.setProperty(KyuubiSparkUtil.DRIVER_CORES, "1")
+    try {
+      f(cluster)
+    } finally {
+      setEnv("HADOOP_CONF_DIR", hadoopConfDir)
+      cluster.stop()
+    }
+  }
+
+  def withTempDir(f: File => Unit): Unit = {
+    val path = KyuubiSparkUtil.createTempDir().getCanonicalFile
+    val sparkHome = Option(System.getenv("SPARK_HOME"))
+    setEnv("SPARK_HOME", Some(path.getAbsolutePath))
+    try {
+      f(path)
+    } finally {
+      setEnv("SPARK_HOME", sparkHome)
+      KyuubiSparkUtil.deleteRecursively(path)
+    }
+  }
+
+  def withTempJarsDir(path: File)(f: (File, String, String) => Unit): Unit = {
+    val jarsDir = path.getAbsolutePath + File.separator + "jars"
+    val libDirName = "libDir"
+    new File(jarsDir).mkdir()
+    new File(jarsDir + File.separator + libDirName).mkdir()
+    val basePath = jarsDir + File.separator
+    val jarName = "KYUUBI_JAR.jar"
+    val dirJarName = libDirName + File.separator + "dirJar.jar"
+    Files.write("JAR".getBytes(), new File(basePath + jarName))
+    Files.write("DIRJAR".getBytes(), new File(basePath + dirJarName))
+    val invalidJar = new File(basePath + "invalidJar.jar")
+    val invalidDirJar = new File(basePath + libDirName + File.separator + "invalidDirJar.jar")
+    Files.write("INVALID".getBytes(), invalidJar)
+    Files.write("INVALID".getBytes(), invalidDirJar)
+    invalidJar.setReadable(false)
+    invalidDirJar.setReadable(false)
+    setEnv("KYUUBI_JAR", Some(basePath + jarName))
+    ReflectUtils.setFieldValue(KyuubiSparkUtil, "SPARK_JARS_DIR", jarsDir)
+    try f(new File(jarsDir), jarName, dirJarName) finally System.clearProperty("KYUUBI_JAR")
+  }
+
+  def setEnv(key: String, value: Option[String]): Unit = {
+    val field = System.getenv().getClass.getDeclaredField("m")
+    field.setAccessible(true)
+    val map = field.get(System.getenv())
+      .asInstanceOf[java.util.Map[java.lang.String, java.lang.String]]
+    value match {
+      case Some(v) =>
+        map.put(key, v)
+      case _ =>
+        map.remove(key)
+    }
+  }
 }

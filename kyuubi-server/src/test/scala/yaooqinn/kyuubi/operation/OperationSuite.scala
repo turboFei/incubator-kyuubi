@@ -27,8 +27,9 @@ import org.scalatest.mock.MockitoSugar
 
 import yaooqinn.kyuubi.KyuubiSQLException
 import yaooqinn.kyuubi.cli.FetchOrientation
-import yaooqinn.kyuubi.session.{KyuubiSession, Session, SessionManager}
+import yaooqinn.kyuubi.session.{Session, SessionManager}
 import yaooqinn.kyuubi.utils.ReflectUtils
+
 
 abstract class OperationSuite extends SparkFunSuite with MockitoSugar {
 

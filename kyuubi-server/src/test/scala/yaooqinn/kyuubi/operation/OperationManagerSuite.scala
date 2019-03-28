@@ -27,7 +27,7 @@ import org.scalatest.mock.MockitoSugar
 import yaooqinn.kyuubi.KyuubiSQLException
 import yaooqinn.kyuubi.cli.FetchOrientation
 import yaooqinn.kyuubi.service.State
-import yaooqinn.kyuubi.session.{KyuubiSession, Session, SessionManager}
+import yaooqinn.kyuubi.session.{KyuubiClusterSession, KyuubiSession, Session, SessionManager}
 import yaooqinn.kyuubi.utils.ReflectUtils
 
 class OperationManagerSuite extends SparkFunSuite with Matchers with MockitoSugar {
@@ -211,11 +211,6 @@ class OperationManagerSuite extends SparkFunSuite with Matchers with MockitoSuga
 
     val kyuubiOperation = operationMgr.newExecuteStatementOperation(kyuubiSession, statement)
     assert(kyuubiOperation.isInstanceOf[KyuubiOperation])
-
-    // TOOD: other type kyuubiSession
-    val session = mock[Session]
-    val e = intercept[Exception](operationMgr.newExecuteStatementOperation(session, statement))
-    assert(e.isInstanceOf[NullPointerException])
   }
 
   test("test isFetchFirst") {

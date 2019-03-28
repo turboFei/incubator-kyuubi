@@ -35,6 +35,7 @@ import yaooqinn.kyuubi.KyuubiSQLException
 import yaooqinn.kyuubi.auth.PlainSaslHelper
 import yaooqinn.kyuubi.cli._
 import yaooqinn.kyuubi.operation.OperationManager
+import yaooqinn.kyuubi.server.KyuubiServer
 import yaooqinn.kyuubi.utils.KyuubiHadoopUtil
 import yaooqinn.kyuubi.yarn.{KyuubiAppMaster, KyuubiAppMasterWithUGI}
 
@@ -84,6 +85,17 @@ private[kyuubi] class KyuubiClusterSession(
     lastIdleTime = lastAccessTime
   }
 
+  /**
+   * Just for unit test with an local kyuubiServer.
+   */
+  @throws[KyuubiSQLException]
+  def mockOpen(server: KyuubiServer): Unit = {
+    client = server.feService
+    openThriftConnection(Map.empty)
+    lastAccessTime = System.currentTimeMillis
+    lastIdleTime = lastAccessTime
+  }
+
   def getInfo(getInfoType: GetInfoType): GetInfoValue = {
     throw new KyuubiSQLException("Method Not Implemented!")
   }
@@ -102,7 +114,7 @@ private[kyuubi] class KyuubiClusterSession(
       }
     } catch {
       case e: Exception =>
-        throw new KyuubiSQLException(e.toString, e)
+        throw new KyuubiSQLException(e.toString, "08S01", e)
     } finally {
       release(true)
     }
@@ -158,7 +170,7 @@ private[kyuubi] class KyuubiClusterSession(
       client.CloseSession(closeReq)
     } catch {
       case e: Exception =>
-        throw new KyuubiSQLException(s"Error occured when close the ThriftConnection", e)
+        throw new KyuubiSQLException("Error occured when close the ThriftConnection", e)
     } finally {
       if (transport != null) {
         transport.close()

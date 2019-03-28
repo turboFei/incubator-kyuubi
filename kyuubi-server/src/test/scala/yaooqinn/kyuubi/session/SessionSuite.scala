@@ -21,10 +21,10 @@ import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
 import org.apache.hadoop.security.UserGroupInformation.AuthenticationMethod
-import org.apache.hive.service.cli.thrift.TProtocolVersion
+import org.apache.hive.service.cli.thrift.{TGetInfoReq, TGetInfoType, TProtocolVersion}
 import org.apache.spark.{KyuubiConf, KyuubiSparkUtil, SparkConf, SparkFunSuite}
-
 import scala.collection.mutable.{HashSet => MHSet}
+
 import yaooqinn.kyuubi.KyuubiSQLException
 import yaooqinn.kyuubi.auth.KyuubiAuthFactory
 import yaooqinn.kyuubi.cli.GetInfoType
@@ -49,7 +49,10 @@ abstract class SessionSuite extends SparkFunSuite {
 
   override def afterAll(): Unit = {
     System.clearProperty(KyuubiConf.FRONTEND_BIND_PORT.key)
-    if (session != null) session.close()
+    if (session != null) {
+      session.stopShared()
+      session.close()
+    }
     if (server != null) server.stop()
     super.afterAll()
   }
@@ -64,7 +67,12 @@ abstract class SessionSuite extends SparkFunSuite {
   }
 
   test("get last access time") {
-    session.getInfo(GetInfoType.SERVER_NAME)
+    if (session.isInstanceOf[KyuubiSession]) {
+      session.getInfo(GetInfoType.SERVER_NAME)
+    } else {
+      session.asInstanceOf[KyuubiClusterSession].getInfoResp(new TGetInfoReq(
+        session.asInstanceOf[KyuubiClusterSession].thriftHandle, TGetInfoType.CLI_SERVER_NAME))
+    }
     assert(session.getLastAccessTime !== 0L)
   }
 
@@ -97,28 +105,32 @@ abstract class SessionSuite extends SparkFunSuite {
   }
 
   test("set resources session dir") {
-    val resourceRoot = new File(server.getConf.get(OPERATION_DOWNLOADED_RESOURCES_DIR))
-    resourceRoot.mkdirs()
-    resourceRoot.deleteOnExit()
-    assert(resourceRoot.isDirectory)
-    session.setResourcesSessionDir(resourceRoot)
-    assert(session.getResourcesSessionDir.getAbsolutePath.startsWith(resourceRoot.getAbsolutePath))
-    val subDir = resourceRoot.listFiles().head
-    assert(subDir.getName === KyuubiSparkUtil.getCurrentUserName)
-    val resourceDir = subDir.listFiles().head
-    assert(resourceDir.getName === session.getSessionHandle.getSessionId + "_resources")
-    session.setResourcesSessionDir(resourceRoot)
-    assert(subDir.listFiles().length === 1, "directory should already exists")
-    assert(resourceDir.delete())
-    resourceDir.createNewFile()
-    assert(resourceDir.isFile)
-    val e1 = intercept[RuntimeException](session.setResourcesSessionDir(resourceRoot))
-    assert(e1.getMessage.startsWith("The resources directory exists but is not a directory"))
-    resourceDir.delete()
-    subDir.setWritable(false)
-    val e2 = intercept[RuntimeException](session.setResourcesSessionDir(resourceRoot))
-    assert(e2.getMessage.startsWith("Couldn't create session resources directory"))
-    subDir.setWritable(true)
+    if (session.isInstanceOf[KyuubiSession]) {
+      // Fot the unit test of KyuubiClusterSession is not real kyuubiClusterSession.
+      val resourceRoot = new File(server.getConf.get(OPERATION_DOWNLOADED_RESOURCES_DIR))
+      resourceRoot.mkdirs()
+      resourceRoot.deleteOnExit()
+      assert(resourceRoot.isDirectory)
+      session.setResourcesSessionDir(resourceRoot)
+      assert(session.getResourcesSessionDir.getAbsolutePath
+        .startsWith(resourceRoot.getAbsolutePath))
+      val subDir = resourceRoot.listFiles().head
+      assert(subDir.getName === KyuubiSparkUtil.getCurrentUserName)
+      val resourceDir = subDir.listFiles().head
+      assert(resourceDir.getName === session.getSessionHandle.getSessionId + "_resources")
+      session.setResourcesSessionDir(resourceRoot)
+      assert(subDir.listFiles().length === 1, "directory should already exists")
+      assert(resourceDir.delete())
+      resourceDir.createNewFile()
+      assert(resourceDir.isFile)
+      val e1 = intercept[RuntimeException](session.setResourcesSessionDir(resourceRoot))
+      assert(e1.getMessage.startsWith("The resources directory exists but is not a directory"))
+      resourceDir.delete()
+      subDir.setWritable(false)
+      val e2 = intercept[RuntimeException](session.setResourcesSessionDir(resourceRoot))
+      assert(e2.getMessage.startsWith("Couldn't create session resources directory"))
+      subDir.setWritable(true)
+    }
   }
 
   test("get no operation time") {

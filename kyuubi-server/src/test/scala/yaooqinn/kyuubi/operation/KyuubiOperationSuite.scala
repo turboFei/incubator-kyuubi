@@ -25,8 +25,8 @@ import org.apache.spark.sql.execution.command.CreateFunctionCommand
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
 import org.mockito.Mockito.when
-
 import scala.collection.JavaConverters._
+
 import yaooqinn.kyuubi.KyuubiSQLException
 import yaooqinn.kyuubi.cli.FetchOrientation.FETCH_NEXT
 import yaooqinn.kyuubi.schema.ColumnBasedSet
