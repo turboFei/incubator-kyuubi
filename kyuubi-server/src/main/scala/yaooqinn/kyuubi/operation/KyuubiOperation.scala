@@ -225,6 +225,12 @@ class KyuubiOperation(session: KyuubiSession, statement: String)
     }
   }
 
+  override protected def onStatementError(id: String, message: String, trace: String): Unit = {
+    super.onStatementError(id, message, trace)
+    KyuubiServerMonitor.getListener(session.getUserName)
+      .foreach(_.onStatementError(id, message, trace))
+  }
+
   override def cleanup(state: OperationState) {
     super.cleanup(state)
     if (statementId != null) {

@@ -280,8 +280,6 @@ abstract class Operation(session: Session, statement: String) extends Logging {
          |$trace
        """.stripMargin)
     setState(ERROR)
-    KyuubiServerMonitor.getListener(session.getUserName)
-      .foreach(_.onStatementError(id, message, trace))
   }
 
   protected def cleanup(state: OperationState): Unit = {

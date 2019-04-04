@@ -172,19 +172,8 @@ class KyuubiClusterOperation(session: KyuubiClusterSession, statement: String)
      statementId = UUID.randomUUID().toString
      info(s"Running query '$statement' with $statementId")
      setState(RUNNING)
-
-     KyuubiServerMonitor.getListener(session.getUserName).foreach {
-       _.onStatementStart(
-         statementId,
-         session.getSessionHandle.getSessionId.toString,
-         statement,
-         statementId,
-         session.getUserName)
-     }
-
      setHasResultSet(executeQuery(statement))
      setState(FINISHED)
-     KyuubiServerMonitor.getListener(session.getUserName).foreach(_.onStatementFinish(statementId))
    } catch {
      case e: KyuubiSQLException =>
        if (!isClosedOrCanceled) {
