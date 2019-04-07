@@ -18,16 +18,18 @@
 package yaooqinn.kyuubi.session
 
 import java.io.File
+import java.security.AccessControlException
 import java.util.UUID
 
 import org.apache.hive.service.cli.thrift.TProtocolVersion
-import org.apache.spark.{KyuubiConf, KyuubiSparkUtil, SparkConf, SparkFunSuite}
-
+import org.apache.spark.{KyuubiConf, KyuubiSparkUtil, SparkConf}
 import yaooqinn.kyuubi.KyuubiSQLException
+import yaooqinn.kyuubi.ha.ZookeeperFunSuite
 import yaooqinn.kyuubi.service.{ServiceException, State}
+import yaooqinn.kyuubi.spark.KyuubiAmSparkSessionCacheManager
 import yaooqinn.kyuubi.utils.ReflectUtils
 
-class SessionManagerSuite extends SparkFunSuite {
+class SessionManagerSuite extends ZookeeperFunSuite {
 
   import KyuubiConf._
 
@@ -179,56 +181,18 @@ class SessionManagerSuite extends SparkFunSuite {
     assert(e2.getMessage.contains(sessionHandle.toString))
   }
 
-  test("test sessionManager with amMode") {
-    val conf = new SparkConf()
-      .setMaster("local")
-      .set(KyuubiConf.YARN_KYUUBIAPPMASTER_MODE.key, "true")
-      .set(KyuubiConf.YARN_KYUUBISERVER_SESSION_MODE, "cluster")
-    KyuubiSparkUtil.setupCommonConfig(conf)
-
-    val sessionMgr = new SessionManager()
-    assert(ReflectUtils.getFieldValue(sessionMgr, "cacheManager") === null)
-    assert(ReflectUtils.getFieldValue(sessionMgr, "amModeEnable") === false)
-    assert(ReflectUtils.getFieldValue(sessionMgr, "clientMode") === true)
-    sessionMgr.init(conf)
-    assert(ReflectUtils.getFieldValue(sessionMgr, "cacheManager") === null)
-    assert(ReflectUtils.getFieldValue(sessionMgr, "amModeEnable") === true)
-    assert(ReflectUtils.getFieldValue(sessionMgr, "clientMode") === false)
-  }
-
-  test("test sessionManager with amMode false and clientMode false") {
-    val conf = new SparkConf()
-      .setMaster("local")
-      .set(KyuubiConf.YARN_KYUUBIAPPMASTER_MODE.key, "false")
-      .set(KyuubiConf.YARN_KYUUBISERVER_SESSION_MODE, "cluster")
-    KyuubiSparkUtil.setupCommonConfig(conf)
-
-    val sessionMgr = new SessionManager()
-    sessionMgr.init(conf)
-    assert(ReflectUtils.getFieldValue(sessionMgr, "cacheManager") === null)
-    assert(ReflectUtils.getFieldValue(sessionMgr, "amModeEnable") === false)
-    assert(ReflectUtils.getFieldValue(sessionMgr, "clientMode") === false)
-    intercept[Exception](sessionMgr.openSession(
-      TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V8,
-      KyuubiSparkUtil.getCurrentUserName,
-      "",
-      "",
-      Map.empty[String, String],
-      withImpersonation = true))
-  }
-
-  test("open session with amMode false  and clientMode true") {
-    val conf = new SparkConf()
-      .setMaster("local")
-      .set(KyuubiConf.YARN_KYUUBIAPPMASTER_MODE.key, "false")
-      .set(KyuubiConf.YARN_KYUUBISERVER_SESSION_MODE, "client")
+  test("open session with amMode enable and clientMode true") {
+    conf.setMaster("local")
+    conf.set(KyuubiConf.HA_ZOOKEEPER_QUORUM.key, zkServer.getConnectString)
+    conf.set(KyuubiConf.YARN_KYUUBIAPPMASTER_MODE.key, "true")
+    conf.set(KyuubiConf.YARN_KYUUBIAPPMASTER_USERNAME.key, KyuubiSparkUtil.getCurrentUserName)
 
     KyuubiSparkUtil.setupCommonConfig(conf)
     val sessionManager = new SessionManager()
 
     sessionManager.init(conf)
     sessionManager.start()
-    assert(ReflectUtils.getFieldValue(sessionManager, "cacheManager") !== null)
+    assert(sessionManager.getCacheMgr.isInstanceOf[KyuubiAmSparkSessionCacheManager])
     val sessionHandle = sessionManager.openSession(
       TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V8,
       KyuubiSparkUtil.getCurrentUserName,
@@ -238,6 +202,15 @@ class SessionManagerSuite extends SparkFunSuite {
       withImpersonation = true)
     assert(sessionManager.getSession(sessionHandle).isInstanceOf[KyuubiSession])
     sessionManager.closeSession(sessionHandle)
-    assert(sessionManager.getCacheMgr != null)
+
+    conf.set(KyuubiConf.YARN_KYUUBIAPPMASTER_USERNAME.key, "")
+    val e = intercept[KyuubiSQLException](sessionManager.openSession(
+      TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V8,
+      KyuubiSparkUtil.getCurrentUserName,
+      "",
+      "",
+      Map.empty[String, String],
+      withImpersonation = true))
+    assert(e.getCause.isInstanceOf[AccessControlException])
   }
 }

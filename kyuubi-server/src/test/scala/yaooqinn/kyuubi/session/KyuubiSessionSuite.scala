@@ -17,8 +17,9 @@
 
 package yaooqinn.kyuubi.session
 
+import org.apache.hadoop.security.UserGroupInformation
 import org.apache.hive.service.cli.thrift.TProtocolVersion
-import org.apache.spark.KyuubiSparkUtil
+import org.apache.spark.{KyuubiConf, KyuubiSparkUtil}
 import org.apache.spark.sql.SparkSession
 import org.scalatest.mock.MockitoSugar
 
@@ -26,7 +27,9 @@ import yaooqinn.kyuubi.KyuubiSQLException
 import yaooqinn.kyuubi.cli.{FetchOrientation, FetchType, GetInfoType}
 import yaooqinn.kyuubi.operation.{KyuubiOperation, OperationManager}
 import yaooqinn.kyuubi.schema.ColumnBasedSet
+import yaooqinn.kyuubi.spark.KyuubiAmSparkSessionCacheManager
 import yaooqinn.kyuubi.ui.KyuubiServerMonitor
+import yaooqinn.kyuubi.utils.ReflectUtils
 
 class KyuubiSessionSuite extends SessionSuite with MockitoSugar {
 

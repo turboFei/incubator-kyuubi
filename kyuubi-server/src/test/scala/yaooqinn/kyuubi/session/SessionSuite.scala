@@ -189,8 +189,7 @@ abstract class SessionSuite extends SparkFunSuite {
 
   test("test closeExpiredOperations") {
     val opMgr = session.getSessionMgr.getOperationMgr
-    val conf = ReflectUtils.getSuperField(session, "yaooqinn$kyuubi$session$Session$$conf")
-      .asInstanceOf[SparkConf]
+    val conf = server.getConf
     conf.set(KyuubiConf.OPERATION_IDLE_TIMEOUT.key, "1ms")
     val op = opMgr.newExecuteStatementOperation(session, statement)
     val opHandle = op.getHandle
