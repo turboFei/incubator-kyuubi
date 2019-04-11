@@ -43,11 +43,11 @@ import scala.util.control.NonFatal
 import yaooqinn.kyuubi.KyuubiSQLException
 import yaooqinn.kyuubi.cli.FetchOrientation
 import yaooqinn.kyuubi.schema.{RowSet, RowSetBuilder}
-import yaooqinn.kyuubi.session.KyuubiSession
+import yaooqinn.kyuubi.session.KyuubiClientSession
 import yaooqinn.kyuubi.ui.KyuubiServerMonitor
 import yaooqinn.kyuubi.utils.ReflectUtils
 
-class KyuubiClientOperation(session: KyuubiSession, statement: String)
+class KyuubiClientOperation(session: KyuubiClientSession, statement: String)
   extends AbstractKyuubiOperation(session, statement) {
 
   import KyuubiClientOperation._
@@ -180,46 +180,6 @@ class KyuubiClientOperation(session: KyuubiSession, statement: String)
       iter.take(rowSetSize.toInt)
     }
     RowSetBuilder.create(getResultSetSchema, taken.toSeq, session.getProtocolVersion)
-  }
-
-  override protected def runInternal(): Unit = {
-    setState(PENDING)
-    setHasResultSet(true)
-
-    // Runnable impl to call runInternal asynchronously, from a different thread
-    val backgroundOperation = new Runnable() {
-      override def run(): Unit = {
-        try {
-          session.ugi.doAs(new PrivilegedExceptionAction[Unit]() {
-            override def run(): Unit = {
-              try {
-                execute()
-              } catch {
-                case e: KyuubiSQLException => setOperationException(e)
-              }
-            }
-          })
-        } catch {
-          case e: Exception => setOperationException(new KyuubiSQLException(e))
-        }
-      }
-    }
-
-    try {
-      // This submit blocks if no background threads are available to run this operation
-      val backgroundHandle =
-        session.getSessionMgr.submitBackgroundOperation(backgroundOperation)
-      setBackgroundHandle(backgroundHandle)
-    } catch {
-      case rejected: RejectedExecutionException =>
-        setState(ERROR)
-        throw new KyuubiSQLException("The background threadpool cannot accept" +
-          " new task for execution, please retry the operation", rejected)
-      case NonFatal(e) =>
-        error(s"Error executing query in background", e)
-        setState(ERROR)
-        throw e
-    }
   }
 
   private def localizeAndAndResource(path: String): Option[String] = try {

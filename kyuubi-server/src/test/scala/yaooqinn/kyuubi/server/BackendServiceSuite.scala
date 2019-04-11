@@ -19,10 +19,10 @@ package yaooqinn.kyuubi.server
 
 import org.apache.hive.service.cli.thrift.TProtocolVersion
 import org.apache.spark.{KyuubiConf, KyuubiSparkUtil, SparkConf, SparkFunSuite}
-
 import yaooqinn.kyuubi.KyuubiSQLException
 import yaooqinn.kyuubi.cli.GetInfoType
 import yaooqinn.kyuubi.operation.{CANCELED, RUNNING}
+import yaooqinn.kyuubi.session.KyuubiClientSession
 
 class BackendServiceSuite extends SparkFunSuite {
 
@@ -105,6 +105,9 @@ class BackendServiceSuite extends SparkFunSuite {
     backendService.cancelOperation(op1)
     assert(backendService.getOperationStatus(op1).getState === CANCELED)
 
-    backendService.getSessionManager.getSession(session).sparkSession.stop()
+    val kyuubiSession = backendService.getSessionManager.getSession(session)
+    if (kyuubiSession.isInstanceOf[KyuubiClientSession]) {
+      kyuubiSession.asInstanceOf[KyuubiClientSession].sparkSession.stop()
+    }
   }
 }

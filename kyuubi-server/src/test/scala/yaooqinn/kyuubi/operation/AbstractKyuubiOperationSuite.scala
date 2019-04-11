@@ -22,7 +22,7 @@ import org.apache.hive.service.cli.thrift.TProtocolVersion
 import org.apache.spark.{KyuubiSparkUtil, SparkConf, SparkFunSuite}
 import org.scalatest.mock.MockitoSugar
 
-import yaooqinn.kyuubi.session.{KyuubiSession, SessionManager}
+import yaooqinn.kyuubi.session.{IKyuubiSession, SessionManager}
 
 abstract class AbstractKyuubiOperationSuite extends SparkFunSuite with MockitoSugar {
 
@@ -36,7 +36,7 @@ abstract class AbstractKyuubiOperationSuite extends SparkFunSuite with MockitoSu
   val userName = user.getShortUserName
   val passwd = ""
   val statement = "show tables"
-  var session: KyuubiSession = _
+  var session: IKyuubiSession = _
 
   override protected def beforeAll(): Unit = {
     sessionMgr = new SessionManager()

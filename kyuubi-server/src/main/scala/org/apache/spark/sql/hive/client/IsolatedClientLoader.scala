@@ -72,7 +72,7 @@ private[hive] class IsolatedClientLoader(
    *
    * Besides, [[HiveClient]] in normal Spark applications is globally one instance, so this
    * classloader could/should be non-closeable. But in Kyuubi, this is a session level object
-   * associated with one KyuubiSession/SparkSession, thus, this classloader should be closeable to
+   * associated with one KyuubiClientSession/SparkSession, thus, this classloader should be closeable to
    * support class unloading.
    *
    * This classloader is a special URLClassLoader that exposes the addURL method.

@@ -24,11 +24,11 @@ import org.apache.spark.sql.types.StructType
 import yaooqinn.kyuubi.KyuubiSQLException
 import yaooqinn.kyuubi.cli.FetchOrientation
 import yaooqinn.kyuubi.schema.RowSet
-import yaooqinn.kyuubi.session.KyuubiSession
+import yaooqinn.kyuubi.session.IKyuubiSession
 
 trait IKyuubiOperation {
 
-  def getSession: KyuubiSession
+  def getSession: IKyuubiSession
 
   def getHandle: OperationHandle
 

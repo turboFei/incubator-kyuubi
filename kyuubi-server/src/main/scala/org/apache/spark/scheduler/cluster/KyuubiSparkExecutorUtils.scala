@@ -35,12 +35,12 @@ import yaooqinn.kyuubi.utils.ReflectUtils._
 object KyuubiSparkExecutorUtils extends Logging {
 
   /**
-   * Populate the tokens contained in the current KyuubiSession's ugi to the all the alive
+   * Populate the tokens contained in the current KyuubiClientSession's ugi to the all the alive
    * executors associated with its own SparkContext.
    *
    * @param sc The SparkContext with its runtime environment which contains all the executors,
-   *           associated with the current KyuubiSession and UserGroupInformation.
-   * @param user the UserGroupInformation associated with the current KyuubiSession
+   *           associated with the current KyuubiClientSession and UserGroupInformation.
+   * @param user the UserGroupInformation associated with the current KyuubiClientSession
    */
   def populateTokens(sc: SparkContext, user: UserGroupInformation): Unit = {
     val schedulerBackend = sc.schedulerBackend

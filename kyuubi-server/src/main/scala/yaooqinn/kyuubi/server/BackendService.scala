@@ -32,7 +32,7 @@ import yaooqinn.kyuubi.session.{SessionHandle, SessionManager}
 
 /**
  * [[BackendService]] holds an instance of [[SessionManager]] which manages
- * `KyuubiSession` for execution
+ * `IKyuubiSession` for execution
  */
 private[server] class BackendService private(name: String)
   extends CompositeService(name) with Logging {
