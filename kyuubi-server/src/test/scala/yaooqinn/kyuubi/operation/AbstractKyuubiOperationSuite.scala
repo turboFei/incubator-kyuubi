@@ -18,11 +18,14 @@
 package yaooqinn.kyuubi.operation
 
 import org.apache.hadoop.security.UserGroupInformation
-import org.apache.hive.service.cli.thrift.TProtocolVersion
+import org.apache.hive.service.cli.thrift.{TFetchOrientation, TProtocolVersion}
 import org.apache.spark.{KyuubiSparkUtil, SparkConf, SparkFunSuite}
 import org.scalatest.mock.MockitoSugar
 
+import yaooqinn.kyuubi.KyuubiSQLException
+import yaooqinn.kyuubi.cli.FetchOrientation
 import yaooqinn.kyuubi.session.{IKyuubiSession, SessionManager}
+import yaooqinn.kyuubi.utils.ReflectUtils
 
 abstract class AbstractKyuubiOperationSuite extends SparkFunSuite with MockitoSugar {
 
@@ -116,5 +119,25 @@ abstract class AbstractKyuubiOperationSuite extends SparkFunSuite with MockitoSu
     op3.cancel()
     op3.close()
     assert(op3.isClosedOrCanceled)
+  }
+
+  test("test set, check and assert state") {
+    val op = sessionMgr.getOperationMgr.newExecuteStatementOperation(session, statement)
+    ReflectUtils.invokeMethod(op, "setState", List(classOf[OperationState]), List(RUNNING))
+    assert(ReflectUtils.invokeMethod(
+      op, "checkState", List(classOf[OperationState]), List(RUNNING)) === true)
+    ReflectUtils.invokeMethod(op, "assertState", List(classOf[OperationState]), List(RUNNING))
+  }
+
+  test("test validateDefaultFetchOrientation") {
+    case object FETCH_RELATIVE extends FetchOrientation {
+      override val toTFetchOrientation: TFetchOrientation = TFetchOrientation.FETCH_RELATIVE
+    }
+
+    val op = sessionMgr.getOperationMgr.newExecuteStatementOperation(session, statement)
+    val e = intercept[KyuubiSQLException](ReflectUtils.invokeMethod(op,
+      "validateDefaultFetchOrientation", List(classOf[FetchOrientation]), List(FETCH_RELATIVE)))
+    assert(e.getMessage === "The fetch type " + FETCH_RELATIVE.toString +
+      " is not supported for this resultset")
   }
 }

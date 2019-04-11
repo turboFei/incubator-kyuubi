@@ -102,22 +102,22 @@ abstract class AbstractKyuubiSession(
   override def ugi: UserGroupInformation = this.sessionUGI
 
   /**
-    * execute operation handler
-    *
-    * @param statement sql statement
-    * @return
-    */
+   * execute operation handler
+   *
+   * @param statement sql statement
+   * @return
+   */
   @throws[KyuubiSQLException]
   override def executeStatement(statement: String): OperationHandle = {
     executeStatementInternal(statement)
   }
 
   /**
-    * execute operation handler
-    *
-    * @param statement sql statement
-    * @return
-    */
+   * execute operation handler
+   *
+   * @param statement sql statement
+   * @return
+   */
   @throws[KyuubiSQLException]
   override def executeStatementAsync(statement: String): OperationHandle = {
     executeStatementInternal(statement)

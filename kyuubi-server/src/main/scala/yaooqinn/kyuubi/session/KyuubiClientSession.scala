@@ -99,8 +99,8 @@ private[kyuubi] class KyuubiClientSession(
   }
 
   /**
-    * close the session
-    */
+   * close the session
+   */
   @throws[KyuubiSQLException]
   override def close(): Unit = {
     acquire(true)
@@ -151,22 +151,22 @@ private[kyuubi] class KyuubiClientSession(
   }
 
   /**
-    * Check whether operation logging is enabled and session dir is created successfully
-    */
+   * Check whether operation logging is enabled and session dir is created successfully
+   */
   def isOperationLogEnabled: Boolean = _isOperationLogEnabled
 
   /**
-    * Get the session log dir, which is the parent dir of operation logs
-    *
-    * @return a file representing the parent directory of operation logs
-    */
+   * Get the session log dir, which is the parent dir of operation logs
+   *
+   * @return a file representing the parent directory of operation logs
+   */
   def getSessionLogDir: File = sessionLogDir
 
   /**
-    * Set the session log dir, which is the parent dir of operation logs
-    *
-    * @param operationLogRootDir the parent dir of the session dir
-    */
+   * Set the session log dir, which is the parent dir of operation logs
+   *
+   * @param operationLogRootDir the parent dir of the session dir
+   */
   def setOperationLogSessionDir(operationLogRootDir: File): Unit = {
     sessionLogDir = new File(operationLogRootDir,
       username + File.separator + sessionHandle.getHandleIdentifier.toString)
@@ -184,17 +184,17 @@ private[kyuubi] class KyuubiClientSession(
   }
 
   /**
-    * Get the session resource dir, which is the parent dir of operation logs
-    *
-    * @return a file representing the parent directory of operation logs
-    */
+   * Get the session resource dir, which is the parent dir of operation logs
+   *
+   * @return a file representing the parent directory of operation logs
+   */
   def getResourcesSessionDir: File = sessionResourcesDir
 
   /**
-    * Set the session log dir, which is the parent dir of operation logs
-    *
-    * @param resourcesRootDir the parent dir of the session dir
-    */
+   * Set the session log dir, which is the parent dir of operation logs
+   *
+   * @param resourcesRootDir the parent dir of the session dir
+   */
   def setResourcesSessionDir(resourcesRootDir: File): Unit = {
     sessionResourcesDir = new File(resourcesRootDir,
       username + File.separator + sessionHandle.getHandleIdentifier.toString + "_resources")

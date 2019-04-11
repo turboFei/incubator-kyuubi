@@ -19,11 +19,14 @@ package yaooqinn.kyuubi.session
 
 import java.io.File
 
-import org.apache.hive.service.cli.thrift.TProtocolVersion
+import org.apache.hive.service.cli.thrift.{TGetInfoType, TProtocolVersion}
 import org.apache.spark.KyuubiConf.{LOGGING_OPERATION_LOG_DIR, OPERATION_DOWNLOADED_RESOURCES_DIR}
 import org.apache.spark.KyuubiSparkUtil
 import org.apache.spark.sql.SparkSession
 
+import yaooqinn.kyuubi.KyuubiSQLException
+import yaooqinn.kyuubi.cli.{FetchOrientation, FetchType, GetInfoType}
+import yaooqinn.kyuubi.schema.ColumnBasedSet
 import yaooqinn.kyuubi.ui.KyuubiServerMonitor
 
 class KyuubiClientSessionSuite extends AbstractKyuubiSessionSuite {
@@ -104,5 +107,56 @@ class KyuubiClientSessionSuite extends AbstractKyuubiSessionSuite {
     val e2 = intercept[RuntimeException](kyuubiClientSession.setResourcesSessionDir(resourceRoot))
     assert(e2.getMessage.startsWith("Couldn't create session resources directory"))
     subDir.setWritable(true)
+  }
+
+  test("test get info") {
+    assert(session.getInfo(GetInfoType.SERVER_NAME).toTGetInfoValue
+      .getStringValue === "Kyuubi Server")
+    assert(session.getInfo(GetInfoType.DBMS_NAME).toTGetInfoValue
+      .getStringValue === "Spark SQL")
+    assert(session.getInfo(GetInfoType.DBMS_VERSION).toTGetInfoValue
+      .getStringValue === spark.version)
+
+    case object UNSUPPORT_INFO extends GetInfoType {
+      override val tInfoType: TGetInfoType = TGetInfoType.CLI_USER_NAME
+    }
+    intercept[KyuubiSQLException](session.getInfo(UNSUPPORT_INFO))
+  }
+
+  test("test getNoOperationTime") {
+    val mockSession = mock[KyuubiClientSession]
+    assert(mockSession.getNoOperationTime === 0L)
+  }
+
+  test("test executeStatement") {
+    val sessionHadnle = server.beService.getSessionManager.openSession(
+      session.getProtocolVersion,
+      session.getUserName,
+      "",
+      session.getIpAddress,
+      Map.empty,
+      true)
+    val kyuubiSession = server.beService.getSessionManager.getSession(sessionHadnle)
+    kyuubiSession.getSessionMgr.getCacheMgr.set(session.getUserName, spark)
+
+    var opHandle = kyuubiSession.executeStatement("wrong statement")
+    Thread.sleep(5000)
+    var opException = kyuubiSession.getSessionMgr.getOperationMgr.getOperation(opHandle)
+      .getStatus.getOperationException
+    assert(opException.getSQLState === "ParseException")
+
+    opHandle = kyuubiSession.executeStatement("select * from tablea")
+    Thread.sleep(5000)
+    opException = kyuubiSession.getSessionMgr.getOperationMgr.getOperation(opHandle)
+      .getStatus.getOperationException
+    assert(opException.getSQLState === "AnalysisException")
+
+    opHandle = kyuubiSession.executeStatement("show tables")
+    Thread.sleep(5000)
+    val results = kyuubiSession.fetchResults(opHandle, FetchOrientation.FETCH_FIRST,
+      10, FetchType.QUERY_OUTPUT)
+    val logs = kyuubiSession.fetchResults(opHandle, FetchOrientation.FETCH_FIRST,
+      10, FetchType.LOG)
+    assert(results.isInstanceOf[ColumnBasedSet] && logs.isInstanceOf[ColumnBasedSet])
   }
 }

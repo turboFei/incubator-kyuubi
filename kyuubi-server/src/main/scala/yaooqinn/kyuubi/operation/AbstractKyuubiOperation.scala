@@ -104,16 +104,16 @@ abstract class AbstractKyuubiOperation(session: IKyuubiSession, statement: Strin
   }
 
   /**
-    * Verify if the given fetch orientation is part of the default orientation types.
-    */
+   * Verify if the given fetch orientation is part of the default orientation types.
+   */
   @throws[KyuubiSQLException]
   protected def validateDefaultFetchOrientation(orientation: FetchOrientation): Unit = {
     validateFetchOrientation(orientation, DEFAULT_FETCH_ORIENTATION_SET)
   }
 
   /**
-    * Verify if the given fetch orientation is part of the supported orientation types.
-    */
+   * Verify if the given fetch orientation is part of the supported orientation types.
+   */
   @throws[KyuubiSQLException]
   protected def validateFetchOrientation(
                                         orientation: FetchOrientation,
@@ -175,8 +175,6 @@ abstract class AbstractKyuubiOperation(session: IKyuubiSession, statement: Strin
          |$trace
        """.stripMargin)
     setState(ERROR)
-    KyuubiServerMonitor.getListener(session.getUserName)
-      .foreach(_.onStatementError(id, message, trace))
   }
 
   protected def cleanup(state: OperationState) {

@@ -17,14 +17,18 @@
 
 package yaooqinn.kyuubi.session
 
+import java.util.concurrent.ConcurrentHashMap
+
 import org.apache.hadoop.security.UserGroupInformation.AuthenticationMethod
 import org.apache.hive.service.cli.thrift.TProtocolVersion
-import org.apache.spark.{KyuubiConf, KyuubiSparkUtil, SparkFunSuite}
+import org.apache.spark.{KyuubiConf, SparkConf, SparkFunSuite}
 import org.scalatest.mock.MockitoSugar
+import scala.collection.mutable.{HashSet => MHSet}
 
 import yaooqinn.kyuubi.KyuubiSQLException
 import yaooqinn.kyuubi.auth.KyuubiAuthFactory
 import yaooqinn.kyuubi.cli.GetInfoType
+import yaooqinn.kyuubi.operation.{CLOSED, IKyuubiOperation, OperationHandle}
 import yaooqinn.kyuubi.server.KyuubiServer
 import yaooqinn.kyuubi.utils.ReflectUtils
 
@@ -32,6 +36,7 @@ abstract class AbstractKyuubiSessionSuite extends SparkFunSuite with MockitoSuga
 
   var server: KyuubiServer = _
   var session: IKyuubiSession = _
+  val statement = "show tables"
 
   override def beforeAll(): Unit = {
     System.setProperty(KyuubiConf.FRONTEND_BIND_PORT.key, "0")
@@ -97,5 +102,50 @@ abstract class AbstractKyuubiSessionSuite extends SparkFunSuite with MockitoSuga
       session.renewDelegationToken(authFactory, ""))
     assert(e.getMessage === "Delegation token only supported over kerberos authentication")
     assert(e.toTStatus.getSqlState === "08S01")
+  }
+
+  test("test getProtocolVersion") {
+    assert(session.getProtocolVersion === TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V8)
+  }
+
+  test("test close operation") {
+    val opMgr = session.getSessionMgr.getOperationMgr
+    val op = opMgr.newExecuteStatementOperation(session, statement)
+    val opHandle = op.getHandle
+    assert(opMgr.getOperation(opHandle) !== null)
+    session.closeOperation(opHandle)
+    val e = intercept[KyuubiSQLException](opMgr.getOperation(opHandle))
+    assert(e.getMessage === "Invalid OperationHandle " + opHandle)
+  }
+
+  test("test cancel operation") {
+    val opMgr = session.getSessionMgr.getOperationMgr
+    val op = opMgr.newExecuteStatementOperation(session, statement)
+    val opHandle = op.getHandle
+    assert(!op.isClosedOrCanceled)
+    session.cancelOperation(opHandle)
+    assert(op.isClosedOrCanceled)
+  }
+
+  test("test closeExpiredOperations") {
+    val opMgr = session.getSessionMgr.getOperationMgr
+    val conf = server.getConf
+    conf.set(KyuubiConf.OPERATION_IDLE_TIMEOUT.key, "1ms")
+    val op = opMgr.newExecuteStatementOperation(session, statement)
+    val opHandle = op.getHandle
+    var opHandleSet = ReflectUtils.getSuperField(session, "opHandleSet")
+      .asInstanceOf[MHSet[OperationHandle]]
+    opHandleSet.add(opHandle)
+    ReflectUtils.setSuperField(session, "opHandleSet", opHandleSet)
+
+    val handleToOperation = ReflectUtils.getFieldValue(opMgr,
+      "yaooqinn$kyuubi$operation$OperationManager$$handleToOperation")
+      .asInstanceOf[ConcurrentHashMap[OperationHandle, IKyuubiOperation]]
+    handleToOperation.put(opHandle, op)
+    ReflectUtils.setSuperField(op, "state", CLOSED)
+    ReflectUtils.setSuperField(op, "lastAccessTime", Long.box(Long.MinValue))
+    session.closeExpiredOperations
+    val e = intercept[KyuubiSQLException](opMgr.getOperation(opHandle))
+    assert(e.getMessage === "Invalid OperationHandle " + opHandle)
   }
 }

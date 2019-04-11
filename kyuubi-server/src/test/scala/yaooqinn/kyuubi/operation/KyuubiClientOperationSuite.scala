@@ -17,7 +17,10 @@
 
 package yaooqinn.kyuubi.operation
 
+import java.io.File
+
 import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.KyuubiConf.LOGGING_OPERATION_LOG_DIR
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.catalog.FunctionResource
 import org.apache.spark.sql.execution.SparkSqlParser
@@ -37,6 +40,7 @@ class KyuubiClientOperationSuite extends AbstractKyuubiOperationSuite {
 
   var spark: SparkSession = _
   var sparkWithUgi: SparkSessionWithUGI = _
+  var kyuubiClientSession: KyuubiClientSession = _
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
@@ -53,6 +57,7 @@ class KyuubiClientOperationSuite extends AbstractKyuubiOperationSuite {
     session = new KyuubiClientSession(
       proto, userName, passwd, conf, "", false, sessionMgr, sessionMgr.getOperationMgr)
     ReflectUtils.setFieldValue(session, "sparkSessionWithUGI", sparkWithUgi)
+    kyuubiClientSession = session.asInstanceOf[KyuubiClientSession]
   }
 
   override protected def afterAll(): Unit = {
@@ -118,6 +123,25 @@ class KyuubiClientOperationSuite extends AbstractKyuubiOperationSuite {
 
     val e3 = intercept[KyuubiSQLException](op.transform(plan5))
     assert(e3.getMessage.startsWith("Resource Type"))
+  }
+
+  test("test get operation log") {
+    val operationLogRootDir = new File(conf.get(LOGGING_OPERATION_LOG_DIR.key))
+    operationLogRootDir.mkdirs()
+    kyuubiClientSession.setOperationLogSessionDir(operationLogRootDir)
+    val op = sessionMgr.getOperationMgr.newExecuteStatementOperation(session, statement)
+    assert(op.getOperationLog === null)
+    ReflectUtils.invokeMethod(op, "registerCurrentOperationLog")
+    assert(sessionMgr.getOperationMgr.getOperationLog === null)
+    ReflectUtils.invokeMethod(op, "createOperationLog")
+    assert(op.getOperationLog !== null)
+
+    ReflectUtils.invokeMethod(op, "createOperationLog")
+    assert(op.getOperationLog !== null)
+
+    ReflectUtils.invokeMethod(op, "unregisterOperationLog")
+    assert(sessionMgr.getOperationMgr.getOperationLog === null)
+    operationLogRootDir.delete()
   }
 
 }
