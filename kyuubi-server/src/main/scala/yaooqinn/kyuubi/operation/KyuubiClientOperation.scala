@@ -20,18 +20,13 @@ package yaooqinn.kyuubi.operation
 import java.io.{File, FileNotFoundException}
 import java.security.PrivilegedExceptionAction
 import java.util.UUID
-import java.util.concurrent.{Future, RejectedExecutionException}
-
-import scala.collection.JavaConverters._
-import scala.util.{Success, Try}
-import scala.util.control.NonFatal
+import java.util.concurrent.RejectedExecutionException
 
 import org.apache.commons.lang3.StringUtils
 import org.apache.hadoop.fs.{FileUtil, Path}
 import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hadoop.hive.ql.security.authorization.plugin.HiveAccessControlException
 import org.apache.hadoop.hive.ql.session.OperationLog
-import org.apache.hive.service.cli.thrift.TProtocolVersion
 import org.apache.spark.KyuubiConf._
 import org.apache.spark.KyuubiSparkUtil
 import org.apache.spark.scheduler.cluster.KyuubiSparkExecutorUtils
@@ -40,87 +35,37 @@ import org.apache.spark.sql.catalyst.catalog.{FileResource, FunctionResource, Ja
 import org.apache.spark.sql.catalyst.parser.ParseException
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.command.{AddFileCommand, AddJarCommand, CreateFunctionCommand}
-import org.apache.spark.sql.types._
+import org.apache.spark.sql.types.StructType
+import scala.collection.JavaConverters._
+import scala.util.{Success, Try}
+import scala.util.control.NonFatal
 
-import yaooqinn.kyuubi.{KyuubiSQLException, Logging}
+import yaooqinn.kyuubi.KyuubiSQLException
 import yaooqinn.kyuubi.cli.FetchOrientation
 import yaooqinn.kyuubi.schema.{RowSet, RowSetBuilder}
 import yaooqinn.kyuubi.session.KyuubiSession
 import yaooqinn.kyuubi.ui.KyuubiServerMonitor
 import yaooqinn.kyuubi.utils.ReflectUtils
 
-class KyuubiOperation(session: KyuubiSession, statement: String) extends Logging {
+class KyuubiClientOperation(session: KyuubiSession, statement: String)
+  extends AbstractKyuubiOperation(session, statement) {
 
-  import KyuubiOperation._
-
-  private var state: OperationState = INITIALIZED
-  private val opHandle: OperationHandle =
-    new OperationHandle(EXECUTE_STATEMENT, session.getProtocolVersion)
+  import KyuubiClientOperation._
 
   private val sparkSession = session.sparkSession
   private val conf = sparkSession.conf
 
-  private val operationTimeout =
+  override protected val operationTimeout =
     KyuubiSparkUtil.timeStringAsMs(conf.get(OPERATION_IDLE_TIMEOUT))
-  private var lastAccessTime = System.currentTimeMillis()
 
-  private var hasResultSet: Boolean = false
-  private var operationException: KyuubiSQLException = _
-  private var backgroundHandle: Future[_] = _
   private var operationLog: OperationLog = _
   private var isOperationLogEnabled: Boolean = false
 
   private var result: DataFrame = _
   private var iter: Iterator[Row] = _
-  private var statementId: String = _
-
-  private val DEFAULT_FETCH_ORIENTATION_SET: Set[FetchOrientation] =
-    Set(FetchOrientation.FETCH_NEXT, FetchOrientation.FETCH_FIRST)
-
   private val incrementalCollect: Boolean = conf.get(OPERATION_INCREMENTAL_COLLECT).toBoolean
 
-  def getBackgroundHandle: Future[_] = backgroundHandle
-
-  def setBackgroundHandle(backgroundHandle: Future[_]): Unit = {
-    this.backgroundHandle = backgroundHandle
-  }
-
-  def getSession: KyuubiSession = session
-
-  def getHandle: OperationHandle = opHandle
-
-  def getProtocolVersion: TProtocolVersion = opHandle.getProtocolVersion
-
-  def getStatus: OperationStatus = new OperationStatus(state, operationException)
-
-  def getOperationLog: OperationLog = operationLog
-
-  private def setOperationException(opEx: KyuubiSQLException): Unit = {
-    this.operationException = opEx
-  }
-
-  @throws[KyuubiSQLException]
-  private def setState(newState: OperationState): Unit = {
-    state.validateTransition(newState)
-    this.state = newState
-    this.lastAccessTime = System.currentTimeMillis()
-  }
-
-  private def checkState(state: OperationState): Boolean = {
-    this.state == state
-  }
-  
-  def isClosedOrCanceled: Boolean = {
-    checkState(CLOSED) || checkState(CANCELED)
-  }
-
-  @throws[KyuubiSQLException]
-  private def assertState(state: OperationState): Unit = {
-    if (this.state ne state) {
-      throw new KyuubiSQLException("Expected state " + state + ", but found " + this.state)
-    }
-    this.lastAccessTime = System.currentTimeMillis()
-  }
+  override def getOperationLog: OperationLog = operationLog
 
   private def createOperationLog(): Unit = {
     if (session.isOperationLogEnabled) {
@@ -192,8 +137,9 @@ class KyuubiOperation(session: KyuubiSession, statement: String) extends Logging
   }
 
   @throws[KyuubiSQLException]
-  def run(): Unit = {
+  override def run(): Unit = {
     createOperationLog()
+    registerCurrentOperationLog()
     try {
       runInternal()
     } finally {
@@ -212,26 +158,19 @@ class KyuubiOperation(session: KyuubiSession, statement: String) extends Logging
     }
   }
 
-  def close(): Unit = {
-    // RDDs will be cleaned automatically upon garbage collection.
-    debug(s"CLOSING $statementId")
-    cleanup(CLOSED)
+  override def close(): Unit = {
+    super.close()
     cleanupOperationLog()
     sparkSession.sparkContext.clearJobGroup()
   }
 
-  def cancel(): Unit = {
-    info(s"Cancel '$statement' with $statementId")
-    cleanup(CANCELED)
-  }
-
-  def getResultSetSchema: StructType = if (result == null || result.schema.isEmpty) {
+  override def getResultSetSchema: StructType = if (result == null || result.schema.isEmpty) {
     new StructType().add("Result", "string")
   } else {
     result.schema
   }
 
-  def getNextRowSet(order: FetchOrientation, rowSetSize: Long): RowSet = {
+  override def getNextRowSet(order: FetchOrientation, rowSetSize: Long): RowSet = {
     validateDefaultFetchOrientation(order)
     assertState(FINISHED)
     setHasResultSet(true)
@@ -243,33 +182,7 @@ class KyuubiOperation(session: KyuubiSession, statement: String) extends Logging
     RowSetBuilder.create(getResultSetSchema, taken.toSeq, session.getProtocolVersion)
   }
 
-  private def setHasResultSet(hasResultSet: Boolean): Unit = {
-    this.hasResultSet = hasResultSet
-    opHandle.setHasResultSet(hasResultSet)
-  }
-
-  /**
-   * Verify if the given fetch orientation is part of the default orientation types.
-   */
-  @throws[KyuubiSQLException]
-  private def validateDefaultFetchOrientation(orientation: FetchOrientation): Unit = {
-    validateFetchOrientation(orientation, DEFAULT_FETCH_ORIENTATION_SET)
-  }
-
-  /**
-   * Verify if the given fetch orientation is part of the supported orientation types.
-   */
-  @throws[KyuubiSQLException]
-  private def validateFetchOrientation(
-      orientation: FetchOrientation,
-      supportedOrientations: Set[FetchOrientation]): Unit = {
-    if (!supportedOrientations.contains(orientation)) {
-      throw new KyuubiSQLException(
-        "The fetch type " + orientation.toString + " is not supported for this resultset", "HY106")
-    }
-  }
-
-  private def runInternal(): Unit = {
+  override protected def runInternal(): Unit = {
     setState(PENDING)
     setHasResultSet(true)
 
@@ -278,7 +191,6 @@ class KyuubiOperation(session: KyuubiSession, statement: String) extends Logging
       override def run(): Unit = {
         try {
           session.ugi.doAs(new PrivilegedExceptionAction[Unit]() {
-            registerCurrentOperationLog()
             override def run(): Unit = {
               try {
                 execute()
@@ -350,7 +262,7 @@ class KyuubiOperation(session: KyuubiSession, statement: String) extends Logging
     case _ => plan
   }
 
-  private def execute(): Unit = {
+  override protected def execute(): Unit = {
     try {
       statementId = UUID.randomUUID().toString
       info(s"Running query '$statement' with $statementId")
@@ -452,43 +364,21 @@ class KyuubiOperation(session: KyuubiSession, statement: String) extends Logging
     }
   }
 
-  private def onStatementError(id: String, message: String, trace: String): Unit = {
-    error(
-      s"""
-         |Error executing query as ${session.getUserName},
-         |$statement
-         |Current operation state ${this.state},
-         |$trace
-       """.stripMargin)
-    setState(ERROR)
+  override protected def onStatementError(id: String, message: String, trace: String): Unit = {
+    super.onStatementError(id, message, trace)
     KyuubiServerMonitor.getListener(session.getUserName)
       .foreach(_.onStatementError(id, message, trace))
   }
 
-  private def cleanup(state: OperationState) {
-    if (this.state != CLOSED) {
-      setState(state)
-    }
-    val backgroundHandle = getBackgroundHandle
-    if (backgroundHandle != null) {
-      backgroundHandle.cancel(true)
-    }
+  override protected def cleanup(state: OperationState) {
+    super.cleanup(state)
     if (statementId != null) {
       sparkSession.sparkContext.cancelJobGroup(statementId)
     }
   }
-
-  def isTimedOut: Boolean = {
-    if (operationTimeout <= 0) {
-      false
-    } else {
-      // check only when it's in terminal state
-      state.isTerminal && lastAccessTime + operationTimeout <= System.currentTimeMillis()
-    }
-  }
 }
 
-object KyuubiOperation {
+object KyuubiClientOperation {
   val DEFAULT_FETCH_ORIENTATION: FetchOrientation = FetchOrientation.FETCH_NEXT
   val DEFAULT_FETCH_MAX_ROWS = 100
 
