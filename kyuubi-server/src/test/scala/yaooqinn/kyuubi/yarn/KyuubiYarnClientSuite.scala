@@ -38,7 +38,7 @@ import org.scalatest.mock.MockitoSugar
 import scala.collection.mutable
 
 import yaooqinn.kyuubi.KYUUBI_JAR_NAME
-import yaooqinn.kyuubi.utils.ReflectUtils
+import yaooqinn.kyuubi.utils.{KyuubiHadoopUtil, ReflectUtils}
 
 class KyuubiYarnClientSuite extends SparkFunSuite with Matchers with MockitoSugar {
 
@@ -251,6 +251,18 @@ class KyuubiYarnClientSuite extends SparkFunSuite with Matchers with MockitoSuga
           assert(!entries.hasMoreElements)
         }
       }
+      }
+    }
+  }
+
+  test("test startKyuubiAppMasterReturnAppId") {
+    withTempDir { dir =>
+      withTempJarsDir(dir) { (_, _, _) =>
+        withMiniCluster(dir) { _ =>
+          val appId = KyuubiYarnClient.startKyuubiAppMaster()
+          assert(appId.isInstanceOf[ApplicationId])
+          KyuubiHadoopUtil.killYarnAppByAppId(appId)
+        }
       }
     }
   }

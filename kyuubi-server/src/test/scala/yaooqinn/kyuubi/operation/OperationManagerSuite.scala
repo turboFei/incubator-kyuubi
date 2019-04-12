@@ -17,18 +17,19 @@
 
 package yaooqinn.kyuubi.operation
 
-import scala.collection.mutable.ArrayBuffer
 import org.apache.hadoop.hive.ql.session.OperationLog
 import org.apache.spark.{KyuubiConf, KyuubiSparkUtil, SparkConf, SparkFunSuite}
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{RuntimeConfig, SparkSession}
 import org.mockito.Mockito._
 import org.scalatest.Matchers
 import org.scalatest.mock.MockitoSugar
 
+import scala.collection.mutable.ArrayBuffer
 import yaooqinn.kyuubi.KyuubiSQLException
 import yaooqinn.kyuubi.cli.FetchOrientation
 import yaooqinn.kyuubi.service.State
-import yaooqinn.kyuubi.session.{KyuubiClientSession, SessionManager}
+import yaooqinn.kyuubi.session.{KyuubiClientSession, KyuubiClusterSession, SessionManager}
+import yaooqinn.kyuubi.utils.ReflectUtils
 
 class OperationManagerSuite extends SparkFunSuite with Matchers with MockitoSugar {
 
@@ -193,6 +194,45 @@ class OperationManagerSuite extends SparkFunSuite with Matchers with MockitoSuga
       operationMgr.getOperationLogRowSet(op1.getHandle, FetchOrientation.FETCH_NEXT, 5))
     e.getMessage should startWith("Couldn't find log associated with operation handle:")
     ss.stop()
+  }
+
+  test("test newExecuteStatementOperation") {
+    val operationMgr = new OperationManager()
+    conf.remove(KyuubiSparkUtil.CATALOG_IMPL)
+    operationMgr.init(conf)
+    val statement = "show tables"
+
+    val kcliSession = mock[KyuubiClientSession]
+    val ss =
+      SparkSession.builder()
+        .config(KyuubiSparkUtil.SPARK_UI_PORT, KyuubiSparkUtil.SPARK_UI_PORT_DEFAULT)
+        .config(conf)
+        .getOrCreate()
+    when(kcliSession.sparkSession).thenReturn(ss)
+
+    val kcliOperation = operationMgr.newExecuteStatementOperation(kcliSession, statement)
+    assert(kcliOperation.isInstanceOf[KyuubiClientOperation])
+
+    val kcluSession = mock[KyuubiClusterSession]
+    when(kcluSession.getConf).thenReturn(new SparkConf()
+      .set(KyuubiConf.OPERATION_IDLE_TIMEOUT.key, "6s"))
+    when(kcluSession.getUserName).thenReturn("")
+    when(kcluSession.thriftHandle).thenReturn(null)
+    when(kcluSession.thriftClient).thenReturn(null)
+    when(kcluSession.thriftHandle).thenReturn(null)
+    val kcluOperation = operationMgr.newExecuteStatementOperation(kcluSession, statement)
+    assert(kcluOperation.isInstanceOf[KyuubiClusterOperation])
+  }
+
+  test("test isFetchFirst") {
+    val operationMgr = new OperationManager()
+    conf.remove(KyuubiSparkUtil.CATALOG_IMPL)
+    operationMgr.init(conf)
+
+    assert(ReflectUtils.invokeMethod(operationMgr, "isFetchFirst",
+      List(classOf[FetchOrientation]), List(FetchOrientation.FETCH_FIRST)) === true)
+    assert(ReflectUtils.invokeMethod(operationMgr, "isFetchFirst",
+      List(classOf[FetchOrientation]), List(FetchOrientation.FETCH_NEXT)) === false)
   }
 
 }

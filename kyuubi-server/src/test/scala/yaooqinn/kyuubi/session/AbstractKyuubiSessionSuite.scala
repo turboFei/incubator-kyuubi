@@ -21,13 +21,12 @@ import java.util.concurrent.ConcurrentHashMap
 
 import org.apache.hadoop.security.UserGroupInformation.AuthenticationMethod
 import org.apache.hive.service.cli.thrift.TProtocolVersion
-import org.apache.spark.{KyuubiConf, SparkConf, SparkFunSuite}
+import org.apache.spark.{KyuubiConf, KyuubiSparkUtil, SparkFunSuite}
 import org.scalatest.mock.MockitoSugar
-import scala.collection.mutable.{HashSet => MHSet}
 
+import scala.collection.mutable.{HashSet => MHSet}
 import yaooqinn.kyuubi.KyuubiSQLException
 import yaooqinn.kyuubi.auth.KyuubiAuthFactory
-import yaooqinn.kyuubi.cli.GetInfoType
 import yaooqinn.kyuubi.operation.{CLOSED, IKyuubiOperation, OperationHandle}
 import yaooqinn.kyuubi.server.KyuubiServer
 import yaooqinn.kyuubi.utils.ReflectUtils
@@ -42,6 +41,7 @@ abstract class AbstractKyuubiSessionSuite extends SparkFunSuite with MockitoSuga
     System.setProperty(KyuubiConf.FRONTEND_BIND_PORT.key, "0")
     System.setProperty("spark.master", "local")
     server = KyuubiServer.startKyuubiServer()
+    server.getConf.remove(KyuubiSparkUtil.CATALOG_IMPL)
     super.beforeAll()
   }
 
@@ -65,7 +65,7 @@ abstract class AbstractKyuubiSessionSuite extends SparkFunSuite with MockitoSuga
   }
 
   test("get last access time") {
-    session.getInfo(GetInfoType.SERVER_NAME)
+    ReflectUtils.invokeMethod(session, "acquire", List(classOf[Boolean]), List(Boolean.box(true)))
     assert(session.getLastAccessTime !== 0L)
   }
 

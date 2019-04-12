@@ -112,6 +112,9 @@ private[kyuubi] abstract class HighAvailableService(name: String, server: Kyuubi
   final override def init(conf: SparkConf): Unit = {
     // service root namespace
     serviceRootNamespace = "/" + conf.get(HA_ZOOKEEPER_NAMESPACE.key)
+    if (conf.getBoolean(APPMASTER_SPECIFIC_MODE_ENABLED.key, false)) {
+      serviceRootNamespace += "/" + conf.get(APPMASTER_SPECIFIC_MODE_USERNAME) + "/" + URIPATH
+    }
     setUpZooKeeperAuth(conf)
     zkClient = newZookeeperClient(conf)
     // Create the parent znodes recursively; ignore if the parent already exists.
@@ -149,6 +152,7 @@ private[kyuubi] abstract class HighAvailableService(name: String, server: Kyuubi
     }
   }
 
+  def getServiceNameSpace: String = serviceRootNamespace
 }
 
 object HighAvailableService {
@@ -158,6 +162,11 @@ object HighAvailableService {
    */
   val aclProvider: ACLProvider = new ZooKeeperACLProvider
 
+  // The uriPath prefix for KyuubiAppMaster in specific mode.
+  val URIPATH = "URIPATH"
+
+  // The lock name used to access the appMaster instance.
+  val LOCK = "LOCK"
   /**
    * Get the ensemble server addresses from the configuration. The format is: host1:port,
    * host2:port...

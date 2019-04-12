@@ -19,6 +19,7 @@ package yaooqinn.kyuubi.utils
 
 import org.apache.hadoop.security.UserGroupInformation
 import org.apache.hadoop.yarn.api.records._
+import org.apache.hadoop.yarn.api.records.YarnApplicationState._
 import org.apache.hadoop.yarn.api.records.impl.pb.ApplicationReportPBImpl
 import org.apache.hadoop.yarn.client.api.YarnClient
 import org.apache.hadoop.yarn.conf.YarnConfiguration
@@ -121,6 +122,17 @@ class KyuubiHadoopUtilSuite extends SparkFunSuite with BeforeAndAfterEach {
   test("get applications") {
     withYarnApplication { id =>
       assert(KyuubiHadoopUtil.getApplications.head.getApplicationId === id)
+    }
+  }
+
+  test("test kill yarnApp by appId and isYarnAppRunning") {
+    withYarnApplication { id =>
+      assert(KyuubiHadoopUtil.isYarnAppRunning(id) === false)
+      assert(yarnClient.getApplicationReport(id).getYarnApplicationState === ACCEPTED)
+      KyuubiHadoopUtil.killYarnAppByAppId(id)
+      assert(yarnClient.getApplicationReport(id).getYarnApplicationState === KILLED)
+      KyuubiHadoopUtil.killYarnAppByAppId(null)
+      assert(KyuubiHadoopUtil.isYarnAppRunning(null) === false)
     }
   }
 

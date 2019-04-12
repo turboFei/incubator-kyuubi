@@ -177,4 +177,45 @@ class SessionManagerSuite extends SparkFunSuite {
     val e2 = intercept[KyuubiSQLException](sessionManager.getSession(sessionHandle))
     assert(e2.getMessage.contains(sessionHandle.toString))
   }
+
+  test("test sessionManager with cluster mode") {
+    val conf = new SparkConf()
+      .setMaster("local")
+      .set(KyuubiConf.SESSION_MODE, "cluster")
+    KyuubiSparkUtil.setupCommonConfig(conf)
+
+    val sessionMgr = new SessionManager()
+    sessionMgr.init(conf)
+    assert(ReflectUtils.getFieldValue(sessionMgr, "cacheManager") === null)
+    intercept[Exception](sessionMgr.openSession(
+      TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V8,
+      KyuubiSparkUtil.getCurrentUserName,
+      "",
+      "",
+      Map.empty[String, String],
+      withImpersonation = true))
+  }
+
+  test("open session with amMode false  and clientMode true") {
+    val conf = new SparkConf()
+      .setMaster("local")
+      .set(KyuubiConf.SESSION_MODE, "client")
+
+    KyuubiSparkUtil.setupCommonConfig(conf)
+    val sessionManager = new SessionManager()
+
+    sessionManager.init(conf)
+    sessionManager.start()
+    assert(ReflectUtils.getFieldValue(sessionManager, "cacheManager") !== null)
+    val sessionHandle = sessionManager.openSession(
+      TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V8,
+      KyuubiSparkUtil.getCurrentUserName,
+      "",
+      "",
+      Map.empty[String, String],
+      withImpersonation = true)
+    assert(sessionManager.getSession(sessionHandle).isInstanceOf[KyuubiClientSession])
+    sessionManager.closeSession(sessionHandle)
+    assert(sessionManager.getCacheMgr != null)
+  }
 }

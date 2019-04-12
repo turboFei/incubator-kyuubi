@@ -19,11 +19,11 @@ package org.apache.spark.deploy
 
 import java.io.{File, PrintStream}
 
-import scala.collection.mutable.{ArrayBuffer, HashMap, Map}
-
 import org.apache.hadoop.security.UserGroupInformation
+import org.apache.hadoop.yarn.api.records.ApplicationId
 import org.apache.spark._
 import org.apache.spark.util.{MutableURLClassLoader, Utils}
+import scala.collection.mutable.{ArrayBuffer, HashMap, Map}
 
 import yaooqinn.kyuubi.Logging
 import yaooqinn.kyuubi.server.KyuubiServer
@@ -46,6 +46,34 @@ object KyuubiSubmit extends Logging {
   // scalastyle:on println
 
   def main(args: Array[String]): Unit = {
+    val appArgs = preProcess(args)
+    try {
+      if (appArgs.deployMode == "cluster") {
+        KyuubiYarnClient.startKyuubiAppMaster()
+      } else {
+        KyuubiServer.startKyuubiServer()
+      }
+    } catch {
+      case t: Throwable =>
+        printErrorAndExit(s"Starting Kyuubi by ${appArgs.deployMode} " + t)
+    }
+  }
+
+  def submitCluster(args: Array[String]): ApplicationId = {
+    preProcess(args)
+    try {
+      KyuubiYarnClient.startKyuubiAppMaster()
+    } catch {
+      case t: Throwable =>
+        error(s"Error ocuured when starting Kyuubi with cluster mode.")
+        throw t
+    }
+  }
+
+  /**
+   * Preprocess all work before submitting an application.
+   */
+  def preProcess(args: Array[String]): SparkSubmitArguments = {
     val appArgs = new SparkSubmitArguments(args)
     if (appArgs.verbose) {
       // scalastyle:off println
@@ -71,17 +99,7 @@ object KyuubiSubmit extends Logging {
     for ((key, value) <- sysProps) {
       System.setProperty(key, value)
     }
-
-    try {
-      if (appArgs.deployMode == "cluster") {
-        KyuubiYarnClient.startKyuubiAppMaster()
-      } else {
-        KyuubiServer.startKyuubiServer()
-      }
-    } catch {
-      case t: Throwable =>
-        printErrorAndExit(s"Starting Kyuubi by ${appArgs.deployMode} " + t)
-    }
+    appArgs
   }
 
   /**
@@ -114,7 +132,8 @@ object KyuubiSubmit extends Logging {
     args.deployMode match {
       case "client" =>
       case "cluster" =>
-      case _ => printWarning("Kyuubi only supports client mode.")
+      case _ => printWarning("Kyuubi only supports client and cluster mode," +
+        " failover to default client mode.")
         args.deployMode = "client"
 
     }

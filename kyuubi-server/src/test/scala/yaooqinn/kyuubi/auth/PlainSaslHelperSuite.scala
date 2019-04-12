@@ -21,7 +21,7 @@ import java.security.Security
 import javax.security.auth.login.LoginException
 
 import org.apache.spark.{KyuubiSparkUtil, SparkConf, SparkFunSuite}
-import org.apache.thrift.transport.{TSaslServerTransport, TSocket}
+import org.apache.thrift.transport.{TSaslClientTransport, TSaslServerTransport, TSocket}
 
 import yaooqinn.kyuubi.auth.PlainSaslServer.SaslPlainProvider
 import yaooqinn.kyuubi.server.KyuubiServer
@@ -50,8 +50,11 @@ class PlainSaslHelperSuite extends SparkFunSuite {
     val saslPlainProvider = new SaslPlainProvider()
     assert(saslPlainProvider.containsKey("SaslServerFactory.PLAIN"))
     assert(saslPlainProvider.getName === "KyuubiSaslPlain")
-
   }
 
-
+  test("get plain transport") {
+    val tSocket = new TSocket("0.0.0.0", 0)
+    assert(PlainSaslHelper.getPlainTransport("test", "", tSocket)
+      .isInstanceOf[TSaslClientTransport])
+  }
 }

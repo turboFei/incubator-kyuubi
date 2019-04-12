@@ -66,6 +66,8 @@ private[kyuubi] class FrontendService private(name: String, beService: BackendSe
 
   private var isStarted = false
 
+  private var clientMode = true
+
 
   def this(beService: BackendService) = {
     this(classOf[FrontendService].getSimpleName, beService)
@@ -112,6 +114,10 @@ private[kyuubi] class FrontendService private(name: String, beService: BackendSe
 
   override def init(conf: SparkConf): Unit = synchronized {
     hadoopConf = SparkHadoopUtil.get.newConfiguration(conf)
+    clientMode = conf.get(SESSION_MODE, "client") match {
+      case "cluster" => false
+      case _ => true
+    }
     val serverHost = conf.get(FRONTEND_BIND_HOST)
     try {
       if (serverHost.nonEmpty) {
@@ -280,18 +286,22 @@ private[kyuubi] class FrontendService private(name: String, beService: BackendSe
   }
 
   override def GetInfo(req: TGetInfoReq): TGetInfoResp = {
-    val resp = new TGetInfoResp
-    try {
-      val getInfoValue = beService.getInfo(
-        new SessionHandle(req.getSessionHandle), GetInfoType.getGetInfoType(req.getInfoType))
-      resp.setInfoValue(getInfoValue.toTGetInfoValue)
-      resp.setStatus(OK_STATUS)
-    } catch {
-      case e: Exception =>
-        warn("Error getting info: ", e)
-        resp.setStatus(KyuubiSQLException.toTStatus(e))
+    if (clientMode) {
+      val resp = new TGetInfoResp
+      try {
+        val getInfoValue = beService.getInfo(
+          new SessionHandle(req.getSessionHandle), GetInfoType.getGetInfoType(req.getInfoType))
+        resp.setInfoValue(getInfoValue.toTGetInfoValue)
+        resp.setStatus(OK_STATUS)
+      } catch {
+        case e: Exception =>
+          warn("Error getting info: ", e)
+          resp.setStatus(KyuubiSQLException.toTStatus(e))
+      }
+      resp
+    } else {
+      beService.getInfoResp(new SessionHandle(req.getSessionHandle), req)
     }
-    resp
   }
 
   override def ExecuteStatement(req: TExecuteStatementReq): TExecuteStatementResp = {
@@ -467,36 +477,47 @@ private[kyuubi] class FrontendService private(name: String, beService: BackendSe
   }
 
   override def GetResultSetMetadata(req: TGetResultSetMetadataReq): TGetResultSetMetadataResp = {
-    val resp = new TGetResultSetMetadataResp
-    try {
-      val schema = beService.getResultSetMetadata(new OperationHandle(req.getOperationHandle))
-      resp.setSchema(SchemaMapper.toTTableSchema(schema))
-      resp.setStatus(OK_STATUS)
-    } catch {
-      case e: Exception =>
-        warn("Error getting result set metadata: ", e)
-        resp.setStatus(KyuubiSQLException.toTStatus(e))
+    if (clientMode) {
+      val resp = new TGetResultSetMetadataResp
+      try {
+        val schema = beService.getResultSetMetadata(new OperationHandle(req.getOperationHandle))
+        resp.setSchema(SchemaMapper.toTTableSchema(schema))
+        resp.setStatus(OK_STATUS)
+      } catch {
+        case e: Exception =>
+          warn("Error getting result set metadata: ", e)
+          resp.setStatus(KyuubiSQLException.toTStatus(e))
+      }
+      resp
+    } else {
+      beService.getResultSetMetadataResp(new OperationHandle(req.getOperationHandle))
     }
-    resp
   }
 
   override def FetchResults(req: TFetchResultsReq): TFetchResultsResp = {
-    val resp = new TFetchResultsResp
-    try {
-      val rowSet = beService.fetchResults(
-        new OperationHandle(req.getOperationHandle),
+    if (clientMode) {
+      val resp = new TFetchResultsResp
+      try {
+        val rowSet = beService.fetchResults(
+          new OperationHandle(req.getOperationHandle),
+          FetchOrientation.getFetchOrientation(req.getOrientation),
+          req.getMaxRows,
+          FetchType.getFetchType(req.getFetchType))
+        resp.setResults(rowSet.toTRowSet)
+        resp.setHasMoreRows(false)
+        resp.setStatus(OK_STATUS)
+      } catch {
+        case e: Exception =>
+          warn("Error fetching results: ", e)
+          resp.setStatus(KyuubiSQLException.toTStatus(e))
+      }
+      resp
+    } else {
+      beService.fetchResultsResp(new OperationHandle(req.getOperationHandle),
         FetchOrientation.getFetchOrientation(req.getOrientation),
         req.getMaxRows,
         FetchType.getFetchType(req.getFetchType))
-      resp.setResults(rowSet.toTRowSet)
-      resp.setHasMoreRows(false)
-      resp.setStatus(OK_STATUS)
-    } catch {
-      case e: Exception =>
-        warn("Error fetching results: ", e)
-        resp.setStatus(KyuubiSQLException.toTStatus(e))
     }
-    resp
   }
 
   override def GetDelegationToken(req: TGetDelegationTokenReq): TGetDelegationTokenResp = {
