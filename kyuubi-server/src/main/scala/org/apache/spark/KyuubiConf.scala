@@ -423,6 +423,93 @@ object KyuubiConf {
   }
 
   /////////////////////////////////////////////////////////////////////////////////////////////////
+  //                                         Session                                             //
+  /////////////////////////////////////////////////////////////////////////////////////////////////
+
+  val SESSION_MODE: ConfigEntry[String] =
+    KyuubiConfigBuilder("spark.kyuubi.session.mode")
+      .doc("The mode of KyuubiSession, either client or cluster, the default is client mode")
+      .stringConf
+      .createWithDefault("client")
+
+  val SESSION_CLUSTER_CONNECTION_MAX_ATTEMPTS: ConfigEntry[Long] =
+    KyuubiConfigBuilder("spark.kyuubi.session.cluster.connection.maxAttempts")
+      .doc("When we fail to get thrift connection with kyuubiAppMaster in cluster session mode," +
+        " we will retry for maxAttempts times.")
+      .longConf
+      .createWithDefault(3L)
+
+  /////////////////////////////////////////////////////////////////////////////////////////////////
+  //                                         AppMaster                                           //
+  /////////////////////////////////////////////////////////////////////////////////////////////////
+
+  val APPMASTER_SPECIFIC_MODE_ENABLED: ConfigEntry[Boolean] =
+    KyuubiConfigBuilder("spark.kyuubi.am.specificMode.enabled")
+      .doc("Whether to enable specific mode for KyuubiAppMaster. KyuubiAppMaster has two kinds " +
+        "of mode, normal mode and specific mode. In normal mode, the kyuubiAppMaster serves " +
+        "all users. In specific mode, the kyuubiAppMaster only serves an specific user.")
+      .booleanConf
+      .createWithDefault(false)
+
+  val APPMASTER_SPECIFIC_MODE_USERNAME: ConfigEntry[String] =
+    KyuubiConfigBuilder("spark.kyuubi.am.specificMode.username")
+      .doc("The username of kyuubiAppMaster's specific user, which must be configured when " +
+        "specific mode is enabled.")
+      .stringConf
+      .createWithDefault("")
+
+  val APPMASTER_SPECIFIC_MODE_IDLE_TIMEOUT: ConfigEntry[Long] =
+    KyuubiConfigBuilder("spark.kyuubi.am.specificMode.idle.timeout")
+      .doc("KyuubiAppMaster will stop itself when idle for more than the timeout duration.")
+      .timeConf(TimeUnit.MINUTES)
+      .createWithDefault(60L)
+
+  val APPMASTER_HA_ZOOKEEPER_NAMESPACE: ConfigEntry[String] =
+    KyuubiConfigBuilder("spark.kyuubi.am.ha.zk.namespace")
+      .doc("The parent node in ZooKeeper used by kyuubiAppMaster when supporting dynamic service" +
+        " discovery.")
+      .stringConf
+      .createWithDefault("kyuubiappmaster")
+
+  val APPMASTER_HA_PUBLISH_TIMEOUT: ConfigEntry[Long] =
+    KyuubiConfigBuilder("spark.kyuubi.am.ha.publish.timeout")
+      .doc("Timeout for kyuubiServer to wait kyuubiAppMaster for publishing service, when " +
+        "kyuubiAppMaster is running.")
+      .timeConf(TimeUnit.SECONDS)
+      .createWithDefault(60L)
+
+  val APPMASTER_MEMORY: ConfigEntry[String] =
+    KyuubiConfigBuilder("spark.kyuubi.am.memory")
+      .doc("Amount of memory to use for the KyuubiAppMaster process.")
+      .stringConf
+      .createWithDefault("2g")
+
+  val APPMASTER_CORES: ConfigEntry[Long] =
+    KyuubiConfigBuilder("spark.kyuubi.am.cores")
+      .doc("Number of cores to use for the KyuubiAppMaster process.")
+      .longConf
+      .createWithDefault(2L)
+
+  val APPMASTER_EXTRA_JAVAOPTIONS: ConfigEntry[String] =
+    KyuubiConfigBuilder("spark.kyuubi.am.extraJavaOptions")
+      .doc("A string of extra JVM options to pass to the KyuubiAppMaster.")
+      .stringConf
+      .createWithDefault("-XX:+PrintGCDetails -XX:+PrintGCDateStamps")
+
+  val APPMASTER_MAX_RESULTSIZE: ConfigEntry[String] =
+    KyuubiConfigBuilder("spark.kyuubi.am.maxResultSize")
+      .doc("Limit of total size of serialized results of all partitions " +
+        "for each Spark action (e.g. collect) in bytes  for the KyuubiAppMaster.")
+      .stringConf
+      .createWithDefault("1g")
+
+  val APPMASTER_MEMORY_OVERHEAD: ConfigEntry[String] =
+    KyuubiConfigBuilder("spark.kyuubi.am.memoryOverhead")
+      .doc("The amount of off-heap memory to be allocated for the KyuubiAppMaster.")
+      .stringConf
+      .createWithDefault("384m")
+
+  /////////////////////////////////////////////////////////////////////////////////////////////////
   //                                   Containerization                                          //
   /////////////////////////////////////////////////////////////////////////////////////////////////
 
