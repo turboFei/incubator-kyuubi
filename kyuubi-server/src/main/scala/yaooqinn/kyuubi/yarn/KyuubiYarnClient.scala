@@ -342,6 +342,15 @@ private[yarn] class KyuubiYarnClient(conf: SparkConf) extends Logging {
           jarsStream.putNextEntry(new ZipEntry(f.getName))
           Files.copy(f, jarsStream)
           jarsStream.closeEntry()
+        } else if (f.isDirectory && f.canRead) {
+          f.listFiles().foreach { df =>
+            val basePrefix = f.getName + File.separator
+            if (df.isFile && df.getName.toLowerCase(Locale.ROOT).endsWith(".jar") && df.canRead) {
+              jarsStream.putNextEntry(new ZipEntry(basePrefix + df.getName))
+              Files.copy(df, jarsStream)
+              jarsStream.closeEntry()
+            }
+          }
         }
       }
     } finally {

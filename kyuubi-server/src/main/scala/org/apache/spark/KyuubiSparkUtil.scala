@@ -151,6 +151,10 @@ object KyuubiSparkUtil extends Logging {
     Utils.createTempDir(root, namePrefix)
   }
 
+  def deleteRecursively(file: File): Unit = {
+    Utils.deleteRecursively(file)
+  }
+
   def newConfiguration(conf: SparkConf): Configuration = {
     SparkHadoopUtil.get.newConfiguration(conf)
   }
