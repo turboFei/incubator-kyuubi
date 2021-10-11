@@ -66,8 +66,8 @@ trait ProcBuilder {
 
   @volatile private var error: Throwable = UNCAUGHT_ERROR
 
-  private val engineFailureLines = conf.get(KyuubiConf.SESSION_ENGINE_FAILURE_LINES)
-  private val lastRowsOfLog: EvictingQueue[String] = EvictingQueue.create(engineFailureLines)
+  private val maxEngineLogLines = conf.get(KyuubiConf.SESSION_ENGINE_STARTUP_MAX_LOG_LINES)
+  private val lastRowsOfLog: EvictingQueue[String] = EvictingQueue.create(maxEngineLogLines)
   // Visible for test
   @volatile private[kyuubi] var logCaptureThreadReleased: Boolean = true
   private var logCaptureThread: Thread = _
@@ -190,7 +190,7 @@ trait ProcBuilder {
     error match {
       case UNCAUGHT_ERROR =>
         KyuubiSQLException(s"Failed to detect the root cause, please check $engineLog at server " +
-          s"side if necessary. The last $engineFailureLines lines of log are: " +
+          s"side if necessary. The last $maxEngineLogLines lines of log are: " +
           s"${lastRowsOfLog.toArray.mkString(",")}")
       case other => other
     }
