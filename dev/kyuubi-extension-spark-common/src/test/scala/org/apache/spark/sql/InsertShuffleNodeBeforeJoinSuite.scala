@@ -21,7 +21,7 @@ import org.apache.spark.SparkConf
 import org.apache.spark.sql.execution.exchange.{ENSURE_REQUIREMENTS, ShuffleExchangeLike}
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 
-import org.apache.kyuubi.sql.KyuubiSQLConf
+import org.apache.kyuubi.sql.{KyuubiSQLConf, KyuubiSparkSQLCommonExtension}
 
 class InsertShuffleNodeBeforeJoinSuite extends KyuubiSparkSQLExtensionTest {
   protected override def beforeAll(): Unit = {
@@ -32,7 +32,7 @@ class InsertShuffleNodeBeforeJoinSuite extends KyuubiSparkSQLExtensionTest {
   override def sparkConf(): SparkConf = {
     super.sparkConf()
       .set(StaticSQLConf.SPARK_SESSION_EXTENSIONS.key,
-        "org.apache.kyuubi.sql.KyuubiSparkSQLCommonExtension")
+        classOf[KyuubiSparkSQLCommonExtension].getCanonicalName)
   }
 
   test("force shuffle before join") {

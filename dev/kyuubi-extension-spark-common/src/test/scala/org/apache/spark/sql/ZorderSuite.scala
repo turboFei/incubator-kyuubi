@@ -28,14 +28,14 @@ import org.apache.spark.sql.hive.execution.{CreateHiveTableAsSelectCommand, Inse
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 import org.apache.spark.sql.types._
 
-import org.apache.kyuubi.sql.{KyuubiSQLConf, KyuubiSQLExtensionException}
+import org.apache.kyuubi.sql.{KyuubiSparkSQLCommonExtension, KyuubiSQLConf, KyuubiSQLExtensionException}
 import org.apache.kyuubi.sql.zorder.{OptimizeZorderCommandBase, Zorder}
 
 trait ZorderSuite extends KyuubiSparkSQLExtensionTest with ExpressionEvalHelper {
   override def sparkConf(): SparkConf = {
     super.sparkConf()
       .set(StaticSQLConf.SPARK_SESSION_EXTENSIONS.key,
-        "org.apache.kyuubi.sql.KyuubiSparkSQLCommonExtension")
+        classOf[KyuubiSparkSQLCommonExtension].getCanonicalName)
   }
 
   test("optimize unpartitioned table") {
