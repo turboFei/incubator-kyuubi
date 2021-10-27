@@ -17,44 +17,32 @@
 
 grammar KyuubiCommands;
 
-@lexer::members {
-  /**
-   * Verify whether current token is a valid decimal token (which contains dot).
-   * Returns true if the character that follows the token is not a digit or letter or underscore.
-   *
-   * For example:
-   * For char stream "2.3", "2." is not a valid decimal token, because it is followed by digit '3'.
-   * For char stream "2.3_", "2.3" is not a valid decimal token, because it is followed by '_'.
-   * For char stream "2.3W", "2.3" is not a valid decimal token, because it is followed by 'W'.
-   * For char stream "12.0D 34.E2+0.12 "  12.0D is a valid decimal token because it is followed
-   * by a space. 34.E2 is a valid decimal token because it is followed by symbol '+'
-   * which is not a digit or letter or underscore.
-   */
-  public boolean isValidDecimal() {
-    int nextChar = _input.LA(1);
-    if (nextChar >= 'A' && nextChar <= 'Z' || nextChar >= '0' && nextChar <= '9' ||
-      nextChar == '_') {
-      return false;
-    } else {
-      return true;
-    }
-  }
+@members {
+   /**
+    * Verify whether current token is a valid decimal token (which contains dot).
+    * Returns true if the character that follows the token is not a digit or letter or underscore.
+    *
+    * For example:
+    * For char stream "2.3", "2." is not a valid decimal token, because it is followed by digit '3'.
+    * For char stream "2.3_", "2.3" is not a valid decimal token, because it is followed by '_'.
+    * For char stream "2.3W", "2.3" is not a valid decimal token, because it is followed by 'W'.
+    * For char stream "12.0D 34.E2+0.12 "  12.0D is a valid decimal token because it is followed
+    * by a space. 34.E2 is a valid decimal token because it is followed by symbol '+'
+    * which is not a digit or letter or underscore.
+    */
+   public boolean isValidDecimal() {
+     int nextChar = _input.LA(1);
+     if (nextChar >= 'A' && nextChar <= 'Z' || nextChar >= '0' && nextChar <= '9' ||
+       nextChar == '_') {
+       return false;
+     } else {
+       return true;
+     }
+   }
+ }
 
-  /**
-   * This method will be called when we see '/*' and try to match it as a bracketed comment.
-   * If the next character is '+', it should be parsed as hint later, and we cannot match
-   * it as a bracketed comment.
-   *
-   * Returns true if the next character is '+'.
-   */
-  public boolean isHint() {
-    int nextChar = _input.LA(1);
-    if (nextChar == '+') {
-      return true;
-    } else {
-      return false;
-    }
-  }
+tokens {
+    DELIMITER
 }
 
 singleStatement
@@ -62,26 +50,8 @@ singleStatement
     ;
 
 statement
-    : EXEC multipartIdentifier '(' (execArgument (',' execArgument)*)? ')'                  #exec
-    | ALTER TABLE multipartIdentifier ADD PARTITION FIELD transform (AS name=identifier)?   #addPartitionField
-    | ALTER TABLE multipartIdentifier DROP PARTITION FIELD transform                        #dropPartitionField
-    | ALTER TABLE multipartIdentifier REPLACE PARTITION FIELD transform WITH transform (AS name=identifier)? #replacePartitionField
-    | ALTER TABLE multipartIdentifier WRITE writeSpec                                       #setWriteDistributionAndOrdering
-    | ALTER TABLE multipartIdentifier SET IDENTIFIER_KW FIELDS fieldList                    #setIdentifierFields
-    | ALTER TABLE multipartIdentifier DROP IDENTIFIER_KW FIELDS fieldList                   #dropIdentifierFields
-    ;
-
-writeSpec
-    : (writeDistributionSpec | writeOrderingSpec)*
-    ;
-
-writeDistributionSpec
-    : DISTRIBUTED BY PARTITION
-    ;
-
-writeOrderingSpec
-    : LOCALLY? ORDERED BY order
-    | UNORDERED
+    : EXEC identifier '(' (execArgument (',' execArgument)*)? ')'   #exec
+    | .*?                                                           #passThrough
     ;
 
 execArgument
@@ -89,40 +59,43 @@ execArgument
     | identifier '=>' expression    #namedArgument
     ;
 
-order
-    : fields+=orderField (',' fields+=orderField)*
-    | '(' fields+=orderField (',' fields+=orderField)* ')'
-    ;
-
-orderField
-    : transform direction=(ASC | DESC)? (NULLS nullOrder=(FIRST | LAST))?
-    ;
-
-transform
-    : multipartIdentifier                                                       #identityTransform
-    | transformName=identifier
-      '(' arguments+=transformArgument (',' arguments+=transformArgument)* ')'  #applyTransform
-    ;
-
-transformArgument
-    : multipartIdentifier
-    | constant
-    ;
-
 expression
     : constant
     | stringMap
     ;
 
-constant
-    : number                          #numericLiteral
-    | booleanValue                    #booleanLiteral
-    | STRING+                         #stringLiteral
-    | identifier STRING               #typeConstructor
-    ;
-
 stringMap
     : MAP '(' constant (',' constant)* ')'
+    ;
+
+whereClause
+    : WHERE booleanExpression
+    ;
+
+booleanExpression
+    : query                                                              #logicalQuery
+    | left=booleanExpression operator=AND right=booleanExpression        #logicalBinary
+    | left=booleanExpression operator=OR right=booleanExpression         #logicalBinary
+    ;
+
+query
+    : '('? multipartIdentifier comparisonOperator constant ')'?
+    ;
+
+comparisonOperator
+    : EQ | NEQ | NEQJ | LT | LTE | GT | GTE | NSEQ
+    ;
+
+constant
+    : NULL                     #nullLiteral
+    | identifier STRING        #typeConstructor
+    | number                   #numericLiteral
+    | booleanValue             #booleanLiteral
+    | STRING+                  #stringLiteral
+    ;
+
+multipartIdentifier
+    : parts+=identifier ('.' parts+=identifier)*
     ;
 
 booleanValue
@@ -130,22 +103,20 @@ booleanValue
     ;
 
 number
-    : MINUS? EXPONENT_VALUE           #exponentLiteral
-    | MINUS? DECIMAL_VALUE            #decimalLiteral
-    | MINUS? INTEGER_VALUE            #integerLiteral
-    | MINUS? BIGINT_LITERAL           #bigIntLiteral
-    | MINUS? SMALLINT_LITERAL         #smallIntLiteral
-    | MINUS? TINYINT_LITERAL          #tinyIntLiteral
-    | MINUS? DOUBLE_LITERAL           #doubleLiteral
-    | MINUS? FLOAT_LITERAL            #floatLiteral
-    | MINUS? BIGDECIMAL_LITERAL       #bigDecimalLiteral
-    ;
-
-multipartIdentifier
-    : parts+=identifier ('.' parts+=identifier)*
+    : MINUS? DECIMAL_VALUE             #decimalLiteral
+    | MINUS? INTEGER_VALUE             #integerLiteral
+    | MINUS? BIGINT_LITERAL            #bigIntLiteral
+    | MINUS? SMALLINT_LITERAL          #smallIntLiteral
+    | MINUS? TINYINT_LITERAL           #tinyIntLiteral
+    | MINUS? DOUBLE_LITERAL            #doubleLiteral
+    | MINUS? BIGDECIMAL_LITERAL        #bigDecimalLiteral
     ;
 
 identifier
+    : strictIdentifier
+    ;
+
+strictIdentifier
     : IDENTIFIER              #unquotedIdentifier
     | quotedIdentifier        #quotedIdentifierAlternative
     | nonReserved             #unquotedIdentifier
@@ -155,48 +126,44 @@ quotedIdentifier
     : BACKQUOTED_IDENTIFIER
     ;
 
-fieldList
-    : fields+=multipartIdentifier (',' fields+=multipartIdentifier)*
-    ;
-
 nonReserved
-    : ADD | ALTER | AS | ASC | BY | DESC | DROP | EXEC | FIELD | FIRST | LAST | NULLS | ORDERED | PARTITION | TABLE | WRITE
-    | DISTRIBUTED | LOCALLY | UNORDERED | REPLACE | WITH | IDENTIFIER_KW | FIELDS | SET
-    | TRUE | FALSE
+    : AND
+    | BY
+    | FALSE
+    | DATE
+    | INTERVAL
     | MAP
+    | OPTIMIZE
+    | OR
+    | TABLE
+    | TIMESTAMP
+    | TRUE
+    | WHERE
     ;
 
-ADD: 'ADD';
-ALTER: 'ALTER';
-AS: 'AS';
-ASC: 'ASC';
+AND: 'AND';
 BY: 'BY';
-EXEC: 'EXEC';
-DESC: 'DESC';
-DISTRIBUTED: 'DISTRIBUTED';
-DROP: 'DROP';
-FIELD: 'FIELD';
-FIELDS: 'FIELDS';
-FIRST: 'FIRST';
-LAST: 'LAST';
-LOCALLY: 'LOCALLY';
-NULLS: 'NULLS';
-ORDERED: 'ORDERED';
-PARTITION: 'PARTITION';
-REPLACE: 'REPLACE';
-IDENTIFIER_KW: 'IDENTIFIER';
-SET: 'SET';
-TABLE: 'TABLE';
-UNORDERED: 'UNORDERED';
-WITH: 'WITH';
-WRITE: 'WRITE';
-
-TRUE: 'TRUE';
 FALSE: 'FALSE';
-
+DATE: 'DATE';
+INTERVAL: 'INTERVAL';
+NULL: 'NULL';
 MAP: 'MAP';
+OPTIMIZE: 'OPTIMIZE';
+OR: 'OR';
+TABLE: 'TABLE';
+TIMESTAMP: 'TIMESTAMP';
+TRUE: 'TRUE';
+WHERE: 'WHERE';
 
-PLUS: '+';
+EQ  : '=' | '==';
+NSEQ: '<=>';
+NEQ : '<>';
+NEQJ: '!=';
+LT  : '<';
+LTE : '<=' | '!>';
+GT  : '>';
+GTE : '>=' | '!<';
+
 MINUS: '-';
 
 STRING
@@ -220,18 +187,9 @@ INTEGER_VALUE
     : DIGIT+
     ;
 
-EXPONENT_VALUE
-    : DIGIT+ EXPONENT
-    | DECIMAL_DIGITS EXPONENT {isValidDecimal()}?
-    ;
-
 DECIMAL_VALUE
-    : DECIMAL_DIGITS {isValidDecimal()}?
-    ;
-
-FLOAT_LITERAL
-    : DIGIT+ EXPONENT? 'F'
-    | DECIMAL_DIGITS EXPONENT? 'F' {isValidDecimal()}?
+    : DIGIT+ EXPONENT
+    | DECIMAL_DIGITS EXPONENT? {isValidDecimal()}?
     ;
 
 DOUBLE_LITERAL
@@ -244,12 +202,12 @@ BIGDECIMAL_LITERAL
     | DECIMAL_DIGITS EXPONENT? 'BD' {isValidDecimal()}?
     ;
 
-IDENTIFIER
-    : (LETTER | DIGIT | '_')+
-    ;
-
 BACKQUOTED_IDENTIFIER
     : '`' ( ~'`' | '``' )* '`'
+    ;
+
+IDENTIFIER
+    : (LETTER | DIGIT | '_')+
     ;
 
 fragment DECIMAL_DIGITS
@@ -270,15 +228,14 @@ fragment LETTER
     ;
 
 SIMPLE_COMMENT
-    : '--' ('\\\n' | ~[\r\n])* '\r'? '\n'? -> channel(HIDDEN)
+    : '--' ~[\r\n]* '\r'? '\n'? -> channel(HIDDEN)
     ;
 
 BRACKETED_COMMENT
-    : '/*' {!isHint()}? (BRACKETED_COMMENT|.)*? '*/' -> channel(HIDDEN)
+    : '/*' .*? '*/' -> channel(HIDDEN)
     ;
 
-WS
-    : [ \r\n\t]+ -> channel(HIDDEN)
+WS  : [ \r\n\t]+ -> channel(HIDDEN)
     ;
 
 // Catch-all for anything we can't recognize.
