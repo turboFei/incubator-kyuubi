@@ -21,7 +21,7 @@ import org.apache.spark.SparkConf
 import org.apache.spark.sql.execution.exchange.{ENSURE_REQUIREMENTS, ShuffleExchangeLike}
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 
-import org.apache.kyuubi.sql.{KyuubiSQLConf, KyuubiSparkSQLCommonExtension}
+import org.apache.kyuubi.sql.{KyuubiSparkSQLCommonExtension, KyuubiSQLConf}
 
 class InsertShuffleNodeBeforeJoinSuite extends KyuubiSparkSQLExtensionTest {
   protected override def beforeAll(): Unit = {
