@@ -28,7 +28,7 @@ import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.trees.Origin
 import org.apache.spark.sql.types.{DataType, StructType}
 
-import org.apache.kyuubi.sql.zorder.UpperCaseCharStream
+import org.apache.kyuubi.sql.UpperCaseCharStream
 
 class KyuubiCommandsSparkSqlExtensionsParser(val delegate: ParserInterface)
   extends ParserInterface {

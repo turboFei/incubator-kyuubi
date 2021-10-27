@@ -19,7 +19,7 @@ package org.apache.kyuubi.sql.zorder
 
 import org.antlr.v4.runtime._
 import org.antlr.v4.runtime.atn.PredictionMode
-import org.antlr.v4.runtime.misc.{Interval, ParseCancellationException}
+import org.antlr.v4.runtime.misc.{ParseCancellationException}
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.{FunctionIdentifier, TableIdentifier}
 import org.apache.spark.sql.catalyst.expressions.Expression
@@ -27,6 +27,8 @@ import org.apache.spark.sql.catalyst.parser.{ParseErrorListener, ParseException,
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.trees.Origin
 import org.apache.spark.sql.types.{DataType, StructType}
+
+import org.apache.kyuubi.sql.UpperCaseCharStream
 
 abstract class ZorderSparkSqlExtensionsParserBase extends ParserInterface {
   def delegate: ParserInterface
@@ -108,25 +110,4 @@ class ZorderSparkSqlExtensionsParser(
     override val delegate: ParserInterface)
   extends ZorderSparkSqlExtensionsParserBase {
   def astBuilder: ZorderSqlAstBuilderBase = new ZorderSqlAstBuilder
-}
-
-/* Copied from Apache Spark's to avoid dependency on Spark Internals */
-class UpperCaseCharStream(wrapped: CodePointCharStream) extends CharStream {
-  override def consume(): Unit = wrapped.consume
-  override def getSourceName(): String = wrapped.getSourceName
-  override def index(): Int = wrapped.index
-  override def mark(): Int = wrapped.mark
-  override def release(marker: Int): Unit = wrapped.release(marker)
-  override def seek(where: Int): Unit = wrapped.seek(where)
-  override def size(): Int = wrapped.size
-
-  override def getText(interval: Interval): String = wrapped.getText(interval)
-
-  // scalastyle:off
-  override def LA(i: Int): Int = {
-    val la = wrapped.LA(i)
-    if (la == 0 || la == IntStream.EOF) la
-    else Character.toUpperCase(la)
-  }
-  // scalastyle:on
 }
