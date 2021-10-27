@@ -129,6 +129,7 @@ quotedIdentifier
 nonReserved
     : AND
     | BY
+    | EXEC
     | FALSE
     | DATE
     | INTERVAL
@@ -143,6 +144,7 @@ nonReserved
 
 AND: 'AND';
 BY: 'BY';
+EXEC: 'EXEC';
 FALSE: 'FALSE';
 DATE: 'DATE';
 INTERVAL: 'INTERVAL';
