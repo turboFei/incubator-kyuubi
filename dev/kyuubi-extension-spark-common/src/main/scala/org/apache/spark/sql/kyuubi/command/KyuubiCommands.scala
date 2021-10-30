@@ -22,7 +22,8 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, GenericInternalRow}
 import org.apache.spark.sql.execution.command.RunnableCommand
 
-case class Exec(procedure: KyuubiDefinedProcedure, args: Seq[Expression]) extends RunnableCommand {
+case class ExecCommand(procedure: KyuubiDefinedProcedure, args: Seq[Expression])
+  extends RunnableCommand {
   override def run(sparkSession: SparkSession): Seq[Row] = {
     procedure.procedure.exec(buildInternalRow(args))
   }

@@ -33,7 +33,7 @@ class KyuubiCommandsSuite extends KyuubiSparkSQLExtensionTest with ExpressionEva
   }
 
   test("test stop engine") {
-    sql("STOP_ENGINE").show()
+    sql("EXEC stop_engine()").show()
     eventually (timeout(Span(10, Seconds)), interval(Span(1, Seconds))) {
       assert(spark.sparkContext.isStopped)
     }

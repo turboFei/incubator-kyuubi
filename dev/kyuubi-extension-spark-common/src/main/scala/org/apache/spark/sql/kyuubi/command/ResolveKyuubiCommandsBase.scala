@@ -26,7 +26,7 @@ import org.apache.spark.sql.catalyst.expressions.{Expression, Literal}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.rules.Rule
 
-case class ResolveProcedures(spark: SparkSession) extends Rule[LogicalPlan] {
+case class ResolveKyuubiProcedures(spark: SparkSession) extends Rule[LogicalPlan] {
   override def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperators {
     case ExecStatement(procedureName, args) =>
       val procedureOpt = KDPRegistry.lookUpProcedure(procedureName)
@@ -38,7 +38,7 @@ case class ResolveProcedures(spark: SparkSession) extends Rule[LogicalPlan] {
       validateParams(normalizedParams)
 
       val normalizedArgs = normalizeArgs(args)
-      Exec(procedureOpt.get, args = buildArgExprs(normalizedParams, normalizedArgs))
+      ExecCommand(procedureOpt.get, args = buildArgExprs(normalizedParams, normalizedArgs))
   }
 
   private def validateParams(params: Seq[ProcedureParameter]): Unit = {
