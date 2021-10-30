@@ -15,27 +15,22 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql
+package org.apache.spark.sql.kyuubi.sqlclassification
 
-import org.apache.spark.SparkConf
-import org.apache.spark.sql.catalyst.expressions.ExpressionEvalHelper
-import org.apache.spark.sql.internal.StaticSQLConf
-import org.apache.spark.sql.kyuubi.KyuubiSparkSQLCommonExtension
-import org.scalatest.concurrent.Eventually
-import org.scalatest.time.{Seconds, Span}
+import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.catalyst.rules.Rule
 
-class KyuubiCommandsSuite extends KyuubiSparkSQLExtensionTest with ExpressionEvalHelper
-  with Eventually{
-  override def sparkConf(): SparkConf = {
-    super.sparkConf()
-      .set(StaticSQLConf.SPARK_SESSION_EXTENSIONS.key,
-        classOf[KyuubiSparkSQLCommonExtension].getCanonicalName)
-  }
+import org.apache.spark.sql.kyuubi.KyuubiSQLConf._
 
-  test("test stop engine") {
-    sql("STOP_ENGINE").show()
-    eventually (timeout(Span(10, Seconds)), interval(Span(1, Seconds))) {
-      assert(spark.sparkContext.isStopped)
+case class KyuubiSqlClassification(session: SparkSession) extends Rule[LogicalPlan] {
+
+  override def apply(plan: LogicalPlan): LogicalPlan = {
+    if (conf.getConf(SQL_CLASSIFICATION_ENABLED) && plan.resolved) {
+      val simpleName = plan.getClass.getSimpleName
+      val sqlClassification = KyuubiGetSqlClassification.getSqlClassification(simpleName)
+      session.conf.set(SQL_CLASSIFICATION, sqlClassification)
     }
+    plan
   }
 }

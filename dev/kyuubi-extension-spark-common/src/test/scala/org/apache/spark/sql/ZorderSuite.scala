@@ -27,9 +27,10 @@ import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hive.execution.{CreateHiveTableAsSelectCommand, InsertIntoHiveTable, OptimizedCreateHiveTableAsSelectCommand}
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 import org.apache.spark.sql.types._
-
-import org.apache.kyuubi.sql.{KyuubiSparkSQLCommonExtension, KyuubiSQLConf, KyuubiSQLExtensionException}
-import org.apache.kyuubi.sql.zorder.{OptimizeZorderCommandBase, Zorder}
+import org.apache.kyuubi.sql.KyuubiSparkSQLCommonExtension
+import org.apache.kyuubi.sql.zorder.OptimizeZorderCommandBase
+import org.apache.spark.sql.kyuubi.{KyuubiSQLConf, KyuubiSQLExtensionException, KyuubiSparkSQLCommonExtension}
+import org.apache.spark.sql.kyuubi.zorder.{OptimizeZorderCommandBase, Zorder}
 
 trait ZorderSuite extends KyuubiSparkSQLExtensionTest with ExpressionEvalHelper {
   override def sparkConf(): SparkConf = {

@@ -15,27 +15,14 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql
+package org.apache.spark.sql.kyuubi
 
-import org.apache.spark.SparkConf
-import org.apache.spark.sql.catalyst.expressions.ExpressionEvalHelper
-import org.apache.spark.sql.internal.StaticSQLConf
-import org.apache.spark.sql.kyuubi.KyuubiSparkSQLCommonExtension
-import org.scalatest.concurrent.Eventually
-import org.scalatest.time.{Seconds, Span}
+import java.sql.SQLException
 
-class KyuubiCommandsSuite extends KyuubiSparkSQLExtensionTest with ExpressionEvalHelper
-  with Eventually{
-  override def sparkConf(): SparkConf = {
-    super.sparkConf()
-      .set(StaticSQLConf.SPARK_SESSION_EXTENSIONS.key,
-        classOf[KyuubiSparkSQLCommonExtension].getCanonicalName)
-  }
+class KyuubiSQLExtensionException(reason: String, cause: Throwable)
+  extends SQLException(reason, cause) {
 
-  test("test stop engine") {
-    sql("STOP_ENGINE").show()
-    eventually (timeout(Span(10, Seconds)), interval(Span(1, Seconds))) {
-      assert(spark.sparkContext.isStopped)
-    }
+  def this(reason: String) = {
+    this(reason, null)
   }
 }

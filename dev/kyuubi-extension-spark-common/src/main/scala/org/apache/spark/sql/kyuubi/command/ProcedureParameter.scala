@@ -15,27 +15,29 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql
+package org.apache.spark.sql.kyuubi.command
 
-import org.apache.spark.SparkConf
-import org.apache.spark.sql.catalyst.expressions.ExpressionEvalHelper
-import org.apache.spark.sql.internal.StaticSQLConf
-import org.apache.spark.sql.kyuubi.KyuubiSparkSQLCommonExtension
-import org.scalatest.concurrent.Eventually
-import org.scalatest.time.{Seconds, Span}
+import org.apache.spark.sql.types.DataType
 
-class KyuubiCommandsSuite extends KyuubiSparkSQLExtensionTest with ExpressionEvalHelper
-  with Eventually{
-  override def sparkConf(): SparkConf = {
-    super.sparkConf()
-      .set(StaticSQLConf.SPARK_SESSION_EXTENSIONS.key,
-        classOf[KyuubiSparkSQLCommonExtension].getCanonicalName)
+trait ProcedureParameter {
+  val name: String
+  val dataType: DataType
+  val required: Boolean
+}
+
+object ProcedureParameter {
+  def required(name: String, dataType: DataType): ProcedureParameterImpl = {
+    new ProcedureParameterImpl(name, dataType, true)
   }
 
-  test("test stop engine") {
-    sql("STOP_ENGINE").show()
-    eventually (timeout(Span(10, Seconds)), interval(Span(1, Seconds))) {
-      assert(spark.sparkContext.isStopped)
-    }
+  def optional(name: String, dataType: DataType): ProcedureParameterImpl = {
+    new ProcedureParameterImpl(name, dataType, false)
+  }
+}
+
+class ProcedureParameterImpl(val name: String, val dataType: DataType, val required: Boolean)
+  extends ProcedureParameter {
+  override def toString: String = {
+    s"ProcedureParameter(name='$name', type='$dataType', required='$required')"
   }
 }
