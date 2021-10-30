@@ -29,7 +29,16 @@ import org.apache.spark.sql.catalyst.rules.Rule
 case class ResolveProcedures(spark: SparkSession) extends Rule[LogicalPlan] {
   override def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperators {
     case ExecStatement(procedureName, args) =>
+      val procedureOpt = KDPRegistry.lookUpProcedure(procedureName)
+      if (procedureOpt.isEmpty) {
+        throw new AnalysisException(s"There is no procedure named[$procedureName]")
+      }
+      val params = procedureOpt.get.procedure.parameters
+      val normalizedParams = normalizeParams(params)
+      validateParams(normalizedParams)
 
+      val normalizedArgs = normalizeArgs(args)
+      Exec(procedureOpt.get, args = buildArgExprs(normalizedParams, normalizedArgs))
   }
 
   private def validateParams(params: Seq[ProcedureParameter]): Unit = {

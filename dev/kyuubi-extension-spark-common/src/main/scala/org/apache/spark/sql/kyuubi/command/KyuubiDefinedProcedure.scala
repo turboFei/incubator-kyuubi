@@ -17,21 +17,15 @@
 
 package org.apache.spark.sql.kyuubi.command
 
-import org.apache.spark.sql.{Row, SparkSession}
-import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{Expression, GenericInternalRow}
-import org.apache.spark.sql.execution.command.RunnableCommand
-
-case class Exec(procedure: KyuubiDefinedProcedure, args: Seq[Expression]) extends RunnableCommand {
-  override def run(sparkSession: SparkSession): Seq[Row] = {
-    procedure.procedure.exec(buildInternalRow(args))
-  }
-
-  private def buildInternalRow(exprs: Seq[Expression]): InternalRow = {
-    val values = new Array[Any](exprs.size)
-    for (index <- exprs.indices) {
-      values(index) = exprs(index).eval()
-    }
-    new GenericInternalRow(values)
-  }
-}
+/**
+ * A wrapper for [[Procedure]]
+ *
+ * @param name procedure name
+ * @param procedure kyuubi procedure
+ * @param description procedure description
+ */
+case class KyuubiDefinedProcedure(
+    name: String,
+    procedure: Procedure,
+    description: String,
+    since: String)

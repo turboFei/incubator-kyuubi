@@ -23,7 +23,6 @@ import org.apache.spark.sql.catalyst.InternalRow
 trait Procedure {
   val parameters: Seq[ProcedureParameter]
   def exec(args: InternalRow): Seq[Row]
-  def description: String
 }
 
 case object StopEngineProcedure extends Procedure {
@@ -33,6 +32,4 @@ case object StopEngineProcedure extends Procedure {
     SparkSession.getActiveSession.foreach(_.stop())
     Seq.empty[Row]
   }
-
-  override def description: String = "stop the engine"
 }

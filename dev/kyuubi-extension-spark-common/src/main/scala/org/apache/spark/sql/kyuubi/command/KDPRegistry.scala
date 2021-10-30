@@ -17,15 +17,31 @@
 
 package org.apache.spark.sql.kyuubi.command
 
-import org.apache.spark.sql.catalyst.util.CaseInsensitiveMap
+import scala.collection.mutable.ArrayBuffer
 
-object ProcedureRegistry {
+object KDPRegistry {
   @transient
-  var registeredProcedures: Map[String, Procedure] = CaseInsensitiveMap[Procedure]
+  var registeredProcedures = new ArrayBuffer[KyuubiDefinedProcedure]()
 
-  create("stop_engine", StopEngineProcedure)
+  val stop_engine: KyuubiDefinedProcedure = create(
+    "stop_engine",
+    StopEngineProcedure,
+    "stop the spark engine",
+    "1.4.0")
 
-  def create(name: String, procedure: Procedure): Unit = {
-    registeredProcedures = registeredProcedures + Map(name -> procedure)
+  def create(
+    name: String,
+    procedure: Procedure,
+    description: String,
+    since: String): KyuubiDefinedProcedure = {
+    val kdp = KyuubiDefinedProcedure(name, procedure, description, since)
+    registeredProcedures += kdp
+    kdp
+  }
+
+  def listProcedures(): Seq[KyuubiDefinedProcedure] = registeredProcedures
+
+  def lookUpProcedure(name: String): Option[KyuubiDefinedProcedure] = {
+    registeredProcedures.find(_.name.equalsIgnoreCase(name))
   }
 }
