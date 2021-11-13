@@ -18,6 +18,7 @@
 package org.apache.kyuubi.operation
 
 import java.sql.SQLException
+import java.util.Properties
 
 import org.apache.hive.service.rpc.thrift.{TExecuteStatementReq, TGetOperationStatusReq, TOperationState, TStatusCode}
 import org.scalatest.time.SpanSugar.convertIntToGrainOfTime
@@ -25,6 +26,7 @@ import org.scalatest.time.SpanSugar.convertIntToGrainOfTime
 import org.apache.kyuubi.Utils
 import org.apache.kyuubi.WithKyuubiServer
 import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.jdbc.KyuubiHiveDriver
 
 /**
  * UT with Connection level engine shared cost much time, only run basic jdbc tests.
@@ -131,5 +133,16 @@ class KyuubiOperationPerConnectionSuite extends WithKyuubiServer with HiveJDBCTe
         assert(executeStmtResp.getStatus.getErrorMessage.contains("kyuubi-spark-sql-engine.log"))
       }
     }
+  }
+
+  test("open kyuubi connection with KyuubiConnection") {
+    val driver = new KyuubiHiveDriver()
+    val connection = driver.connect(getJdbcUrl, new Properties())
+
+    val stmt = connection.createStatement();
+    stmt.execute("select engine_name()")
+    val resultSet = stmt.getResultSet
+    assert(resultSet.next())
+    assert(!resultSet.getString(1).isEmpty)
   }
 }

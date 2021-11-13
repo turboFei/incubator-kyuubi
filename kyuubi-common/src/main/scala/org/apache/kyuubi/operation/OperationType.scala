@@ -64,4 +64,15 @@ object OperationType extends Enumeration {
         throw new UnsupportedOperationException(s"Unsupported Operation type: ${other.toString}")
     }
   }
+
+  val kyuubiDefinedOperationTypes: Seq[OperationType] = Seq(LAUNCH_ENGINE)
+
+  /**
+   * Whether the operation type is defined by kyuubi and does not has related TOperationType
+   * @param opType
+   * @return
+   */
+  def isKyuubiDefinedOperationType(opType: OperationType): Boolean = {
+    kyuubiDefinedOperationTypes.contains(opType)
+  }
 }
