@@ -24,6 +24,8 @@ class LaunchEngine(session: KyuubiSessionImpl, override val shouldRunAsync: Bool
   KyuubiOperation(OperationType.LAUNCH_ENGINE, session) {
   import LaunchEngine._
 
+  override protected val operationTimeout: Long = 0
+
   private lazy val _operationLog: OperationLog = if (shouldRunAsync) {
     OperationLog.createOperationLog(session, getHandle)
   } else {
@@ -57,7 +59,7 @@ class LaunchEngine(session: KyuubiSessionImpl, override val shouldRunAsync: Bool
               try {
                 session.closeOperation(getHandle)
               } catch {
-                case _: Exception => // it might has been removed because expiration
+                case _: Exception => // it might has been closed
               }
             }
           }.start()
