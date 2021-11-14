@@ -22,7 +22,6 @@ import java.lang.reflect.Method;
 import java.sql.DatabaseMetaData;
 import java.sql.SQLException;
 import java.util.*;
-import java.util.stream.Collectors;
 
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hive.jdbc.HiveConnection;
@@ -178,39 +177,12 @@ public class KyuubiConnection extends HiveConnection {
         return Collections.unmodifiableList(logs);
     }
 
-    private static String buildJdbcUrlWithConf(
-      String url,
-      Map<String, String> sessionConf,
-      Map<String, String> jdbcConfig,
-      Map<String, String> jdbcVars) {
-        String sessionConfStr = map2KVString(sessionConf);
-        String jdbcConfStr = "";
-        if (!jdbcConfig.isEmpty()) {
-            jdbcConfStr = "?" + map2KVString(jdbcConfig);
-        }
-        String jdbcVarsStr = "";
-        if (!jdbcVars.isEmpty()) {
-            jdbcVarsStr = "#" + map2KVString(jdbcVars);
-        }
-        return url + sessionConfStr + jdbcConfStr + jdbcVarsStr;
-    }
-
-    private static String map2KVString(Map<String, String> map) {
-        return String.join(";", map.entrySet().stream()
-          .map(kv -> kv.getKey() + "=" + kv.getValue()).collect(Collectors.toList()));
-    }
-
-    private static JdbcConnectionParams parseConnectionParams(String url, Properties info) throws Exception {
+    private void executeDelayedInitFile(String url, Properties info) throws Exception {
         Method parseURLMethod = Utils.class.getDeclaredMethod(
           "parseURL", String.class, Properties.class);
         parseURLMethod.setAccessible(true);
         JdbcConnectionParams connParams = (JdbcConnectionParams) parseURLMethod.invoke(
           null, url, info);
-        return connParams;
-    }
-
-    private void executeDelayedInitFile(String url, Properties info) throws Exception {
-        JdbcConnectionParams connParams = parseConnectionParams(url, info);
         String initFile = connParams.getSessionVars().get(INIT_FILE);
         Field initFileField = HiveConnection.class.getDeclaredField("initFile");
         initFileField.setAccessible(true);
