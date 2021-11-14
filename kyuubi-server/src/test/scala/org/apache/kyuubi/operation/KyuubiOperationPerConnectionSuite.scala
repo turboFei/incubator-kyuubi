@@ -60,12 +60,13 @@ class KyuubiOperationPerConnectionSuite extends WithKyuubiServer with HiveJDBCTe
 
   test("submit spark app timeout with last log output") {
     withSessionConf()(Map(KyuubiConf.ENGINE_INIT_TIMEOUT.key -> "2000"))(Map.empty) {
-      val exception = intercept[SQLException] {
-        withJdbcStatement() { statement => // no-op
+      withJdbcStatement() { statement =>
+        val exception = intercept[SQLException] {
+          statement.execute("select engine_id()")
         }
+        val verboseMessage = Utils.stringifyException(exception)
+        assert(verboseMessage.contains("Failed to detect the root cause"))
       }
-      val verboseMessage = Utils.stringifyException(exception)
-      assert(verboseMessage.contains("Failed to detect the root cause"))
     }
   }
 
