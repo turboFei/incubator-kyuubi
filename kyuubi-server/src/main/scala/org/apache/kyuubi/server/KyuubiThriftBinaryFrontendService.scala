@@ -55,6 +55,9 @@ class KyuubiThriftBinaryFrontendService(
           resp.setOperationHandle(launchEngineOpHandle.toTOperationHandle)
           resp.setStatus(OK_STATUS)
 
+        case Some(_) =>
+          ExecuteStatement(req, false)
+
         case _ =>
           throw KyuubiSQLException("No Kyuubi defined operation type specified")
       }

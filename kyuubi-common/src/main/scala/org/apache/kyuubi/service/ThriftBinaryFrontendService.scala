@@ -248,9 +248,10 @@ abstract class ThriftBinaryFrontendService(name: String)
     resp
   }
 
-  override def ExecuteStatement(req: TExecuteStatementReq): TExecuteStatementResp = {
-    debug(req.toString)
-    if (isKyuubiDefinedExecuteStatement(req)) {
+  protected def ExecuteStatement(
+      req: TExecuteStatementReq,
+      checkKyuubiDefined: Boolean): TExecuteStatementResp = {
+    if (checkKyuubiDefined && isKyuubiDefinedExecuteStatement(req)) {
       ExecuteKyuubiDefinedStatement(req)
     } else {
       val resp = new TExecuteStatementResp
@@ -270,6 +271,11 @@ abstract class ThriftBinaryFrontendService(name: String)
       }
       resp
     }
+  }
+
+  override def ExecuteStatement(req: TExecuteStatementReq): TExecuteStatementResp = {
+    debug(req.toString)
+    ExecuteStatement(req, true)
   }
 
   override def GetTypeInfo(req: TGetTypeInfoReq): TGetTypeInfoResp = {
