@@ -36,20 +36,21 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class KyuubiConnection extends HiveConnection {
-    public static final Logger LOG = LoggerFactory.getLogger(KyuubiConnection.class.getName());
+    private static final Logger LOG = LoggerFactory.getLogger(KyuubiConnection.class.getName());
 
     // launch backend engine asynchronously
-    static final String LAUNCH_ENGINE_ASYNC = "kyuubi.session.engine.launch.async";
+    public static final String LAUNCH_ENGINE_ASYNC = "kyuubi.session.engine.launch.async";
 
     // the key to indicate that this TExecuteStatementReq is dedicated for kyuubi defined operation
-    static final String DEFINED_OPERATION_ENABLED =
+    public static final String DEFINED_OPERATION_ENABLED =
       "kyuubi.execute.statement.defined.operation.enabled";
     // kyuubi defined operation type
-    static final String DEFINED_OPERATION_TYPE =
+    public static final String DEFINED_OPERATION_TYPE =
       "kyuubi.execute.statement.defined.operation.type";
+    public static final String DEFINED_OPERATION_STATEMENT = "PLACE_HOLDER";
 
     // to get launch engine operation handle
-    static final String LAUNCH_ENGINE_TYPE =
+    public static final String LAUNCH_ENGINE_TYPE =
       "LAUNCH_ENGINE";
 
 
@@ -102,11 +103,15 @@ public class KyuubiConnection extends HiveConnection {
         execStmtConf.put(DEFINED_OPERATION_ENABLED, "true");
         execStmtConf.put(DEFINED_OPERATION_TYPE, LAUNCH_ENGINE_TYPE);
         req.setConfOverlay(execStmtConf);
-        req.setStatement("PLACE_HOLDER");
+        req.setStatement(DEFINED_OPERATION_STATEMENT);
 
         TOperationHandle launchEngineOpHandle = null;
         try {
             TExecuteStatementResp resp = client.ExecuteStatement(req);
+            if (!resp.getStatus().getStatusCode().equals(TStatusCode.SUCCESS_STATUS)) {
+                // the service side does not support this kind of kyuubi defined operation
+                return;
+            }
             launchEngineOpHandle = resp.getOperationHandle();
         } catch (TException e) {
             LOG.error("Error when getting launch engine operation handle", e);

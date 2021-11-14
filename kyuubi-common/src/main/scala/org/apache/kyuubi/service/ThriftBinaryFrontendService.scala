@@ -18,6 +18,7 @@
 package org.apache.kyuubi.service
 
 import java.net.{InetAddress, ServerSocket}
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 import scala.collection.JavaConverters._
@@ -33,6 +34,7 @@ import org.apache.kyuubi.{KyuubiException, KyuubiSQLException, Logging, Utils}
 import org.apache.kyuubi.cli.HandleIdentifier
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.operation.{FetchOrientation, OperationHandle, OperationType}
+import org.apache.kyuubi.operation.KyuubiExecuteStatementConf.DEFINED_OPERATION_ENABLED
 import org.apache.kyuubi.service.authentication.KyuubiAuthenticationFactory
 import org.apache.kyuubi.session.SessionHandle
 import org.apache.kyuubi.util.{ExecutorPoolCaptureOom, KyuubiHadoopUtils, NamedThreadFactory}
@@ -230,24 +232,40 @@ abstract class ThriftBinaryFrontendService(name: String)
     resp
   }
 
+  protected def isKyuubiDefinedExecuteStatement(req: TExecuteStatementReq): Boolean = {
+    val definedOpEnabled = req.getConfOverlay.get(DEFINED_OPERATION_ENABLED.key)
+    definedOpEnabled != null && definedOpEnabled.toLowerCase(Locale.ROOT) == "true"
+  }
+
+  def ExecuteKyuubiDefinedStatement(req: TExecuteStatementReq): TExecuteStatementResp = {
+    val resp = new TExecuteStatementResp
+    val exception = KyuubiSQLException("Do not support Kyuubi Defined execute statement")
+    resp.setStatus(KyuubiSQLException.toTStatus(exception))
+    resp
+  }
+
   override def ExecuteStatement(req: TExecuteStatementReq): TExecuteStatementResp = {
     debug(req.toString)
-    val resp = new TExecuteStatementResp
-    try {
-      val sessionHandle = SessionHandle(req.getSessionHandle)
-      val statement = req.getStatement
-      val runAsync = req.isRunAsync
-      // val confOverlay = req.getConfOverlay
-      val queryTimeout = req.getQueryTimeout
-      val operationHandle = be.executeStatement(sessionHandle, statement, runAsync, queryTimeout)
-      resp.setOperationHandle(operationHandle.toTOperationHandle)
-      resp.setStatus(OK_STATUS)
-    } catch {
-      case e: Exception =>
-        error("Error executing statement: ", e)
-        resp.setStatus(KyuubiSQLException.toTStatus(e))
+    if (isKyuubiDefinedExecuteStatement(req)) {
+      ExecuteKyuubiDefinedStatement(req)
+    } else {
+      val resp = new TExecuteStatementResp
+      try {
+        val sessionHandle = SessionHandle(req.getSessionHandle)
+        val statement = req.getStatement
+        val runAsync = req.isRunAsync
+        // val confOverlay = req.getConfOverlay
+        val queryTimeout = req.getQueryTimeout
+        val operationHandle = be.executeStatement(sessionHandle, statement, runAsync, queryTimeout)
+        resp.setOperationHandle(operationHandle.toTOperationHandle)
+        resp.setStatus(OK_STATUS)
+      } catch {
+        case e: Exception =>
+          error("Error executing statement: ", e)
+          resp.setStatus(KyuubiSQLException.toTStatus(e))
+      }
+      resp
     }
-    resp
   }
 
   override def GetTypeInfo(req: TGetTypeInfoReq): TGetTypeInfoResp = {

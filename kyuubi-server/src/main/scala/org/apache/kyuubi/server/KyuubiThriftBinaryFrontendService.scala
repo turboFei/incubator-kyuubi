@@ -17,8 +17,6 @@
 
 package org.apache.kyuubi.server
 
-import java.util.Locale
-
 import org.apache.hive.service.rpc.thrift.{TExecuteStatementReq, TExecuteStatementResp}
 
 import org.apache.kyuubi.KyuubiSQLException
@@ -31,8 +29,8 @@ import org.apache.kyuubi.session.{KyuubiSessionImpl, SessionHandle}
 class KyuubiThriftBinaryFrontendService(
     override val serverable: Serverable)
   extends ThriftBinaryFrontendService("KyuubiThriftBinaryFrontendService") {
-  import ThriftBinaryFrontendService._
   import KyuubiExecuteStatementConf._
+  import ThriftBinaryFrontendService._
 
   override lazy val discoveryService: Option[Service] = {
     if (ServiceDiscovery.supportServiceDiscovery(conf)) {
@@ -42,36 +40,30 @@ class KyuubiThriftBinaryFrontendService(
     }
   }
 
-  override def ExecuteStatement(req: TExecuteStatementReq): TExecuteStatementResp = {
-    val definedOpEnabled = req.getConfOverlay.get(DEFINED_OPERATION_ENABLED.key)
-    if (definedOpEnabled != null && definedOpEnabled.toLowerCase(Locale.ROOT) == "true") {
-      debug(req.toString)
-      var resp = new TExecuteStatementResp
-      try {
-        val execStmtConf = new KyuubiExecuteStatementConf(req.getConfOverlay)
-        val definedOpType = execStmtConf.get(DEFINED_OPERATION_TYPE).map(OperationType.withName)
+  override def ExecuteKyuubiDefinedStatement(req: TExecuteStatementReq): TExecuteStatementResp = {
+    val resp = new TExecuteStatementResp
+    try {
+      val execStmtConf = new KyuubiExecuteStatementConf(req.getConfOverlay)
+      val definedOpType = execStmtConf.get(DEFINED_OPERATION_TYPE).map(OperationType.withName)
 
-        definedOpType match {
-          case Some(LAUNCH_ENGINE) =>
-            val sessionHandle = SessionHandle(req.getSessionHandle)
-            val session = be.sessionManager.getSession(sessionHandle)
-              .asInstanceOf[KyuubiSessionImpl]
-            val launchEngineOpHandle = session.launchEngineOp.getHandle
-            resp.setOperationHandle(launchEngineOpHandle.toTOperationHandle)
-            resp.setStatus(OK_STATUS)
+      definedOpType match {
+        case Some(LAUNCH_ENGINE) =>
+          val sessionHandle = SessionHandle(req.getSessionHandle)
+          val session = be.sessionManager.getSession(sessionHandle)
+            .asInstanceOf[KyuubiSessionImpl]
+          val launchEngineOpHandle = session.launchEngineOp.getHandle
+          resp.setOperationHandle(launchEngineOpHandle.toTOperationHandle)
+          resp.setStatus(OK_STATUS)
 
-          case _ =>
-            resp = super.ExecuteStatement(req)
-        }
-      } catch {
-        case e: Exception =>
-          error("Error executing statement: ", e)
-          resp.setStatus(KyuubiSQLException.toTStatus(e))
+        case _ =>
+          throw KyuubiSQLException("No Kyuubi defined operation type specified")
       }
-      resp
-    } else {
-      super.ExecuteStatement(req)
+    } catch {
+      case e: Exception =>
+        error("Error executing statement: ", e)
+        resp.setStatus(KyuubiSQLException.toTStatus(e))
     }
+    resp
   }
 
   override def connectionUrl: String = {
