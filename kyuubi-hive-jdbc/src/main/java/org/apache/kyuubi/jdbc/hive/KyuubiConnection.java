@@ -54,21 +54,26 @@ public class KyuubiConnection extends HiveConnection {
 
 
     static final String INIT_FILE = "initFile";
+    static final String DELAY_TO_INIT_FILE = "delayToInitFile";
 
     static final Long ENGINE_LOG_THREAD_DELAY_EXIT = 10 * 1000L;
 
     public KyuubiConnection(String url, Properties info) throws SQLException {
         super(Optional.of(url).map(u -> {
             try {
-                JdbcConnectionParams connParams = parseConnectionParams(url, info);
-                String pureUrl = connParams.getJdbcUriString();
-                Map<String, String> sessionConf = connParams.getSessionVars();
-                // disable the init file at first
-                sessionConf.remove(INIT_FILE);
-                Map<String, String>  hiveVars = connParams.getHiveVars();
-                hiveVars.put(LAUNCH_ENGINE_ASYNC, "true");
-                u = buildJdbcUrlWithConf(pureUrl, sessionConf, connParams.getHiveConfs(),
-                  hiveVars);
+                if (url.contains(";" + INIT_FILE + "=")) {
+                    u = u.replace(";" + INIT_FILE + "=", ";" + DELAY_TO_INIT_FILE + "=");
+                } else if (url.contains("?" + INIT_FILE + "=")) {
+                    u = u.replace("?" + INIT_FILE + "=", ";" + DELAY_TO_INIT_FILE + "=");
+                } else if (url.contains("#" + INIT_FILE + "=")) {
+                    u = u.replace("#" + INIT_FILE + "=", "#" + DELAY_TO_INIT_FILE + "=");
+                }
+
+                if (u.contains("#")) {
+                    u += ";" + LAUNCH_ENGINE_ASYNC + "=true";
+                } else {
+                    u += "#" + LAUNCH_ENGINE_ASYNC + "=true";
+                }
             } catch (Exception e) {
                 LOG.error("Error when processing original url:" + u, e);
             }
