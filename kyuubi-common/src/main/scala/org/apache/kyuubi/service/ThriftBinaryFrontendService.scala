@@ -233,8 +233,12 @@ abstract class ThriftBinaryFrontendService(name: String)
   }
 
   protected def isKyuubiDefinedExecuteStatement(req: TExecuteStatementReq): Boolean = {
-    val definedOpEnabled = req.getConfOverlay.get(DEFINED_OPERATION_ENABLED.key)
-    definedOpEnabled != null && definedOpEnabled.toLowerCase(Locale.ROOT) == "true"
+    if (req.getConfOverlay == null) {
+      false
+    } else {
+      val definedOpEnabled = req.getConfOverlay.get(DEFINED_OPERATION_ENABLED.key)
+      definedOpEnabled != null && definedOpEnabled.toLowerCase(Locale.ROOT) == "true"
+    }
   }
 
   def ExecuteKyuubiDefinedStatement(req: TExecuteStatementReq): TExecuteStatementResp = {
