@@ -60,22 +60,19 @@ public class KyuubiConnection extends HiveConnection {
 
     public KyuubiConnection(String url, Properties info) throws SQLException {
         super(Optional.of(url).map(u -> {
-            try {
-                if (url.contains(";" + INIT_FILE + "=")) {
-                    u = u.replace(";" + INIT_FILE + "=", ";" + DELAY_TO_INIT_FILE + "=");
-                } else if (url.contains("?" + INIT_FILE + "=")) {
-                    u = u.replace("?" + INIT_FILE + "=", ";" + DELAY_TO_INIT_FILE + "=");
-                } else if (url.contains("#" + INIT_FILE + "=")) {
-                    u = u.replace("#" + INIT_FILE + "=", "#" + DELAY_TO_INIT_FILE + "=");
+            String INIT_FILE_PART = INIT_FILE + "=";
+            String DELAY_TO_INIT_FILE_PART = DELAY_TO_INIT_FILE + "=";
+            for (String delimiter: Arrays.asList(";", "?", "#")) {
+                if (u.contains(delimiter + INIT_FILE_PART)) {
+                    u = u.replace(delimiter + INIT_FILE_PART,
+                      delimiter + DELAY_TO_INIT_FILE_PART);
                 }
+            }
 
-                if (u.contains("#")) {
-                    u += ";" + LAUNCH_ENGINE_ASYNC + "=true";
-                } else {
-                    u += "#" + LAUNCH_ENGINE_ASYNC + "=true";
-                }
-            } catch (Exception e) {
-                LOG.error("Error when processing original url:" + u, e);
+            if (u.contains("#")) {
+                u += ";" + LAUNCH_ENGINE_ASYNC + "=true";
+            } else {
+                u += "#" + LAUNCH_ENGINE_ASYNC + "=true";
             }
             return u;
         }).get(), info);
