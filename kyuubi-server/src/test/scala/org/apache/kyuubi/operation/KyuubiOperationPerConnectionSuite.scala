@@ -20,6 +20,8 @@ package org.apache.kyuubi.operation
 import java.sql.SQLException
 import java.util.Properties
 
+import scala.collection.JavaConverters._
+
 import org.apache.hive.service.rpc.thrift.{TExecuteStatementReq, TGetOperationStatusReq, TOperationState, TStatusCode}
 import org.scalatest.time.SpanSugar.convertIntToGrainOfTime
 
@@ -144,5 +146,23 @@ class KyuubiOperationPerConnectionSuite extends WithKyuubiServer with HiveJDBCTe
     val resultSet = stmt.getResultSet
     assert(resultSet.next())
     assert(!resultSet.getString(1).isEmpty)
+  }
+
+  test("kyuubi defined ExecuteStatement - launch engine") {
+    withSessionHandle { (client, handle) =>
+      val executeStmtReq = new TExecuteStatementReq()
+      executeStmtReq.setStatement("PLACE_HOLDER")
+      executeStmtReq.setSessionHandle(handle)
+      executeStmtReq.setRunAsync(true)
+      val execStmtConf = Map(
+        KyuubiExecuteStatementConf.DEFINED_OPERATION_ENABLED.key -> "true",
+        KyuubiExecuteStatementConf.DEFINED_OPERATION_TYPE.key -> "LAUNCH_ENGINE"
+      )
+      executeStmtReq.setConfOverlay(execStmtConf.asJava)
+
+      val executeStmtResp = client.ExecuteStatement(executeStmtReq)
+      assert(executeStmtResp.getStatus.getStatusCode == TStatusCode.SUCCESS_STATUS)
+      assert(executeStmtResp.getOperationHandle != null)
+    }
   }
 }
