@@ -54,7 +54,11 @@ class LaunchEngine(session: KyuubiSessionImpl, override val shouldRunAsync: Bool
           new Thread(s"delay-close-launch-engine-op-${getHandle}") {
             override def run(): Unit = {
               Thread.sleep(DEFAULT_LAUNCH_ENGINE_OPERATION_CLOSE_DELAY)
-              session.closeOperation(getHandle)
+              try {
+                session.closeOperation(getHandle)
+              } catch {
+                case _: Exception => // it might has been removed because expiration
+              }
             }
           }.start()
         } else {
