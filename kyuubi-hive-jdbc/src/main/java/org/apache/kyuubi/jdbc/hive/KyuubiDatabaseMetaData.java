@@ -17,8 +17,7 @@
 
 package org.apache.kyuubi.jdbc.hive;
 
-import org.apache.hive.jdbc.HiveDatabaseMetaData;
-import org.apache.hive.jdbc.HiveQueryResultSet;
+import org.apache.hive.jdbc.KyuubiQueryResultSet;
 import org.apache.hive.service.cli.HiveSQLException;
 import org.apache.hive.service.rpc.thrift.*;
 import org.apache.thrift.TException;
@@ -27,7 +26,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Arrays;
 
-public class KyuubiDatabaseMetaData extends HiveDatabaseMetaData {
+public class KyuubiDatabaseMetaData extends org.apache.hive.jdbc.KyuubiDatabaseMetaData {
     private final KyuubiConnection conn;
     private final TCLIService.Iface client;
     private final TSessionHandle sessHandle;
@@ -60,7 +59,7 @@ public class KyuubiDatabaseMetaData extends HiveDatabaseMetaData {
         if (tStatus.getStatusCode() != TStatusCode.SUCCESS_STATUS) {
             throw new HiveSQLException(tStatus);
         }
-        return new HiveQueryResultSet.Builder(conn)
+        return new KyuubiQueryResultSet.Builder(conn)
                 .setClient(client)
                 .setSessionHandle(sessHandle)
                 .setStmtHandle(getTableResp.getOperationHandle())

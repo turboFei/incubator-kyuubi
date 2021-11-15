@@ -24,7 +24,6 @@ import java.sql.SQLException;
 import java.util.*;
 
 import org.apache.hadoop.hive.conf.HiveConf;
-import org.apache.hive.jdbc.HiveConnection;
 import org.apache.hive.jdbc.Utils.JdbcConnectionParams;
 import org.apache.hive.jdbc.Utils;
 import org.apache.hive.service.cli.RowSet;
@@ -34,7 +33,7 @@ import org.apache.thrift.TException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class KyuubiConnection extends HiveConnection {
+public class KyuubiConnection extends org.apache.hive.jdbc.KyuubiConnection {
     private static final Logger LOG = LoggerFactory.getLogger(KyuubiConnection.class.getName());
 
     // launch backend engine asynchronously
@@ -88,11 +87,11 @@ public class KyuubiConnection extends HiveConnection {
     private void getLaunchEngineLog() throws Exception {
         LOG.info("Starting to get launch engine log.");
 
-        Field sessionHandleField = HiveConnection.class.getDeclaredField("sessHandle");
+        Field sessionHandleField = org.apache.hive.jdbc.KyuubiConnection.class.getDeclaredField("sessHandle");
         sessionHandleField.setAccessible(true);
         TSessionHandle sessionHandle = (TSessionHandle) sessionHandleField.get(this);
 
-        Field clientField = HiveConnection.class.getDeclaredField("client");
+        Field clientField = org.apache.hive.jdbc.KyuubiConnection.class.getDeclaredField("client");
         clientField.setAccessible(true);
         TCLIService.Iface client = (TCLIService.Iface) clientField.get(this);
 
@@ -184,11 +183,11 @@ public class KyuubiConnection extends HiveConnection {
         JdbcConnectionParams connParams = (JdbcConnectionParams) parseURLMethod.invoke(
           null, url, info);
         String initFile = connParams.getSessionVars().get(INIT_FILE);
-        Field initFileField = HiveConnection.class.getDeclaredField("initFile");
+        Field initFileField = org.apache.hive.jdbc.KyuubiConnection.class.getDeclaredField("initFile");
         initFileField.setAccessible(true);
         initFileField.set(this, initFile);
 
-        Method executeInitFileMethod = HiveConnection.class.getDeclaredMethod("executeInitSql");
+        Method executeInitFileMethod = org.apache.hive.jdbc.KyuubiConnection.class.getDeclaredMethod("executeInitSql");
         executeInitFileMethod.setAccessible(true);
         executeInitFileMethod.invoke(this);
     }
@@ -199,10 +198,10 @@ public class KyuubiConnection extends HiveConnection {
             throw new SQLException("Connection is closed");
         }
         try {
-            Field clientField = HiveConnection.class.getDeclaredField("client");
+            Field clientField = org.apache.hive.jdbc.KyuubiConnection.class.getDeclaredField("client");
             clientField.setAccessible(true);
             TCLIService.Iface client = (TCLIService.Iface) clientField.get(this);
-            Field handleField = HiveConnection.class.getDeclaredField("sessHandle");
+            Field handleField = org.apache.hive.jdbc.KyuubiConnection.class.getDeclaredField("sessHandle");
             handleField.setAccessible(true);
             TSessionHandle sessionHandle = (TSessionHandle) handleField.get(this);
             return new KyuubiDatabaseMetaData(this, client, sessionHandle);
