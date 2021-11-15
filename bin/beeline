@@ -17,7 +17,7 @@
 #
 
 ## Kyuubi Service Control Client Entrance
-CLASS="org.apache.hive.beeline.BeeLine"
+CLASS="org.apache.kyuubi.beeline.Beeline"
 KYUUBI_DRIVER_CLASS="org.apache.kyuubi.jdbc.KyuubiHiveDriver"
 
 export KYUUBI_HOME="$(cd "$(dirname "$0")"/..; pwd)"
@@ -43,7 +43,6 @@ if [[ -z "$KYUUBI_JDBC_JAR_DIR" ]]; then
     export KYUUBI_SCALA_VERSION="${KYUUBI_SCALA_VERSION:-"2.12"}"
     echo -e "\nCandidate Kyuubi jdbc lib $KYUUBI_JDBC_JAR_DIR doesn't exist, searching development environment..."
     KYUUBI_JDBC_JAR_DIR="$KYUUBI_HOME/kyuubi-hive-beeline/target/scala-${KYUUBI_SCALA_VERSION}/jars"
-    CLASS="org.apache.hive.beeline.BeeLine"
   fi
 fi
 

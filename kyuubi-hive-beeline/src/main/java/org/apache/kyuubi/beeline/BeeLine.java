@@ -39,9 +39,13 @@
  */
 package org.apache.kyuubi.beeline;
 
-public class Beeline extends org.apache.hive.beeline.BeeLine {
-  public Beeline() throws Exception {
+public class BeeLine extends org.apache.hive.beeline.BeeLine {
+  public BeeLine() {
     super();
     addLocalDriverClazz("org.apache.kyuubi.jdbc.KyuubiHiveDriver");
+  }
+
+  public Beeline(boolean isBeeLine) {
+    super();
   }
 }
