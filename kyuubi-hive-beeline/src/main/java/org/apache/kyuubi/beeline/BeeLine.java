@@ -39,11 +39,16 @@
  */
 package org.apache.kyuubi.beeline;
 
+import java.io.IOException;
+import java.io.InputStream;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class BeeLine extends org.apache.hive.beeline.BeeLine {
   private static final Logger LOG = LoggerFactory.getLogger(BeeLine.class.getName());
+  public static final String PROPERTY_PREFIX = "beeline.";
+  public static final String PROPERTY_NAME_EXIT = PROPERTY_PREFIX + "system.exit";
   public static final String KYUUBI_HIVE_DRIVER = "org.apache.kyuubi.jdbc.KyuubiHiveDriver";
 
   public BeeLine() {
@@ -53,6 +58,25 @@ public class BeeLine extends org.apache.hive.beeline.BeeLine {
       addLocalDriverClazz(KYUUBI_HIVE_DRIVER);
     } catch (ClassNotFoundException e) {
       LOG.error("Failed to find class for Kyuubi hive dirver with name:" + KYUUBI_HIVE_DRIVER);
+    }
+  }
+
+  public static void main(String[] args) throws IOException {
+    mainWithInputRedirection(args, null);
+  }
+
+  public static void mainWithInputRedirection(String[] args, InputStream inputStream)
+    throws IOException {
+    BeeLine beeLine = new BeeLine();
+
+    try {
+      int status = beeLine.begin(args, inputStream);
+
+      if (!Boolean.getBoolean(PROPERTY_NAME_EXIT)) {
+        System.exit(status);
+      }
+    } finally {
+      beeLine.close();
     }
   }
 }
