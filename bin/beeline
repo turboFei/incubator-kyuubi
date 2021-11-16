@@ -42,7 +42,7 @@ if [[ -z "$KYUUBI_JDBC_JAR_DIR" ]]; then
   if [[ ! -d ${KYUUBI_JDBC_JAR_DIR} ]]; then
     export KYUUBI_SCALA_VERSION="${KYUUBI_SCALA_VERSION:-"2.12"}"
     echo -e "\nCandidate Kyuubi jdbc lib $KYUUBI_JDBC_JAR_DIR doesn't exist, searching development environment..."
-    KYUUBI_JDBC_JAR_DIR="$KYUUBI_HOME/kyuubi-hive-beeline/target/scala-${KYUUBI_SCALA_VERSION}/jars"
+    KYUUBI_JDBC_JAR_DIR="$KYUUBI_HOME/kyuubi-cli-assembly/target/scala-${KYUUBI_SCALA_VERSION}/jars"
   fi
 fi
 
