@@ -39,13 +39,20 @@
  */
 package org.apache.kyuubi.beeline;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class BeeLine extends org.apache.hive.beeline.BeeLine {
+  private static final Logger LOG = LoggerFactory.getLogger(BeeLine.class.getName());
+  public static final String KYUUBI_HIVE_DRIVER = "org.apache.kyuubi.jdbc.KyuubiHiveDriver";
+
   public BeeLine() {
     super();
-    addLocalDriverClazz("org.apache.kyuubi.jdbc.KyuubiHiveDriver");
-  }
-
-  public Beeline(boolean isBeeLine) {
-    super();
+    try {
+      Class.forName(KYUUBI_HIVE_DRIVER);
+      addLocalDriverClazz(KYUUBI_HIVE_DRIVER);
+    } catch (ClassNotFoundException e) {
+      LOG.error("Failed to find class for Kyuubi hive dirver with name:" + KYUUBI_HIVE_DRIVER);
+    }
   }
 }

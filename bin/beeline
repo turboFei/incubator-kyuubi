@@ -17,7 +17,7 @@
 #
 
 ## Kyuubi Service Control Client Entrance
-CLASS="org.apache.kyuubi.beeline.Beeline"
+CLASS="org.apache.kyuubi.beeline.BeeLine"
 KYUUBI_DRIVER_CLASS="org.apache.kyuubi.jdbc.KyuubiHiveDriver"
 
 export KYUUBI_HOME="$(cd "$(dirname "$0")"/..; pwd)"
