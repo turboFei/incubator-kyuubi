@@ -41,7 +41,10 @@ package org.apache.kyuubi.beeline;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Field;
 
+import org.apache.hive.beeline.Commands;
+import org.apache.hive.beeline.KyuubiCommands;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,6 +63,15 @@ public class KyuubiBeeLine extends BeeLine {
       addLocalDriverClazz(KYUUBI_HIVE_DRIVER);
     } catch (ClassNotFoundException e) {
       LOG.error("Failed to find class for Kyuubi hive dirver with name:" + KYUUBI_HIVE_DRIVER);
+    }
+
+    Commands commands = new KyuubiCommands(this);
+    try {
+      Field commandsField = BeeLine.class.getDeclaredField("commands");
+      commandsField.setAccessible(true);
+      commandsField.set(this, commands);
+    } catch (Exception e) {
+      LOG.error("Failed to use Kyuubi commands", e);
     }
   }
 

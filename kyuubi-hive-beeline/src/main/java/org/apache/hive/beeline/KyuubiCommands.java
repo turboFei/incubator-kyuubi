@@ -75,7 +75,7 @@ public class KyuubiCommands extends Commands {
   /**
    * @param beeLine
    */
-  KyuubiCommands(BeeLine beeLine) {
+  public KyuubiCommands(BeeLine beeLine) {
     super(beeLine);
     this.beeLine = beeLine;
   }
