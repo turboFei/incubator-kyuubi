@@ -42,6 +42,9 @@ package org.apache.kyuubi.beeline;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Field;
+import java.sql.Driver;
+import java.sql.DriverManager;
+import java.util.Collections;
 
 import org.apache.hive.beeline.Commands;
 import org.apache.hive.beeline.KyuubiCommands;
@@ -70,6 +73,13 @@ public class KyuubiBeeLine extends BeeLine {
       Field commandsField = BeeLine.class.getDeclaredField("commands");
       commandsField.setAccessible(true);
       commandsField.set(this, commands);
+
+      for (Driver driver: Collections.list(DriverManager.getDrivers())) {
+        if (!driver.getClass().getCanonicalName().equals(KYUUBI_HIVE_DRIVER)) {
+          DriverManager.deregisterDriver(driver);
+        }
+      }
+
     } catch (Exception e) {
       LOG.error("Failed to use Kyuubi commands", e);
     }

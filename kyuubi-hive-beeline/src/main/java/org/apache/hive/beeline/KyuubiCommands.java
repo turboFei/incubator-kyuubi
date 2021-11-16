@@ -1301,6 +1301,7 @@ public class KyuubiCommands extends Commands {
 
   private Runnable createLogRunnable(final Statement statement,
       InPlaceUpdateStream.EventNotifier eventNotifier) {
+    beeLine.info("statement type " + statement.getClass().getCanonicalName());
     if (statement instanceof KyuubiStatement) {
       return new KyuubiLogRunnable(this, (KyuubiStatement) statement, DEFAULT_QUERY_PROGRESS_INTERVAL,
           eventNotifier);
