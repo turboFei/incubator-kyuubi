@@ -45,13 +45,15 @@ import java.io.InputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class BeeLine extends org.apache.hive.beeline.BeeLine {
-  private static final Logger LOG = LoggerFactory.getLogger(BeeLine.class.getName());
+import org.apache.hive.beeline.BeeLine;
+
+public class KyuubiBeeLine extends BeeLine {
+  private static final Logger LOG = LoggerFactory.getLogger(KyuubiBeeLine.class.getName());
   public static final String PROPERTY_PREFIX = "beeline.";
   public static final String PROPERTY_NAME_EXIT = PROPERTY_PREFIX + "system.exit";
   public static final String KYUUBI_HIVE_DRIVER = "org.apache.kyuubi.jdbc.KyuubiHiveDriver";
 
-  public BeeLine() {
+  public KyuubiBeeLine() {
     super();
     try {
       Class.forName(KYUUBI_HIVE_DRIVER);
@@ -67,7 +69,7 @@ public class BeeLine extends org.apache.hive.beeline.BeeLine {
 
   public static void mainWithInputRedirection(String[] args, InputStream inputStream)
     throws IOException {
-    BeeLine beeLine = new BeeLine();
+    KyuubiBeeLine beeLine = new KyuubiBeeLine();
 
     try {
       int status = beeLine.begin(args, inputStream);
