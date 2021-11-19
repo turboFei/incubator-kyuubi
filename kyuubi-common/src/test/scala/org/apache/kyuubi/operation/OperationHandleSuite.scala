@@ -27,7 +27,7 @@ import org.apache.kyuubi.operation.OperationType._
 class OperationHandleSuite extends KyuubiFunSuite {
 
   test("OperationHandle") {
-    val h1 = OperationHandle(EXECUTE_STATEMENT, HIVE_CLI_SERVICE_PROTOCOL_V10)
+    val h1 = OperationHandle(EXECUTE_STATEMENT, hive.client.SERVICE_PROTOCOL_V10)
     TProtocolVersion.values().foreach { protocol =>
       assert(h1 === OperationHandle(h1.identifier, h1.typ, protocol))
     }
@@ -43,9 +43,9 @@ class OperationHandleSuite extends KyuubiFunSuite {
     assert(h1.toTOperationHandle.isHasResultSet)
     assert(h1 !== null)
     assert(h1 !== new Integer(1))
-    val h3 = OperationHandle(h1.identifier, GET_CATALOGS, HIVE_CLI_SERVICE_PROTOCOL_V10)
+    val h3 = OperationHandle(h1.identifier, GET_CATALOGS, hive.client.SERVICE_PROTOCOL_V10)
     assert(h3 !== h1, "different types")
-    val h4 = OperationHandle(HandleIdentifier(), h1.typ, HIVE_CLI_SERVICE_PROTOCOL_V10)
+    val h4 = OperationHandle(HandleIdentifier(), h1.typ, hive.client.SERVICE_PROTOCOL_V10)
     assert(h4 !== h1)
   }
 }

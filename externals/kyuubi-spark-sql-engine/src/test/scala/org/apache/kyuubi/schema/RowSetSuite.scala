@@ -252,7 +252,7 @@ class RowSetSuite extends KyuubiFunSuite {
   test("to row set") {
     TProtocolVersion.values().foreach { proto =>
       val set = RowSet.toTRowSet(rows, schema, proto, zoneId)
-      if (proto.getValue < TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V6.getValue) {
+      if (proto.getValue < TProtocolVersion.hive.client.SERVICE_PROTOCOL_V6.getValue) {
         assert(!set.isSetColumns, proto.toString)
         assert(set.isSetRows, proto.toString)
       } else {

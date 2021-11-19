@@ -29,7 +29,7 @@
 ```shell
 
 $ bin/beeline --help
-Usage: java org.apache.hive.cli.beeline.BeeLine
+Usage: java org.apache.hive.client.beeline.BeeLine
    -u <database url>               the JDBC URL to connect to
    -r                              reconnect to last saved connect url (in conjunction with !save)
    -n <username>                   the username to connect as

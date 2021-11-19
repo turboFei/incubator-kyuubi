@@ -274,8 +274,8 @@ public class Utils {
    *
    * <p>As before, if the host/port is not specified, it the driver runs an embedded hive. examples
    * -
-   * jdbc:hive2://ubuntu:11000/db2?hive.cli.conf.printheader=true;hive.exec.mode.local.auto.inputbytes.max=9999#stab=salesTable;icol=customerID
-   * jdbc:hive2://?hive.cli.conf.printheader=true;hive.exec.mode.local.auto.inputbytes.max=9999#stab=salesTable;icol=customerID
+   * jdbc:hive2://ubuntu:11000/db2?hive.client.conf.printheader=true;hive.exec.mode.local.auto.inputbytes.max=9999#stab=salesTable;icol=customerID
+   * jdbc:hive2://?hive.client.conf.printheader=true;hive.exec.mode.local.auto.inputbytes.max=9999#stab=salesTable;icol=customerID
    * jdbc:hive2://ubuntu:11000/db2;user=foo;password=bar
    *
    * <p>Connect to http://server:10001/hs2, with specified basicAuth credentials and initial

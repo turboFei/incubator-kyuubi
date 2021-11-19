@@ -49,7 +49,7 @@ object SessionHandle {
   }
 
   def apply(tHandle: TSessionHandle): SessionHandle = {
-    apply(tHandle, TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V1)
+    apply(tHandle, TProtocolVersion.hive.client.SERVICE_PROTOCOL_V1)
   }
 
   def apply(protocol: TProtocolVersion): SessionHandle = {

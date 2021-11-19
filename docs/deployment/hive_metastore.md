@@ -37,7 +37,7 @@ In this section, you will learn how to configure Kyuubi to interact with Hive Me
   - Use the built-in one in the Kyuubi distribution
   - Download from [Spark official website](https://spark.apache.org/downloads.html)
   - Build from Spark source, [Building With Hive and JDBC Support](http://spark.apache.org/docs/latest/building-spark.html#building-with-hive-and-jdbc-support)
-- A copy of Hive client configuration
+- A copy of hive.client.nt configuration
 
 So the whole thing here is to let Spark applications use this copy of Hive configuration to start a Hive metastore client for their own to talk to the Hive metastore server.
 
@@ -128,7 +128,7 @@ hive.metastore.uris | thrift://&lt;host&gt;:&lt;port&gt;,thrift://&lt;host1&gt;:
 
 In `$KYUUBI_HOME/conf/kyuubi-defaults.conf`, all _**Hive primitive configurations**_, e.g. `hive.metastore.uris`,
 and the **_Spark derivatives_**, which are prefixed with `spark.hive.` or `spark.hadoop.`, e.g `spark.hive.metastore.uris` or `spark.hadoop.hive.metastore.uris`,
-will be loaded as Hive primitives by the Hive client inside the Spark application.
+will be loaded as Hive primitives by the hive.client.nt inside the Spark application.
 
 Kyuubi will take these configurations as system wide defaults for all applications it launches.
 
@@ -177,7 +177,7 @@ Most Hive configurations are final and unmodifiable in Spark at runtime, so keep
 If backward compatibility is guaranteed by Hive versioning,
 we can always use a lower version Hive metastore client to communicate with the higher version Hive metastore server.
 
-For example, Spark 3.0 was released with a built-in Hive client (2.3.7), so, ideally, the version of server should &gt;= 2.3.x.
+For example, Spark 3.0 was released with a built-in hive.client.nt (2.3.7), so, ideally, the version of server should &gt;= 2.3.x.
 
 If you do have a legacy Hive metastore server that cannot be easily upgraded, and you may face the issue by default like this,
 

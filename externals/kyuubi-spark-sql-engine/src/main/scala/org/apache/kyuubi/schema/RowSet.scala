@@ -41,7 +41,7 @@ object RowSet {
       schema: StructType,
       protocolVersion: TProtocolVersion,
       timeZone: ZoneId): TRowSet = {
-    if (protocolVersion.getValue < TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V6.getValue) {
+    if (protocolVersion.getValue < TProtocolVersion.hive.client.SERVICE_PROTOCOL_V6.getValue) {
       toRowBasedSet(rows, schema, timeZone)
     } else {
       toColumnBasedSet(rows, schema, timeZone)

@@ -70,7 +70,7 @@ object OperationHandle {
   }
 
   def apply(tOperationHandle: TOperationHandle): OperationHandle = {
-    apply(tOperationHandle, TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V1)
+    apply(tOperationHandle, TProtocolVersion.hive.client.SERVICE_PROTOCOL_V1)
   }
 
   implicit def toTOperationHandle(handle: OperationHandle): TOperationHandle = {

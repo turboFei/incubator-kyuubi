@@ -23,7 +23,7 @@ import org.apache.kyuubi.KyuubiFunSuite
 
 class SessionHandleSuite extends KyuubiFunSuite {
   test("SessionHandle") {
-    val h1 = SessionHandle(TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V10)
+    val h1 = SessionHandle(TProtocolVersion.hive.client.SERVICE_PROTOCOL_V10)
     val t1 = h1.toTSessionHandle
     TProtocolVersion.values().foreach { proto =>
       assert(h1 === SessionHandle(t1, proto))
