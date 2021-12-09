@@ -28,7 +28,7 @@
 
     <groupId>org.apache.kyuubi</groupId>
     <artifactId>kyuubi-parent</artifactId>
-    <version>1.6.0-SNAPSHOT</version>
+    <version>1.6.0-ebay-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <name>Kyuubi Project Parent</name>
@@ -194,7 +194,24 @@
 
         <!-- Package to use when relocating shaded classes. -->
         <kyuubi.shade.packageName>org.apache.kyuubi.shade</kyuubi.shade.packageName>
+
+        <!-- ebay central repository -->
+        <distMgmtReleasesUrl>http://ebaycentral.qa.ebay.com/content/repositories/thirdparty</distMgmtReleasesUrl>
+        <distMgmtSnapshotsUrl>http://ebaycentral.qa.ebay.com/content/repositories/snapshots</distMgmtSnapshotsUrl>
     </properties>
+
+    <distributionManagement>
+        <repository>
+            <id>raptor.releases</id>
+            <name>eBay Raptor Distribution Repository</name>
+            <url>${distMgmtReleasesUrl}</url>
+        </repository>
+        <snapshotRepository>
+            <id>raptor.snapshots</id>
+            <name>eBay Raptor Distribution Snapshot Repository</name>
+            <url>${distMgmtSnapshotsUrl}</url>
+        </snapshotRepository>
+    </distributionManagement>
 
     <repositories>
         <repository>
@@ -218,6 +235,39 @@
             </releases>
             <snapshots>
                 <enabled>false</enabled>
+            </snapshots>
+        </repository>
+
+        <repository>
+            <id>eBay third party</id>
+            <url>https://ebaycentral.qa.ebay.com/content/repositories/thirdparty</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+
+        <repository>
+            <id>eBay releases</id>
+            <url>https://ebaycentral.qa.ebay.com/content/repositories/releases</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+
+        <repository>
+            <id>eBay snapshots</id>
+            <url>https://ebaycentral.qa.ebay.com/content/repositories/snapshots</url>
+            <releases>
+                <enabled>false</enabled>
+            </releases>
+            <snapshots>
+                <enabled>true</enabled>
             </snapshots>
         </repository>
     </repositories>
