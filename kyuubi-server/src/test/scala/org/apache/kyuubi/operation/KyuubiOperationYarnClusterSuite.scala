@@ -20,7 +20,9 @@ package org.apache.kyuubi.operation
 import org.apache.kyuubi.WithKyuubiServerOnYarn
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf.ENGINE_INIT_TIMEOUT
+import org.apache.kyuubi.tags.YarnTest
 
+@YarnTest
 class KyuubiOperationYarnClusterSuite extends WithKyuubiServerOnYarn with SparkQueryTests {
 
   override protected def jdbcUrl: String = getJdbcUrl
