@@ -80,6 +80,8 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
   public static int DEFAULT_ENGINE_LOG_THREAD_TIMEOUT = 10 * 1000;
   public static final String KYUUBI_PROXY_BATCH_ACCOUNT = "kyuubi.proxy.batchAccount";
 
+  public static final String FAST_CONNECT_MODE = "FAST_CONNECT_MODE";
+
   private String jdbcUriString;
   private String host;
   private int port;
@@ -106,6 +108,7 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
   private volatile boolean launchEngineOpCompleted = false;
 
   private boolean isBeeLineMode;
+  private boolean fastConnectMode;
 
   public KyuubiConnection(String uri, Properties info) throws SQLException {
     setupLoginTimeout();
@@ -115,6 +118,7 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
       throw new SQLException(e);
     }
     isBeeLineMode = Boolean.parseBoolean(info.getProperty(BEELINE_MODE_PROPERTY));
+    fastConnectMode = Boolean.parseBoolean(info.getProperty(FAST_CONNECT_MODE));
     jdbcUriString = connParams.getJdbcUriString();
     // JDBC URL: jdbc:hive2://<host>:<port>/dbName;sess_var_list?hive_conf_list#hive_var_list
     // each list: <key1>=<val1>;<key2>=<val2> and so on
@@ -154,7 +158,9 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
       // open client session
       openSession();
       showLaunchEngineLog();
-      waitLaunchEngineToComplete();
+      if (!fastConnectMode) {
+        waitLaunchEngineToComplete();
+      }
       executeInitSql();
     } else {
       int maxRetries = 1;
@@ -178,7 +184,9 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
           openSession();
           if (!isBeeLineMode) {
             showLaunchEngineLog();
-            waitLaunchEngineToComplete();
+            if (!fastConnectMode) {
+              waitLaunchEngineToComplete();
+            }
             executeInitSql();
           }
           break;
@@ -210,6 +218,14 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
         }
       }
     }
+  }
+
+  public TCLIService.Iface getClient() {
+    return client;
+  }
+
+  public TOperationHandle getLaunchEngineOpHandle() {
+    return launchEngineOpHandle;
   }
 
   /**
