@@ -22,6 +22,7 @@ import java.util
 import java.util.Properties
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable.ListBuffer
 
 import org.apache.hive.service.rpc.thrift.{TExecuteStatementReq, TFetchResultsReq, TGetOperationStatusReq, TOperationState, TStatusCode}
 import org.scalatest.time.SpanSugar.convertIntToGrainOfTime
@@ -31,6 +32,7 @@ import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf.SESSION_CONF_ADVISOR
 import org.apache.kyuubi.jdbc.KyuubiHiveDriver
 import org.apache.kyuubi.jdbc.hive.KyuubiConnection
+import org.apache.kyuubi.jdbc.hive.logs.KyuubiEngineLogListener
 import org.apache.kyuubi.plugin.SessionConfAdvisor
 import org.apache.kyuubi.service.authentication.KyuubiAuthenticationFactory
 
@@ -212,7 +214,7 @@ class KyuubiOperationPerConnectionSuite extends WithKyuubiServer with HiveJDBCTe
       "spark.master" -> "invalid")) {
       val prop = new Properties()
       prop.setProperty(KyuubiConnection.BEELINE_MODE_PROPERTY, "true")
-      val kyuubiConnection = new KyuubiConnection(jdbcUrlWithConf, prop)
+      val kyuubiConnection = new KyuubiConnection(jdbcUrlWithConf, prop, null)
       intercept[SQLException](kyuubiConnection.waitLaunchEngineToComplete())
       assert(kyuubiConnection.isClosed)
     }
@@ -278,6 +280,24 @@ class KyuubiOperationPerConnectionSuite extends WithKyuubiServer with HiveJDBCTe
         assert(resultSet.getString(2).isEmpty)
         assert(!resultSet.next())
       }
+    }
+  }
+
+  test("HADP-44732: kyuubi engine log listener") {
+    val engineLogs = ListBuffer[String]()
+
+    val engineLogListener = new KyuubiEngineLogListener {
+      override def onLogFetchSuccess(list: util.List[String]): Unit = {
+        engineLogs ++= list.asScala
+      }
+
+      override def onLogFetchFailure(throwable: Throwable): Unit = {}
+    }
+    withSessionConf()(Map.empty)(Map(
+      KyuubiConf.SESSION_ENGINE_LAUNCH_ASYNC.key -> "true")) {
+      val conn = new KyuubiConnection(jdbcUrlWithConf, new Properties(), engineLogListener)
+      assert(engineLogs.nonEmpty)
+      conn.close()
     }
   }
 }

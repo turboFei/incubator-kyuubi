@@ -64,6 +64,7 @@ import org.apache.http.impl.conn.BasicHttpClientConnectionManager;
 import org.apache.http.protocol.HttpContext;
 import org.apache.http.ssl.SSLContexts;
 import org.apache.kyuubi.jdbc.hive.Utils.JdbcConnectionParams;
+import org.apache.kyuubi.jdbc.hive.logs.KyuubiEngineLogListener;
 import org.apache.kyuubi.jdbc.hive.logs.KyuubiLoggable;
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
@@ -110,7 +111,14 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
   private boolean isBeeLineMode;
   private boolean fastConnectMode;
 
-  public KyuubiConnection(String uri, Properties info) throws SQLException {
+  private List<KyuubiEngineLogListener> engineLogListeners = new LinkedList();
+
+  public KyuubiConnection(String url, Properties info) throws SQLException {
+    this(url, info, null);
+  }
+
+  public KyuubiConnection(String uri, Properties info, KyuubiEngineLogListener... listeners)
+      throws SQLException {
     setupLoginTimeout();
     try {
       connParams = Utils.parseURL(uri, info);
@@ -148,6 +156,12 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
     supportedProtocols.add(TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V8);
     supportedProtocols.add(TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V9);
     supportedProtocols.add(TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V10);
+
+    if (listeners != null) {
+      for (KyuubiEngineLogListener listener : listeners) {
+        engineLogListeners.add(listener);
+      }
+    }
 
     if (isEmbeddedMode) {
       EmbeddedThriftBinaryCLIService embeddedClient = new EmbeddedThriftBinaryCLIService();
@@ -292,10 +306,17 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
                   for (String log : logs) {
                     LOG.info(log);
                   }
+                  engineLogListeners.forEach(
+                      listener -> {
+                        listener.onLogFetchSuccess(logs);
+                      });
                   Thread.sleep(300);
                 }
               } catch (Exception e) {
-                // do nothing
+                engineLogListeners.forEach(
+                    listener -> {
+                      listener.onLogFetchFailure(e);
+                    });
               }
               LOG.info("Finished to get launch engine log.");
             }
@@ -958,6 +979,7 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
         if (transport != null) {
           transport.close();
         }
+        engineLogListeners.clear();
       }
     }
   }
