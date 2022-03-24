@@ -28,8 +28,7 @@ import java.security.SecureRandom;
 import java.sql.*;
 import java.util.*;
 import java.util.Map.Entry;
-import java.util.concurrent.Executor;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.locks.ReentrantLock;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
@@ -1289,12 +1288,24 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
       throw new SQLException("timeout value was negative");
     }
     boolean rc = false;
+    ExecutorService executorService = Executors.newSingleThreadExecutor();
     try {
-      String productName =
-          new KyuubiDatabaseMetaData(this, client, sessHandle).getDatabaseProductName();
+      KyuubiConnection conn = this;
+      Future<String> future =
+          executorService.submit(
+              new Callable<String>() {
+                @Override
+                public String call() throws Exception {
+                  return new KyuubiDatabaseMetaData(conn, client, sessHandle)
+                      .getDatabaseProductName();
+                }
+              });
+      future.get(timeout, TimeUnit.MILLISECONDS);
       rc = true;
-    } catch (SQLException e) {
+    } catch (Exception e) {
       // IGNORE
+    } finally {
+      executorService.shutdown();
     }
     return rc;
   }

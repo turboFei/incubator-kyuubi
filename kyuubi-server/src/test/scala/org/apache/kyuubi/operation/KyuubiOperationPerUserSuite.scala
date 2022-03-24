@@ -21,6 +21,7 @@ import org.scalatest.time.SpanSugar._
 
 import org.apache.kyuubi.{Utils, WithKyuubiServer}
 import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.jdbc.hive.KyuubiConnection
 
 class KyuubiOperationPerUserSuite extends WithKyuubiServer with SparkQueryTests {
 
@@ -135,5 +136,14 @@ class KyuubiOperationPerUserSuite extends WithKyuubiServer with SparkQueryTests 
     assert(r2 contains "abc")
 
     assert(r1 !== r2)
+  }
+
+  test("HADP-44628: Enable the timeout for KyuubiConnection::isValid") {
+    withJdbcStatement() { statement =>
+      val conn = statement.getConnection
+      assert(conn.isInstanceOf[KyuubiConnection])
+      assert(!conn.isValid(1))
+      assert(conn.isValid(3000))
+    }
   }
 }
