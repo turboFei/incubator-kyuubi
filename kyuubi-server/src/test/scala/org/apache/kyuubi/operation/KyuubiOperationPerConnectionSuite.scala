@@ -300,6 +300,17 @@ class KyuubiOperationPerConnectionSuite extends WithKyuubiServer with HiveJDBCTe
       conn.close()
     }
   }
+
+  test("HADP-44631: get full spark url") {
+    withSessionConf()(Map.empty)(Map(
+      "spark.ui.enabled" -> "true")) {
+      withJdbcStatement() { statement =>
+        val conn = statement.getConnection.asInstanceOf[KyuubiConnection]
+        val sparkUrl = conn.getSparkURL
+        assert(sparkUrl.nonEmpty)
+      }
+    }
+  }
 }
 
 class TestSessionConfAdvisor extends SessionConfAdvisor {
