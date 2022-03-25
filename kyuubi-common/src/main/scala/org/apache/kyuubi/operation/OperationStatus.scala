@@ -27,4 +27,5 @@ case class OperationStatus(
     lastModified: Long,
     completed: Long,
     hasResultSet: Boolean,
-    exception: Option[KyuubiSQLException] = None)
+    exception: Option[KyuubiSQLException] = None,
+    numModifiedRows: Long)

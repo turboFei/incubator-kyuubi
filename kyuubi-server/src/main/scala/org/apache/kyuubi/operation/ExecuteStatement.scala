@@ -47,6 +47,11 @@ class ExecuteStatement(
 
   override def getOperationLog: Option[OperationLog] = Option(_operationLog)
 
+  override def getProgressPercentage: Double = {
+    progressUpdateEnabled = true
+    super.getProgressPercentage
+  }
+
   override def beforeRun(): Unit = {
     OperationLog.setCurrentOperationLog(_operationLog)
     setHasResultSet(true)
@@ -74,7 +79,9 @@ class ExecuteStatement(
 
       // initialize operation status
       while (statusResp == null) {
-        statusResp = client.getOperationStatus(_remoteOpHandle)
+        statusResp = client.getOperationStatus(_remoteOpHandle, getProgressUpdate)
+        numModifiedRows = statusResp.getNumModifiedRows
+        progressPercentage = statusResp.getProgressedPercentage
       }
 
       var isComplete = false
@@ -87,9 +94,12 @@ class ExecuteStatement(
         remoteState match {
           case INITIALIZED_STATE | PENDING_STATE | RUNNING_STATE =>
             isComplete = false
-            statusResp = client.getOperationStatus(_remoteOpHandle)
+            statusResp = client.getOperationStatus(_remoteOpHandle, getProgressUpdate)
+            numModifiedRows = statusResp.getNumModifiedRows
+            progressPercentage = statusResp.getProgressedPercentage
 
           case FINISHED_STATE =>
+            progressPercentage = 1.0
             setState(OperationState.FINISHED)
 
           case CLOSED_STATE =>

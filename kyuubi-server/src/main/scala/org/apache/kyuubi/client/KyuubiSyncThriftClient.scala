@@ -310,8 +310,11 @@ class KyuubiSyncThriftClient private (
     resp.getOperationHandle
   }
 
-  def getOperationStatus(operationHandle: TOperationHandle): TGetOperationStatusResp = {
+  def getOperationStatus(
+      operationHandle: TOperationHandle,
+      getProgressUpdate: Boolean): TGetOperationStatusResp = {
     val req = new TGetOperationStatusReq(operationHandle)
+    req.setGetProgressUpdate(getProgressUpdate)
     val resp = withRetryingRequest(GetOperationStatus(req), "GetOperationStatus")
     resp
   }

@@ -23,9 +23,16 @@ import scala.collection.JavaConverters._
 
 import org.apache.spark.kyuubi.SQLOperationListener
 import org.apache.spark.sql.Row
+import org.apache.spark.sql.execution.QueryExecution
+import org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanExec
+import org.apache.spark.sql.execution.command.{DataWritingCommandExec, ExecutedCommandExec}
+import org.apache.spark.sql.execution.datasources.InsertIntoDataSourceCommand
+import org.apache.spark.sql.execution.datasources.v2.{AppendDataExecV1, OverwriteByExpressionExecV1, V2TableWriteExec}
+import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.types._
 
 import org.apache.kyuubi.{KyuubiSQLException, Logging}
+import org.apache.kyuubi.config.KyuubiConf.OPERATION_PROGRESS_PERCENTAGE_INTERVAL
 import org.apache.kyuubi.engine.spark.KyuubiSparkUtil._
 import org.apache.kyuubi.engine.spark.events.SparkOperationEvent
 import org.apache.kyuubi.events.EventLogging
@@ -42,6 +49,11 @@ class ExecuteStatement(
     queryTimeout: Long,
     incrementalCollect: Boolean)
   extends SparkOperation(OperationType.EXECUTE_STATEMENT, session) with Logging {
+  private var lastGetProgressTime: Long = 0
+  private val progressPercentageInterval: Long =
+    spark.conf.get(
+      OPERATION_PROGRESS_PERCENTAGE_INTERVAL.key,
+      session.sessionManager.getConf.get(OPERATION_PROGRESS_PERCENTAGE_INTERVAL).toString).toLong
 
   private var statementTimeoutCleaner: Option[ScheduledExecutorService] = None
 
@@ -67,7 +79,67 @@ class ExecuteStatement(
   }
 
   override protected def afterRun(): Unit = {
+    progressPercentage = 1.0
     OperationLog.removeCurrentOperationLog()
+  }
+
+  private def updateProgressIfNeeded(): Unit = {
+    val now = System.currentTimeMillis()
+    if (progressPercentage != 1.0 && now - lastGetProgressTime > progressPercentageInterval) {
+      val statusTracker = spark.sparkContext.statusTracker
+      val jobIds = statusTracker.getJobIdsForGroup(statementId)
+      val jobs = jobIds.flatMap { id => statusTracker.getJobInfo(id) }
+      val stages = jobs.flatMap { job =>
+        job.stageIds().flatMap(statusTracker.getStageInfo)
+      }
+      val taskCount = stages.map(_.numTasks()).sum
+      val completedTaskCount = stages.map(_.numCompletedTasks).sum
+      progressPercentage =
+        if (taskCount == 0) {
+          0.0
+        } else {
+          completedTaskCount.toDouble / taskCount
+        }
+      lastGetProgressTime = now
+    }
+  }
+
+  override def getProgressPercentage: Double = {
+    updateProgressIfNeeded()
+    super.getProgressPercentage
+  }
+
+  def setNumOutputRows(metrics: Map[String, SQLMetric], key: String): Unit = {
+    if (metrics != null) {
+      val modifiedRowCount = metrics.get(key).map(_.value).getOrElse(0L)
+      info(s"$modifiedRowCount rows inserted/updated/deleted/merged by $statementId")
+      numModifiedRows = modifiedRowCount
+    }
+  }
+
+  private def withMetrics(qe: QueryExecution): Unit = {
+    val checkedSparkPlan = qe.executedPlan match {
+      case a: AdaptiveSparkPlanExec =>
+        a.executedPlan
+      case plan => plan
+    }
+    checkedSparkPlan match {
+      case DataWritingCommandExec(cmd, _) =>
+        setNumOutputRows(cmd.metrics, "numOutputRows")
+      case ExecutedCommandExec(cmd) =>
+        cmd match {
+          case c: InsertIntoDataSourceCommand =>
+            setNumOutputRows(c.metrics, "numOutputRows")
+          case _ => // TODO: Support delta Update(WithJoin)Command/Delete(WithJoin)Command
+        }
+      case a: AppendDataExecV1 =>
+        setNumOutputRows(a.metrics, "numOutputRows")
+      case a: OverwriteByExpressionExecV1 =>
+        setNumOutputRows(a.metrics, "numOutputRows")
+      case a: V2TableWriteExec =>
+        setNumOutputRows(a.metrics, "numOutputRows")
+      case _ =>
+    }
   }
 
   private def executeStatement(): Unit = withLocalProperties {
@@ -81,6 +153,7 @@ class ExecuteStatement(
       // TODO #921: COMPILED need consider eagerly executed commands
       setState(OperationState.COMPILED)
       debug(result.queryExecution)
+      withMetrics(result.queryExecution)
       iter =
         if (incrementalCollect) {
           info("Execute in incremental collect mode")

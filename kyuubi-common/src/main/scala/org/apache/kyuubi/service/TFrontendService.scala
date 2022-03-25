@@ -453,6 +453,11 @@ abstract class TFrontendService(name: String)
         resp.setErrorCode(e.getErrorCode)
         resp.setErrorMessage(e.getMessage)
       }
+      resp.setNumModifiedRows(operationStatus.numModifiedRows)
+      if (req.isGetProgressUpdate) {
+        val operation = be.sessionManager.operationManager.getOperation(operationHandle)
+        resp.setProgressedPercentage(operation.getProgressPercentage)
+      }
       resp.setStatus(OK_STATUS)
     } catch {
       case e: Exception =>

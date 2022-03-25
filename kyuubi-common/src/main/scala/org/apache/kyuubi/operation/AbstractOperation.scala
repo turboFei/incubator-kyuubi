@@ -51,7 +51,12 @@ abstract class AbstractOperation(opType: OperationType, session: Session)
   @volatile protected var operationException: KyuubiSQLException = _
   @volatile protected var hasResultSet: Boolean = false
 
+  @volatile protected var numModifiedRows: Long = -1
+  @volatile protected var progressPercentage: Double = 0
+
   @volatile private var _backgroundHandle: Future[_] = _
+
+  def getProgressPercentage: Double = progressPercentage
 
   protected def setBackgroundHandle(backgroundHandle: Future[_]): Unit = {
     _backgroundHandle = backgroundHandle
@@ -181,7 +186,8 @@ abstract class AbstractOperation(opType: OperationType, session: Session)
       lastAccessTime,
       completedTime,
       hasResultSet,
-      Option(operationException))
+      Option(operationException),
+      numModifiedRows)
   }
 
   override def shouldRunAsync: Boolean

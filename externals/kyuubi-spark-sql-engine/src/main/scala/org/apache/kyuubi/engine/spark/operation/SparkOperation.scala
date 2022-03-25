@@ -125,6 +125,7 @@ abstract class SparkOperation(opType: OperationType, session: Session)
   }
 
   override protected def afterRun(): Unit = {
+    progressPercentage = 1.0
     state.synchronized {
       if (!isTerminalState(state)) {
         setState(OperationState.FINISHED)

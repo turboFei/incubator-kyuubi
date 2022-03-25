@@ -1362,4 +1362,18 @@ object KyuubiConf {
       .stringConf
       .toSequence()
       .createWithDefault(Nil)
+
+  val OPERATION_PROGRESS_PERCENTAGE_ENABLED: ConfigEntry[Boolean] =
+    buildConf("operation.progress.update.enabled")
+      .doc("Whether to enable get operation progress percentage.")
+      .version("1.4.0")
+      .booleanConf
+      .createWithDefault(false)
+
+  val OPERATION_PROGRESS_PERCENTAGE_INTERVAL: ConfigEntry[Long] =
+    buildConf("operation.progress.update.interval")
+      .doc("The interval to get operation progress percentage.")
+      .version("1.4.0")
+      .timeConf
+      .createWithDefaultString("PT10S")
 }

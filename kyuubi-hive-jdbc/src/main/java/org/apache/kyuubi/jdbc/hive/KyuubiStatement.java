@@ -58,6 +58,7 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
   private int fetchSize = DEFAULT_FETCH_SIZE;
   private boolean isScrollableResultset = false;
   private boolean isOperationComplete = false;
+  private long updateCount = -1;
   /**
    * We need to keep a reference to the result set to support the following: <code>
    * statement.execute(String sql);
@@ -419,6 +420,9 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
       we set progress bar to be completed when hive query execution has completed
     */
     inPlaceUpdateStream.getEventNotifier().progressBarCompleted();
+    if (statusResp != null) {
+      updateCount = statusResp.getNumModifiedRows();
+    }
     return statusResp;
   }
 
@@ -523,7 +527,7 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
   @Override
   public int executeUpdate(String sql) throws SQLException {
     execute(sql);
-    return 0;
+    return getUpdateCount();
   }
 
   /*
@@ -723,7 +727,10 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
      * finished.
      */
     waitForOperationToComplete();
-    return -1;
+    if (updateCount == -1 || updateCount > Integer.MAX_VALUE) {
+      return -1;
+    }
+    return (int) updateCount;
   }
 
   /*
