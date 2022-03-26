@@ -31,11 +31,14 @@
     <packaging>pom</packaging>
     <url>https://kyuubi.apache.org/</url>
 
-    <modules>
-        <module>kyuubi-flink-it</module>
-    </modules>
-
     <profiles>
+        <profile>
+            <id>flink-it</id>
+            <modules>
+                <module>kyuubi-flink-it</module>
+            </modules>
+        </profile>
+
         <profile>
             <id>kubernetes-it</id>
             <modules>
