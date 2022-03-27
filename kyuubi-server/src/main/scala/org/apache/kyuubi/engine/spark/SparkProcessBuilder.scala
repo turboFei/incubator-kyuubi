@@ -108,7 +108,7 @@ class SparkProcessBuilder(
     buffer += CLASS
     buffer += mainClass
 
-    var allConf = conf.getAll
+    var allConf = conf.getAll ++ procConf()
 
     // if enable sasl kerberos authentication for zookeeper, need to upload the server ketab file
     if (ZooKeeperAuthTypes.withName(conf.get(HighAvailabilityConf.HA_ZK_ENGINE_AUTH_TYPE))

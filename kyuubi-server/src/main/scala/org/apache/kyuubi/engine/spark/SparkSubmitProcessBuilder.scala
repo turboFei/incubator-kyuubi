@@ -43,7 +43,8 @@ class SparkSubmitProcessBuilder(
     buffer += CLASS
     buffer += mainClass
 
-    submitCommand.conf.foreach { case (k, v) =>
+    val allConf = submitCommand.conf ++ procConf()
+    allConf.foreach { case (k, v) =>
       buffer += CONF
       buffer += s"$k=$v"
     }
