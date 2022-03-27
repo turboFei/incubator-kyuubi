@@ -28,4 +28,4 @@ case class OperationStatus(
     completed: Long,
     hasResultSet: Boolean,
     exception: Option[KyuubiSQLException] = None,
-    numModifiedRows: Long)
+    numModifiedRows: Long = -1L)
