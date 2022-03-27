@@ -907,6 +907,15 @@ object KyuubiConf {
       .booleanConf
       .createWithDefault(false)
 
+  // TODO: this is for ebay legacy conf, the community conf is `kyuubi.operation.result.max.rows`
+  val OPERATION_RESULT_MAX_ROWS: ConfigEntry[Int] =
+    buildConf("operation.max.result.count")
+      .doc("Max rows of Spark query results. Rows that exceeds the limit would be ignored. " +
+        "By setting this value to 0 to disable the max rows limit.")
+      .version("1.6.0")
+      .intConf
+      .createWithDefault(0)
+
   val SERVER_OPERATION_LOG_DIR_ROOT: ConfigEntry[String] =
     buildConf("operation.log.dir.root")
       .doc("Root directory for query operation log at server-side.")
