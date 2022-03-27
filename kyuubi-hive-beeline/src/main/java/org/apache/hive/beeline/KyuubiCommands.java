@@ -109,9 +109,30 @@ public class KyuubiCommands extends Commands {
     return true;
   }
 
+  private boolean isSparkSubmitCommand(String line) {
+    if (line.startsWith(BeeLine.COMMAND_PREFIX)) {
+      line = line.substring(BeeLine.COMMAND_PREFIX.length()).trim();
+      String[] arr = line.split("\\s+");
+      return arr.length >= 1 && arr[0].equalsIgnoreCase(KyuubiBeeLine.SPARK_SUBMIT_COMMAND_PREFIX);
+    }
+    return false;
+  }
+
+  private boolean isScalaCommand(String line) {
+    if (line.startsWith(BeeLine.COMMAND_PREFIX)) {
+      line = line.substring(BeeLine.COMMAND_PREFIX.length()).trim();
+      String[] arr = line.split("\\s+");
+      return arr.length >= 1 && arr[0].equalsIgnoreCase(KyuubiBeeLine.SCALA_COMMAND_PREFIX);
+    }
+    return false;
+  }
+
   // Return false only occurred error when execution the sql and the sql should follow the rules
   // of beeline.
   private boolean executeInternal(String sql, boolean call) {
+    boolean isSparkSubmit = false;
+    boolean isScala = false;
+
     if (!beeLine.isBeeLine()) {
       sql = cliToBeelineCmd(sql);
     }
@@ -131,19 +152,30 @@ public class KyuubiCommands extends Commands {
     }
 
     if (sql.startsWith(BeeLine.COMMAND_PREFIX)) {
-      return beeLine.execCommandWithPrefix(sql);
+      isSparkSubmit = isSparkSubmitCommand(sql);
+      isScala = isScalaCommand(sql);
+      if (!isSparkSubmit && !isScala) {
+        return beeLine.execCommandWithPrefix(sql);
+      }
+      sql = sql.substring(BeeLine.COMMAND_PREFIX.length());
     }
 
-    String prefix = call ? "call" : "sql";
+    if (isSparkSubmit) {
+      sql = sql.trim().substring(KyuubiBeeLine.SPARK_SUBMIT_COMMAND_PREFIX.length());
+    } else if (isScala) {
+      sql = sql.trim().substring(KyuubiBeeLine.SCALA_COMMAND_PREFIX.length());
+    } else {
+      String prefix = call ? "call" : "sql";
 
-    if (sql.startsWith(prefix)) {
-      sql = sql.substring(prefix.length());
-    }
+      if (sql.startsWith(prefix)) {
+        sql = sql.substring(prefix.length());
+      }
 
-    // batch statements?
-    if (beeLine.getBatch() != null) {
-      beeLine.getBatch().add(sql);
-      return true;
+      // batch statements?
+      if (beeLine.getBatch() != null) {
+        beeLine.getBatch().add(sql);
+        return true;
+      }
     }
 
     if (!(beeLine.assertConnection())) {
@@ -166,7 +198,14 @@ public class KyuubiCommands extends Commands {
         } else {
           stmnt = beeLine.createStatement();
           if (beeLine.getOpts().isSilent()) {
-            hasResults = stmnt.execute(sql);
+            if (isSparkSubmit) {
+              hasResults = ((KyuubiStatement) stmnt).executeSparkSubmit(sql);
+            } else if (isScala) {
+              ((KyuubiStatement) stmnt).executeScala(sql);
+              hasResults = true;
+            } else {
+              hasResults = stmnt.execute(sql);
+            }
           } else {
             InPlaceUpdateStream.EventNotifier eventNotifier =
                 new InPlaceUpdateStream.EventNotifier();
@@ -178,7 +217,14 @@ public class KyuubiCommands extends Commands {
               kyuubiStatement.setInPlaceUpdateStream(
                   new KyuubiBeelineInPlaceUpdateStream(beeLine.getErrorStream(), eventNotifier));
             }
-            hasResults = stmnt.execute(sql);
+            if (isSparkSubmit) {
+              hasResults = ((KyuubiStatement) stmnt).executeSparkSubmit(sql);
+            } else if (isScala) {
+              ((KyuubiStatement) stmnt).executeScala(sql);
+              hasResults = true;
+            } else {
+              hasResults = stmnt.execute(sql);
+            }
             logThread.interrupt();
             logThread.join(DEFAULT_QUERY_PROGRESS_THREAD_TIMEOUT);
           }
@@ -559,5 +605,38 @@ public class KyuubiCommands extends Commands {
         commands.showRemainingLogsIfAny(kyuubiLoggable);
       }
     }
+  }
+
+  public boolean sparksubmit(String line) throws Exception {
+    return executeKyuubiStatementInternal(line);
+  }
+
+  public boolean scala(String line) throws Exception {
+    return executeKyuubiStatementInternal(line);
+  }
+
+  private boolean executeKyuubiStatementInternal(String line) throws Exception {
+    if (line == null || line.length() == 0) {
+      return false; // ???
+    }
+
+    // use multiple lines for statements not terminated by the delimiter
+    try {
+      line = handleMultiLineCmd(line);
+    } catch (Exception e) {
+      beeLine.handleException(e);
+    }
+
+    line = line.trim();
+    List<String> cmdList = getCmdList(line, false);
+    for (int i = 0; i < cmdList.size(); i++) {
+      String cmd = cmdList.get(i).trim();
+      if (cmd.length() != 0) {
+        if (!executeInternal(BeeLine.COMMAND_PREFIX + cmd, false)) {
+          return false;
+        }
+      }
+    }
+    return true;
   }
 }
