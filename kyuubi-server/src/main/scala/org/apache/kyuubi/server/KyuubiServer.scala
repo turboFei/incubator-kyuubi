@@ -45,47 +45,49 @@ object KyuubiServer extends Logging {
   private[kyuubi] var kyuubiServer: KyuubiServer = _
 
   def startServer(conf: KyuubiConf): KyuubiServer = {
-    if (!ServiceDiscovery.supportServiceDiscovery(conf)) {
-      zkServer.initialize(conf)
-      zkServer.start()
-      conf.set(HA_ZK_QUORUM, zkServer.getConnectString)
-      conf.set(HA_ZK_AUTH_TYPE, ZooKeeperAuthTypes.NONE.toString)
-    } else {
-      // create chroot path if necessary
-      val connectionStr = conf.get(HA_ZK_QUORUM)
-      val addresses = connectionStr.split(",")
-      val slashOption = util.Arrays.copyOfRange(addresses, 0, addresses.length - 1)
-        .toList
-        .find(_.contains("/"))
-      if (slashOption.isDefined) {
-        throw new IllegalArgumentException(s"Illegal zookeeper quorum '$connectionStr', " +
-          s"the chroot path started with / is only allowed at the end!")
-      }
-      val chrootIndex = connectionStr.indexOf("/")
-      val chrootOption = {
-        if (chrootIndex > 0) Some(connectionStr.substring(chrootIndex))
-        else None
-      }
-      chrootOption.foreach { chroot =>
-        val zkConnectionForChrootCreation = connectionStr.substring(0, chrootIndex)
-        val overrideQuorumConf = conf.clone.set(HA_ZK_QUORUM, zkConnectionForChrootCreation)
-        withZkClient(overrideQuorumConf) { zkClient =>
-          if (zkClient.checkExists().forPath(chroot) == null) {
-            val chrootPath = ZKPaths.makePath(null, chroot)
-            try {
-              zkClient
-                .create()
-                .creatingParentsIfNeeded()
-                .withMode(PERSISTENT)
-                .forPath(chrootPath)
-            } catch {
-              case _: NodeExistsException => // do nothing
-              case e: KeeperException =>
-                throw new KyuubiException(s"Failed to create chroot path '$chrootPath'", e)
+    if (conf.get(SERVER_HA_ZK_ENABLED)) {
+      if (!ServiceDiscovery.supportServiceDiscovery(conf)) {
+        zkServer.initialize(conf)
+        zkServer.start()
+        conf.set(HA_ZK_QUORUM, zkServer.getConnectString)
+        conf.set(HA_ZK_AUTH_TYPE, ZooKeeperAuthTypes.NONE.toString)
+      } else {
+        // create chroot path if necessary
+        val connectionStr = conf.get(HA_ZK_QUORUM)
+        val addresses = connectionStr.split(",")
+        val slashOption = util.Arrays.copyOfRange(addresses, 0, addresses.length - 1)
+          .toList
+          .find(_.contains("/"))
+        if (slashOption.isDefined) {
+          throw new IllegalArgumentException(s"Illegal zookeeper quorum '$connectionStr', " +
+            s"the chroot path started with / is only allowed at the end!")
+        }
+        val chrootIndex = connectionStr.indexOf("/")
+        val chrootOption = {
+          if (chrootIndex > 0) Some(connectionStr.substring(chrootIndex))
+          else None
+        }
+        chrootOption.foreach { chroot =>
+          val zkConnectionForChrootCreation = connectionStr.substring(0, chrootIndex)
+          val overrideQuorumConf = conf.clone.set(HA_ZK_QUORUM, zkConnectionForChrootCreation)
+          withZkClient(overrideQuorumConf) { zkClient =>
+            if (zkClient.checkExists().forPath(chroot) == null) {
+              val chrootPath = ZKPaths.makePath(null, chroot)
+              try {
+                zkClient
+                  .create()
+                  .creatingParentsIfNeeded()
+                  .withMode(PERSISTENT)
+                  .forPath(chrootPath)
+              } catch {
+                case _: NodeExistsException => // do nothing
+                case e: KeeperException =>
+                  throw new KyuubiException(s"Failed to create chroot path '$chrootPath'", e)
+              }
             }
           }
+          info(s"Created zookeeper chroot path $chroot")
         }
-        info(s"Created zookeeper chroot path $chroot")
       }
     }
 

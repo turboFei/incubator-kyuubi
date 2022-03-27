@@ -28,6 +28,12 @@ object HighAvailabilityConf {
 
   private def buildConf(key: String): ConfigBuilder = KyuubiConf.buildConf(key)
 
+  val SERVER_HA_ZK_ENABLED: ConfigEntry[Boolean] = buildConf("server.ha.zookeeper.enabled")
+    .doc("Whether to enable the ha zookeeper discovery in server side")
+    .version("1.4.0")
+    .booleanConf
+    .createWithDefault(true)
+
   val HA_ZK_QUORUM: ConfigEntry[String] = buildConf("ha.zookeeper.quorum")
     .doc("The connection string for the zookeeper ensemble")
     .version("1.0.0")
