@@ -226,4 +226,14 @@ class EngineRefSuite extends KyuubiFunSuite {
       assert(port2 == port1, "engine shared")
     }
   }
+
+  test("HADP-44003 engine name with session cluster") {
+    val id = UUID.randomUUID().toString
+    val conf = KyuubiConf(false)
+    conf.set(KyuubiConf.ENGINE_SHARE_LEVEL, USER.toString)
+    conf.set(KyuubiConf.ENGINE_TYPE, SPARK_SQL.toString)
+    conf.set(KyuubiConf.SESSION_CLUSTER, "cluster")
+    val appName = new EngineRef(conf, user, id)
+    assert(appName.defaultEngineName === s"kyuubi_cluster_${USER}_${SPARK_SQL}_${user}_default_$id")
+  }
 }

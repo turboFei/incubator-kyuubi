@@ -22,7 +22,7 @@ import scala.collection.JavaConverters._
 import com.codahale.metrics.MetricRegistry
 import org.apache.hive.service.rpc.thrift._
 
-import org.apache.kyuubi.KyuubiSQLException
+import org.apache.kyuubi.{KyuubiSQLException, Utils}
 import org.apache.kyuubi.client.KyuubiSyncThriftClient
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf._
@@ -45,6 +45,36 @@ class KyuubiSessionImpl(
     sessionConf: KyuubiConf)
   extends AbstractSession(protocol, user, password, ipAddress, conf, sessionManager) {
 
+  val sessionCluster =
+    if (sessionManager.sessionClusterModeEnabled) {
+      normalizedConf.get(SESSION_CLUSTER.key)
+    } else {
+      None
+    }
+
+  if (sessionManager.sessionClusterModeEnabled) {
+    var gotClusterPropertiesFile = false
+
+    val sessionClusterConf = KyuubiConf(false)
+    Utils.getDefaultPropertiesFileForCluster(sessionCluster).foreach { clusterPropertiesFile =>
+      gotClusterPropertiesFile = true
+      Utils.getPropertiesFromFile(Option(clusterPropertiesFile)).foreach {
+        case (key, value) => sessionClusterConf.set(key, value)
+      }
+    }
+
+    if (!gotClusterPropertiesFile) {
+      val clusterList = Utils.getDefinedPropertiesClusterList()
+      throw KyuubiSQLException(
+        s"Please specify the cluster to access with session conf[${SESSION_CLUSTER.key}]," +
+          s" which should be one of ${clusterList.mkString("[", ",", "]")}")
+    }
+
+    sessionClusterConf.getUserDefaults(user).getAll.foreach { case (key, value) =>
+      sessionConf.set(key, value)
+    }
+  }
+
   private[kyuubi] val optimizedConf: Map[String, String] = {
     val confOverlay = sessionManager.sessionConfAdvisor.getConfOverlay(
       user,
@@ -61,6 +91,7 @@ class KyuubiSessionImpl(
   optimizedConf.foreach {
     case ("use:database", _) =>
     case ("kyuubi.engine.pool.size.threshold", _) =>
+    case (key, _) if !sessionManager.sessionClusterModeEnabled && key.equals(SESSION_CLUSTER.key) =>
     case (key, value) => sessionConf.set(key, value)
   }
 
@@ -115,6 +146,7 @@ class KyuubiSessionImpl(
       logSessionInfo(s"Connected to engine [$host:$port] with ${_engineSessionHandle}")
       sessionEvent.openedTime = System.currentTimeMillis()
       sessionEvent.remoteSessionId = _engineSessionHandle.identifier.toString
+      sessionCluster.foreach(sessionEvent.sessionCluster = _)
       _client.engineId.foreach(e => sessionEvent.engineId = e)
       EventLogging.onEvent(sessionEvent)
     }

@@ -20,16 +20,16 @@ package org.apache.kyuubi.credentials
 import java.util.ServiceLoader
 import java.util.concurrent._
 
+import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.concurrent.Future
 import scala.concurrent.Promise
 import scala.concurrent.duration.Duration
 import scala.util.{Failure, Success, Try}
 
-import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.security.Credentials
 
-import org.apache.kyuubi.Logging
+import org.apache.kyuubi.{Logging, Utils}
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf._
 import org.apache.kyuubi.service.AbstractService
@@ -81,25 +81,63 @@ class HadoopCredentialsManager private (name: String) extends AbstractService(na
 
   def this() = this(classOf[HadoopCredentialsManager].getSimpleName)
 
-  private val userCredentialsRefMap = new ConcurrentHashMap[String, CredentialsRef]()
+  private val userCredentialsRefMap = new ConcurrentHashMap[AppUserCluster, CredentialsRef]()
   private val sessionCredentialsEpochMap = new ConcurrentHashMap[String, Long]()
 
-  private var providers: Map[String, HadoopDelegationTokenProvider] = _
+  private val clusterProviders =
+    new ConcurrentHashMap[Option[String], Map[String, HadoopDelegationTokenProvider]]().asScala
   private var renewalInterval: Long = _
   private var renewalRetryWait: Long = _
   private var credentialsWaitTimeout: Long = _
-  private var hadoopConf: Configuration = _
 
   private[credentials] var renewalExecutor: Option[ScheduledExecutorService] = None
 
   override def initialize(conf: KyuubiConf): Unit = {
-    hadoopConf = KyuubiHadoopUtils.newHadoopConf(conf)
-    providers = HadoopCredentialsManager.loadProviders(conf)
+    val clusterOptList =
+      if (conf.get(KyuubiConf.SESSION_CLUSTER_MODE_ENABLED)) {
+        Utils.getDefinedPropertiesClusterList().map(Option(_))
+      } else {
+        Seq(None)
+      }
+
+    clusterOptList.foreach { clusterOpt =>
+      val providers = getClusterProviders(conf, clusterOpt)
+      if (providers.nonEmpty) {
+        clusterProviders.put(clusterOpt, providers)
+      }
+    }
+
+    if (clusterProviders.isEmpty) {
+      warn("No delegation token is required by services.")
+    } else {
+      clusterProviders.foreach { case (cluster, clusterProviders) =>
+        info(s"For cluster: $cluster, using the following builtin delegation token providers:" +
+          s"${clusterProviders.keys.mkString(",")}.")
+      }
+    }
+
+    renewalInterval = conf.get(CREDENTIALS_RENEWAL_INTERVAL)
+    renewalRetryWait = conf.get(CREDENTIALS_RENEWAL_RETRY_WAIT)
+    credentialsWaitTimeout = conf.get(CREDENTIALS_UPDATE_WAIT_TIMEOUT)
+    super.initialize(conf)
+  }
+
+  private def getClusterProviders(
+      conf: KyuubiConf,
+      clusterOpt: Option[String]): Map[String, HadoopDelegationTokenProvider] = {
+    val clusterConf = conf.clone
+    Utils.getPropertiesFromFile(
+      Utils.getDefaultPropertiesFileForCluster(clusterOpt)).foreach { case (key, value) =>
+      clusterConf.set(key, value)
+    }
+
+    HadoopCredentialsManager.loadProviders(clusterConf)
       .filter { case (_, provider) =>
-        provider.initialize(hadoopConf, conf)
+        val clusterHadoopConf = KyuubiHadoopUtils.newHadoopConf(conf, clusterOpt = clusterOpt)
+        provider.initialize(clusterHadoopConf, clusterConf)
         val required = provider.delegationTokensRequired()
         if (!required) {
-          warn(s"Service ${provider.serviceName} does not require a token." +
+          warn(s"Service ${provider.serviceName}/$clusterOpt does not require a token." +
             s" Check your configuration to see if security is disabled or not." +
             s" If security is enabled, some configurations of ${provider.serviceName} " +
             s" might be missing, please check the configurations in " +
@@ -109,22 +147,10 @@ class HadoopCredentialsManager private (name: String) extends AbstractService(na
         }
         required
       }
-
-    if (providers.isEmpty) {
-      warn("No delegation token is required by services.")
-    } else {
-      info("Using the following builtin delegation token providers: " +
-        s"${providers.keys.mkString(", ")}.")
-    }
-
-    renewalInterval = conf.get(CREDENTIALS_RENEWAL_INTERVAL)
-    renewalRetryWait = conf.get(CREDENTIALS_RENEWAL_RETRY_WAIT)
-    credentialsWaitTimeout = conf.get(CREDENTIALS_UPDATE_WAIT_TIMEOUT)
-    super.initialize(conf)
   }
 
   override def start(): Unit = {
-    if (providers.nonEmpty) {
+    if (clusterProviders.nonEmpty) {
       renewalExecutor =
         Some(ThreadUtils.newDaemonSingleThreadScheduledExecutor("Delegation Token Renewal Thread"))
     }
@@ -132,7 +158,7 @@ class HadoopCredentialsManager private (name: String) extends AbstractService(na
   }
 
   override def stop(): Unit = {
-    providers.values.foreach(_.close())
+    clusterProviders.values.foreach(_.values.foreach(_.close()))
     renewalExecutor.foreach { executor =>
       executor.shutdownNow()
       try {
@@ -155,13 +181,14 @@ class HadoopCredentialsManager private (name: String) extends AbstractService(na
   def sendCredentialsIfNeeded(
       sessionId: String,
       appUser: String,
+      appCluster: Option[String],
       send: String => Unit,
       waitUntilCredentialsReady: Boolean = false): Unit = {
     if (renewalExecutor.isEmpty) {
       return
     }
 
-    val userRef = getOrCreateUserCredentialsRef(appUser, waitUntilCredentialsReady)
+    val userRef = getOrCreateUserCredentialsRef(appUser, appCluster, waitUntilCredentialsReady)
     val sessionEpoch = getSessionCredentialsEpoch(sessionId)
 
     if (userRef.getEpoch > sessionEpoch) {
@@ -193,14 +220,17 @@ class HadoopCredentialsManager private (name: String) extends AbstractService(na
   // Visible for testing.
   private[credentials] def getOrCreateUserCredentialsRef(
       appUser: String,
+      appCluster: Option[String] = None,
       waitUntilCredentialsReady: Boolean = false): CredentialsRef = {
+    val appUserCluster = AppUserCluster(appUser, appCluster)
     val ref = userCredentialsRefMap.computeIfAbsent(
-      appUser,
-      appUser => {
-        val ref = new CredentialsRef(appUser)
+      appUserCluster,
+      appUserCluster => {
+        val ref = new CredentialsRef(appUserCluster)
         val credentialsFuture: Future[Unit] = scheduleRenewal(ref, 0, waitUntilCredentialsReady)
         ref.setFuture(credentialsFuture)
-        info(s"Created CredentialsRef for user $appUser and scheduled a renewal task")
+        info(s"Created CredentialsRef for user/cluster $appUser/$appUserCluster" +
+          s" and scheduled a renewal task")
         ref
       })
 
@@ -217,14 +247,19 @@ class HadoopCredentialsManager private (name: String) extends AbstractService(na
   }
 
   // Visible for testing.
-  private[credentials] def containsProvider(serviceName: String): Boolean = {
-    providers.contains(serviceName)
+  private[credentials] def containsProvider(
+      serviceName: String,
+      clusterOpt: Option[String] = None): Boolean = {
+    clusterProviders.get(clusterOpt).contains(serviceName)
   }
 
   private def updateCredentials(userRef: CredentialsRef): Unit = {
     val creds = new Credentials()
-    providers.values
-      .foreach(_.obtainDelegationTokens(userRef.getAppUser, creds))
+    clusterProviders.getOrElseUpdate(
+      userRef.getAppCluster,
+      getClusterProviders(conf, userRef.getAppCluster)).map { case (_, provider) =>
+      provider.obtainDelegationTokens(userRef.getAppUser, creds)
+    }
     userRef.updateCredentials(creds)
   }
 

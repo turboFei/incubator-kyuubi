@@ -140,7 +140,8 @@ case class KyuubiConf(loadSysDefault: Boolean = true) extends Logging {
     FRONTEND_MYSQL_BIND_HOST,
     FRONTEND_MYSQL_BIND_PORT,
     AUTHENTICATION_METHOD,
-    KINIT_INTERVAL)
+    KINIT_INTERVAL,
+    SESSION_CLUSTER_MODE_ENABLED)
 
   def getUserDefaults(user: String): KyuubiConf = {
     val cloned = KyuubiConf(false)
@@ -171,6 +172,9 @@ object KyuubiConf {
   final val KYUUBI_CONF_FILE_NAME = "kyuubi-defaults.conf"
   final val KYUUBI_HOME = "KYUUBI_HOME"
   final val KYUUBI_ENGINE_ENV_PREFIX = "kyuubi.engineEnv"
+
+  /** the cluster default file name prefix */
+  final val KYUUBI_CLUSTER_CONF_FILE_NAME_PREFIX = KYUUBI_CONF_FILE_NAME + "."
 
   val kyuubiConfEntries: java.util.Map[String, ConfigEntry[_]] =
     java.util.Collections.synchronizedMap(new java.util.HashMap[String, ConfigEntry[_]]())
@@ -1221,6 +1225,23 @@ object KyuubiConf {
       .doc("A human readable name of session and we use empty string by default. " +
         "This name will be recorded in event. Note that, we only apply this value from " +
         "session conf.")
+      .version("1.4.0")
+      .stringConf
+      .createOptional
+
+  val SESSION_CLUSTER_MODE_ENABLED: ConfigEntry[Boolean] =
+    buildConf("session.cluster.mode.enabled")
+      .doc("Whether to enable session with cluster specify mode. If it is enabled," +
+        " the cluster for session connection is must to be specified.")
+      .version("1.4.0")
+      .booleanConf
+      .createWithDefault(false)
+
+  val SESSION_CLUSTER: OptionalConfigEntry[String] =
+    buildConf("session.cluster")
+      .doc("The cluster to access, such as apollo-rno, hercules-lvs.  For each cluster," +
+        " there should be a defined properties file, whose name is formatted like" +
+        " kyuubi-defaults.conf.<cluster>")
       .version("1.4.0")
       .stringConf
       .createOptional

@@ -172,4 +172,14 @@ class KyuubiConfSuite extends KyuubiFunSuite {
     kyuubiConf.set(ENGINE_SHARE_LEVEL_SUBDOMAIN.key, path)
     assert(kyuubiConf.get(ENGINE_SHARE_LEVEL_SUBDOMAIN).get == path)
   }
+
+  test("test SESSION_CLUSTER_MODE_ENABLED and SESSION_CLUSTER") {
+    val kyuubiConf = KyuubiConf()
+    assert(!kyuubiConf.get(SESSION_CLUSTER_MODE_ENABLED))
+    kyuubiConf.set(SESSION_CLUSTER_MODE_ENABLED, true)
+    assert(kyuubiConf.get(SESSION_CLUSTER_MODE_ENABLED))
+    assert(kyuubiConf.get(SESSION_CLUSTER).isEmpty)
+    kyuubiConf.set(SESSION_CLUSTER, "test")
+    assert(kyuubiConf.get(SESSION_CLUSTER) == Option("test"))
+  }
 }

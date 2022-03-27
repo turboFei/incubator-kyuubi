@@ -140,4 +140,13 @@ class UtilsSuite extends KyuubiFunSuite {
     val path2 = "/tmp/path2"
     assert(Utils.getAbsolutePathFromWork(path2).toString === path2)
   }
+
+  test("getDefinedPropertiesClusterList") {
+    val clusterList = Utils.getDefinedPropertiesClusterList()
+    assert(clusterList == Seq("test"))
+  }
+
+  test("getDefaultPropertiesFileForCluster") {
+    assert(Utils.getDefaultPropertiesFileForCluster(Option("test")).nonEmpty)
+  }
 }

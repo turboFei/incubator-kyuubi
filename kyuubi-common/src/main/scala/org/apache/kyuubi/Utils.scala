@@ -46,6 +46,30 @@ object Utils extends Logging {
     sys.props.toMap
   }
 
+  private def getDefaultPropertiesClusterList(confDir: File): Seq[String] = {
+    confDir.listFiles().map(_.getName).filter(_.startsWith(KYUUBI_CLUSTER_CONF_FILE_NAME_PREFIX))
+      .map(_.stripPrefix(KYUUBI_CLUSTER_CONF_FILE_NAME_PREFIX))
+  }
+
+  def getDefinedPropertiesClusterList(env: Map[String, String] = sys.env): Seq[String] = {
+    env.get(KYUUBI_CONF_DIR)
+      .orElse(env.get(KYUUBI_HOME).map(_ + File.separator + "conf"))
+      .map(d => new File(d))
+      .filter(_.isDirectory())
+      .map(getDefaultPropertiesClusterList)
+      .getOrElse {
+        var clusterList: Seq[String] = Seq.empty[String]
+        val classPathUrls = getClass.getClassLoader.getResources(".").asScala
+        for (classPathUrl <- classPathUrls if clusterList.isEmpty) {
+          val classPathDir = new File(classPathUrl.getFile)
+          if (classPathDir.isDirectory) {
+            clusterList = getDefaultPropertiesClusterList(classPathDir)
+          }
+        }
+        clusterList
+      }
+  }
+
   def getDefaultPropertiesFile(env: Map[String, String] = sys.env): Option[File] = {
     env.get(KYUUBI_CONF_DIR)
       .orElse(env.get(KYUUBI_HOME).map(_ + File.separator + "conf"))
@@ -56,6 +80,27 @@ object Utils extends Logging {
           new File(url.getFile)
         }.filter(_.exists())
       }
+  }
+
+  def getDefaultPropertiesFileForCluster(
+      clusterOpt: Option[String],
+      env: Map[String, String] = sys.env): Option[File] = {
+    clusterOpt.map { cluster =>
+      val clusterPropertiesFileName = KYUUBI_CLUSTER_CONF_FILE_NAME_PREFIX + cluster
+      env.get(KYUUBI_CONF_DIR)
+        .orElse(env.get(KYUUBI_HOME).map(_ + File.separator + "conf"))
+        .map(d => new File(d + File.separator + clusterPropertiesFileName))
+        .filter(_.exists())
+        .orElse {
+          Option(getClass.getClassLoader.getResource(clusterPropertiesFileName)).map { url =>
+            new File(url.getFile)
+          }.filter(_.exists())
+        }.orElse(throw KyuubiSQLException(
+          s"""
+             |Failed to get properties file for cluster [$cluster].
+             |It should be one of ${getDefinedPropertiesClusterList().mkString("[", ",", "]")}.
+        """.stripMargin))
+    }.getOrElse(None)
   }
 
   def getPropertiesFromFile(file: Option[File]): Map[String, String] = {

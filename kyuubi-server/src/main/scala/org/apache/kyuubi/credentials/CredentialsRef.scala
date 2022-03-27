@@ -27,7 +27,7 @@ import org.apache.hadoop.security.Credentials
 import org.apache.kyuubi.credentials.CredentialsRef.UNSET_EPOCH
 import org.apache.kyuubi.util.{KyuubiHadoopUtils, ThreadUtils}
 
-class CredentialsRef(appUser: String) {
+class CredentialsRef(appUserCluster: AppUserCluster) {
 
   @volatile
   private var epoch = UNSET_EPOCH
@@ -42,7 +42,9 @@ class CredentialsRef(appUser: String) {
 
   def getEpoch: Long = epoch
 
-  def getAppUser: String = appUser
+  def getAppUser: String = appUserCluster.appUser
+
+  def getAppCluster: Option[String] = appUserCluster.appCluster
 
   def getEncodedCredentials: String = {
     encodedCredentials
@@ -58,6 +60,8 @@ class CredentialsRef(appUser: String) {
   }
 
 }
+
+case class AppUserCluster(appUser: String, appCluster: Option[String] = None)
 
 object CredentialsRef {
   val UNSET_EPOCH: Long = -1L

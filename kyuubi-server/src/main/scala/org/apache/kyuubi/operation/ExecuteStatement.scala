@@ -130,6 +130,7 @@ class ExecuteStatement(
     sessionManager.credentialsManager.sendCredentialsIfNeeded(
       session.handle.identifier.toString,
       appUser,
+      session.asInstanceOf[KyuubiSessionImpl].sessionCluster,
       client.sendCredentials)
   }
 

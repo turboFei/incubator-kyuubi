@@ -67,6 +67,7 @@ class LaunchEngine(session: KyuubiSessionImpl, override val shouldRunAsync: Bool
       sessionManager.credentialsManager.sendCredentialsIfNeeded(
         session.handle.identifier.toString,
         session.user,
+        session.sessionCluster,
         client.sendCredentials,
         true)
     } catch {

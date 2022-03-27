@@ -97,7 +97,7 @@ class HadoopCredentialsManagerSuite extends KyuubiFunSuite {
     val kyuubiConf = new KyuubiConf(false)
       .set(KyuubiConf.CREDENTIALS_RENEWAL_INTERVAL, 1000L)
     withStartedManager(kyuubiConf) { manager =>
-      val userRef = manager.getOrCreateUserCredentialsRef(appUser, true)
+      val userRef = manager.getOrCreateUserCredentialsRef(appUser, waitUntilCredentialsReady = true)
       assert(userRef.getEpoch == 0)
 
       eventually(timeout(1100.milliseconds), interval(100.milliseconds)) {
@@ -111,7 +111,9 @@ class HadoopCredentialsManagerSuite extends KyuubiFunSuite {
       .set(KyuubiConf.CREDENTIALS_RENEWAL_INTERVAL, 1000L)
     withStartedManager(kyuubiConf) { manager =>
       UnstableDelegationTokenProvider.throwException = true
-      assertThrows[KyuubiException](manager.getOrCreateUserCredentialsRef(appUser, true))
+      assertThrows[KyuubiException](manager.getOrCreateUserCredentialsRef(
+        appUser,
+        waitUntilCredentialsReady = true))
     }
   }
 
@@ -146,7 +148,7 @@ class HadoopCredentialsManagerSuite extends KyuubiFunSuite {
         assert(userRef.getEpoch == 0)
       }
 
-      manager.sendCredentialsIfNeeded(sessionId, appUser, send)
+      manager.sendCredentialsIfNeeded(sessionId, appUser, appCluster = None, send)
 
       val sessionEpoch = manager.getSessionCredentialsEpoch(sessionId)
       assert(sessionEpoch == userRef.getEpoch)
@@ -165,6 +167,7 @@ class HadoopCredentialsManagerSuite extends KyuubiFunSuite {
       manager.sendCredentialsIfNeeded(
         sessionId,
         appUser,
+        appCluster = None,
         _ => {
           called = true
           throw new IOException
@@ -172,6 +175,13 @@ class HadoopCredentialsManagerSuite extends KyuubiFunSuite {
 
       assert(called)
       assert(manager.getSessionCredentialsEpoch(sessionId) == CredentialsRef.UNSET_EPOCH)
+    }
+  }
+
+  test("cluster mode credentials managers") {
+    val kyuubiConf = new KyuubiConf(false).set(KyuubiConf.SESSION_CLUSTER_MODE_ENABLED, true)
+    withStartedManager(kyuubiConf) { manager =>
+      manager.containsProvider("unstable", Option("test"))
     }
   }
 }

@@ -112,7 +112,8 @@ private[kyuubi] class EngineRef(
    */
   @VisibleForTesting
   private[kyuubi] val defaultEngineName: String = {
-    val commonNamePrefix = s"kyuubi_${shareLevel}_${engineType}_${appUser}"
+    val clusterPlaceHolder = conf.get(SESSION_CLUSTER).map(_ + "_").getOrElse("")
+    val commonNamePrefix = s"kyuubi_${clusterPlaceHolder}${shareLevel}_${engineType}_${appUser}"
     shareLevel match {
       case CONNECTION => s"${commonNamePrefix}_$engineRefId"
       case _ => s"${commonNamePrefix}_${subdomain}_$engineRefId"

@@ -37,6 +37,7 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
   val credentialsManager = new HadoopCredentialsManager()
   // this lazy is must be specified since the conf is null when the class initialization
   lazy val sessionConfAdvisor: SessionConfAdvisor = PluginLoader.loadSessionConfAdvisor(conf)
+  lazy val sessionClusterModeEnabled: Boolean = conf.get(SESSION_CLUSTER_MODE_ENABLED)
 
   override def initialize(conf: KyuubiConf): Unit = {
     addService(credentialsManager)

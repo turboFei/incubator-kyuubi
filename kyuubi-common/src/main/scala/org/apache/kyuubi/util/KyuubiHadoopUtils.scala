@@ -17,7 +17,7 @@
 
 package org.apache.kyuubi.util
 
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream, DataInputStream, DataOutputStream}
+import java.io._
 import java.util.{Base64, Map => JMap}
 
 import scala.collection.JavaConverters._
@@ -28,9 +28,17 @@ import org.apache.hadoop.io.Text
 import org.apache.hadoop.security.{Credentials, SecurityUtil, UserGroupInformation}
 import org.apache.hadoop.security.token.{Token, TokenIdentifier}
 
+import org.apache.kyuubi.Utils
 import org.apache.kyuubi.config.KyuubiConf
 
 object KyuubiHadoopUtils {
+  val HADOOP_CONF_DIR = "HADOOP_CONF_DIR"
+  val HADOOP_CONF_FILES =
+    Seq("core-site.xml", "hdfs-site.xml", "mapred-site.xml", "yarn-site.xml", "hive-site.xml")
+
+  private def isHadoopConfFile(file: File): Boolean = {
+    HADOOP_CONF_FILES.contains(file.getName)
+  }
 
   private val subjectField =
     classOf[UserGroupInformation].getDeclaredField("subject")
@@ -40,13 +48,39 @@ object KyuubiHadoopUtils {
     classOf[Credentials].getDeclaredField("tokenMap")
   tokenMapField.setAccessible(true)
 
+  /**
+   * TODO: enhance the usage for EventLoggingService and UserGroupInformation
+   * @param conf kyuubi conf
+   * @param clusterOpt the cluster name, for cluster mode, does not load defaults
+   * @return
+   */
   def newHadoopConf(
       conf: KyuubiConf,
-      loadDefaults: Boolean = true): Configuration = {
-    val hadoopConf = new Configuration(loadDefaults)
-    conf.getAll
-      .foreach { case (k, v) => hadoopConf.set(k, v) }
-    hadoopConf
+      loadDefaults: Boolean = true,
+      clusterOpt: Option[String] = None): Configuration = {
+    clusterOpt.map { _ =>
+      val clusterPropertiesFile = Utils.getDefaultPropertiesFileForCluster(clusterOpt)
+      val clusterConf = conf.clone
+      Utils.getPropertiesFromFile(clusterPropertiesFile).foreach { case (key, value) =>
+        clusterConf.set(key, value)
+      }
+      val clusterEnvs = clusterConf.getEnvs
+      val hadoopConf = new Configuration(false)
+      clusterEnvs.get(HADOOP_CONF_DIR)
+        .map(new File(_))
+        .filter(_.isDirectory).foreach { confDir =>
+          confDir.listFiles().filter(_.getName.endsWith(".xml")).foreach { xmlFile =>
+            hadoopConf.addResource(xmlFile.toURI.toURL)
+          }
+        }
+      clusterConf.getAll.foreach { case (k, v) => hadoopConf.set(k, v) }
+      hadoopConf
+    }.getOrElse {
+      val hadoopConf = new Configuration(loadDefaults)
+      conf.getAll
+        .foreach { case (k, v) => hadoopConf.set(k, v) }
+      hadoopConf
+    }
   }
 
   def getServerPrincipal(principal: String): String = {

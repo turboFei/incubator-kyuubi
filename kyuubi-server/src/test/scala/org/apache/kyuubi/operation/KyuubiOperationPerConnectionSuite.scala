@@ -237,6 +237,17 @@ class KyuubiOperationPerConnectionSuite extends WithKyuubiServer with HiveJDBCTe
       }
     }
   }
+
+  test("without session cluster mode enabled, the session cluster doest not valid") {
+    withSessionConf(Map.empty)(Map.empty)(Map(
+      KyuubiConf.SESSION_CLUSTER.key -> "test")) {
+      withJdbcStatement() { statement =>
+        val rs = statement.executeQuery("set spark.sql.kyuubi.session.cluster.test")
+        assert(rs.next())
+        assert(rs.getString(2).equals("<undefined>"))
+      }
+    }
+  }
 }
 
 class TestSessionConfAdvisor extends SessionConfAdvisor {

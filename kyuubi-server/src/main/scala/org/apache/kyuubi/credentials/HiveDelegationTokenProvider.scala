@@ -17,6 +17,8 @@
 
 package org.apache.kyuubi.credentials
 
+import java.io.File
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hadoop.hive.metastore.{IMetaStoreClient, RetryingMetaStoreClient}
@@ -30,6 +32,8 @@ import org.apache.kyuubi.Logging
 import org.apache.kyuubi.config.KyuubiConf
 
 class HiveDelegationTokenProvider extends HadoopDelegationTokenProvider with Logging {
+  val HIVE_CONF_DIR = "HIVE_CONF_DIR"
+  val HIVE_SITE = "hive-site.xml"
 
   private var client: Option[IMetaStoreClient] = None
   private var principal: String = _
@@ -39,6 +43,16 @@ class HiveDelegationTokenProvider extends HadoopDelegationTokenProvider with Log
 
   override def initialize(hadoopConf: Configuration, kyuubiConf: KyuubiConf): Unit = {
     val conf = new HiveConf(hadoopConf, classOf[HiveConf])
+    if (kyuubiConf.get(KyuubiConf.SESSION_CLUSTER_MODE_ENABLED)) {
+      kyuubiConf.getEnvs.get(HIVE_CONF_DIR).foreach { hiveConfEnv =>
+        val hiveSite = new File(hiveConfEnv, HIVE_SITE)
+        if (hiveSite.isFile) {
+          info(s"Adding ${hiveSite.getAbsolutePath} into HiveConf resource")
+          conf.addResource(hiveSite.toURI.toURL)
+        }
+      }
+    }
+
     val metastoreUris = conf.getTrimmed("hive.metastore.uris", "")
     // SQL engine requires token alias to be `hive.metastore.uris`
     tokenAlias = new Text(metastoreUris)
