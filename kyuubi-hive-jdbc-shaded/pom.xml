@@ -56,7 +56,7 @@
         </dependency>
 
         <dependency>
-            <groupId>org.apache.hive</groupId>
+            <groupId>${hive.service.rpc.groupId}</groupId>
             <artifactId>hive-service-rpc</artifactId>
         </dependency>
 

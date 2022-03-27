@@ -178,6 +178,5 @@ object MySQLDataType {
     case TTypeId.CHAR_TYPE => STRING
     case TTypeId.INTERVAL_YEAR_MONTH_TYPE => VAR_STRING // not exactly match, fallback
     case TTypeId.INTERVAL_DAY_TIME_TYPE => VAR_STRING // not exactly match, fallback
-    case TTypeId.TIMESTAMPLOCALTZ_TYPE => TIMESTAMP
   }
 }

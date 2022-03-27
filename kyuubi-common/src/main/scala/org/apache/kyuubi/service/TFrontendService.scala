@@ -546,15 +546,16 @@ abstract class TFrontendService(name: String)
     resp
   }
 
-  override def GetQueryId(req: TGetQueryIdReq): TGetQueryIdResp = {
+  override def DownloadData(req: TDownloadDataReq): TDownloadDataResp = {
     debug(req.toString)
-    val resp = new TGetQueryIdResp
+    val resp = new TDownloadDataResp()
+    resp.setStatus(KyuubiSQLException.featureNotSupported().toTStatus)
     resp
   }
 
-  override def SetClientInfo(req: TSetClientInfoReq): TSetClientInfoResp = {
+  override def TransferData(req: TTransferDataReq): TTransferDataResp = {
     debug(req.toString)
-    val resp = new TSetClientInfoResp
+    val resp = new TTransferDataResp()
     resp.setStatus(KyuubiSQLException.featureNotSupported().toTStatus)
     resp
   }

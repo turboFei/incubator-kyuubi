@@ -218,7 +218,7 @@ org.apache.hadoop:hadoop-client-runtime
 org.apache.hive:hive-common
 org.apache.hive:hive-metastore
 org.apache.hive:hive-serde
-org.apache.hive:hive-service-rpc
+org.spark-project.hive:hive-service-rpc
 org.apache.hive:hive-shims-0.23
 org.apache.hive:hive-shims-common
 com.fasterxml.jackson.core:jackson-annotations

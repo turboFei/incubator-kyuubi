@@ -191,7 +191,7 @@
                             <include>org.apache.curator:curator-client</include>
                             <include>org.apache.curator:curator-framework</include>
                             <include>org.apache.curator:curator-recipes</include>
-                            <include>org.apache.hive:hive-service-rpc</include>
+                            <include>${hive.service.rpc.groupId}:hive-service-rpc</include>
                             <include>org.apache.thrift:*</include>
                         </includes>
                     </artifactSet>
