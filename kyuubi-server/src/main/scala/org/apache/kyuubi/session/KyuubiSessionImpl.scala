@@ -26,7 +26,7 @@ import org.apache.kyuubi.{KyuubiSQLException, Utils}
 import org.apache.kyuubi.client.KyuubiSyncThriftClient
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf._
-import org.apache.kyuubi.engine.EngineRef
+import org.apache.kyuubi.engine.{EngineRef, EngineType}
 import org.apache.kyuubi.events.{EventLogging, KyuubiEvent, KyuubiSessionEvent}
 import org.apache.kyuubi.ha.client.ZooKeeperClientProvider._
 import org.apache.kyuubi.metrics.MetricsConstants._
@@ -41,8 +41,8 @@ class KyuubiSessionImpl(
     password: String,
     ipAddress: String,
     conf: Map[String, String],
-    sessionManager: KyuubiSessionManager,
-    sessionConf: KyuubiConf)
+    override val sessionManager: KyuubiSessionManager,
+    val sessionConf: KyuubiConf)
   extends AbstractSession(protocol, user, password, ipAddress, conf, sessionManager) {
 
   val sessionCluster =
@@ -95,8 +95,15 @@ class KyuubiSessionImpl(
     case (key, value) => sessionConf.set(key, value)
   }
 
+  private[kyuubi] val needLaunchRemoteEngine =
+    EngineType.withName(sessionConf.get(ENGINE_TYPE)) match {
+      // for SPARK_SUBMIT, no engine needed to launch
+      case EngineType.SPARK_SUBMIT => false
+      case _ => true
+    }
+
   val engine: EngineRef = new EngineRef(sessionConf, user)
-  private[kyuubi] val launchEngineOp = sessionManager.operationManager
+  private[kyuubi] lazy val launchEngineOp = sessionManager.operationManager
     .newLaunchEngineOperation(this, sessionConf.get(SESSION_ENGINE_LAUNCH_ASYNC))
 
   private val sessionEvent = KyuubiSessionEvent(this)
@@ -120,7 +127,9 @@ class KyuubiSessionImpl(
     // we should call super.open before running launch engine operation
     super.open()
 
-    runOperation(launchEngineOp)
+    if (needLaunchRemoteEngine) {
+      runOperation(launchEngineOp)
+    }
   }
 
   private[kyuubi] def openEngineSession(extraEngineLog: Option[OperationLog] = None): Unit = {
@@ -153,7 +162,7 @@ class KyuubiSessionImpl(
   }
 
   override protected def runOperation(operation: Operation): OperationHandle = {
-    if (operation != launchEngineOp) {
+    if (needLaunchRemoteEngine && operation != launchEngineOp) {
       waitForEngineLaunched()
       sessionEvent.totalOperations += 1
     }
@@ -163,7 +172,7 @@ class KyuubiSessionImpl(
   @volatile private var engineLaunched: Boolean = false
 
   private def waitForEngineLaunched(): Unit = {
-    if (!engineLaunched) {
+    if (needLaunchRemoteEngine && !engineLaunched) {
       Option(launchEngineOp).foreach { op =>
         val waitingStartTime = System.currentTimeMillis()
         logSessionInfo(s"Starting to wait the launch engine operation finished")
@@ -185,7 +194,7 @@ class KyuubiSessionImpl(
   }
 
   override def close(): Unit = {
-    if (!OperationState.isTerminal(launchEngineOp.getStatus.state)) {
+    if (needLaunchRemoteEngine && !OperationState.isTerminal(launchEngineOp.getStatus.state)) {
       closeOperation(launchEngineOp.getHandle)
     }
     super.close()

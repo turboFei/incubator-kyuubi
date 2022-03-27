@@ -261,6 +261,25 @@ class KyuubiOperationPerConnectionSuite extends WithKyuubiServer with HiveJDBCTe
       assert(verboseMessage.contains("batch account proxy is not supported"))
     }
   }
+
+  test("HADP-43956 test SPARK_SUBMIT to submit spark application to local") {
+    withSessionConf()(Map.empty)(Map(
+      "kyuubi.engine.type" -> "SPARK_SUBMIT")) {
+      withJdbcStatement() { statement =>
+        val submissionCmd = new SubmitApplicationProtocol
+        submissionCmd.mainClass = "org.apache.spark.sql.hive.thriftserver.SparkSQLCLIDriver"
+        submissionCmd.conf = Map("spark.master" -> "local")
+        submissionCmd.args = List("--verbose")
+        submissionCmd.returnOnSubmitted = true
+
+        val resultSet = statement.executeQuery(submissionCmd.toJson)
+        assert(resultSet.next())
+        assert(resultSet.getString(1).contains("local-"))
+        assert(resultSet.getString(2).isEmpty)
+        assert(!resultSet.next())
+      }
+    }
+  }
 }
 
 class TestSessionConfAdvisor extends SessionConfAdvisor {

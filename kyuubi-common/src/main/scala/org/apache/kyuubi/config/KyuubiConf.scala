@@ -1350,4 +1350,16 @@ object KyuubiConf {
       .version("1.6.0")
       .stringConf
       .createWithDefault("yyyy-MM-dd HH:mm:ss.SSS")
+
+  val OPERATION_SUBMIT_CONF_IGNORE_LIST: ConfigEntry[Seq[String]] =
+    buildConf("operation.submit.conf.ignore.list")
+      .doc("A comma separated list of ignored keys. If the submit command conf contains any of" +
+        " them, the key and the corresponding value will be removed silently during executing" +
+        " submission." +
+        " Note that: some config items could be defined in server side with" +
+        " `operation.submit.conf.spark` prefix")
+      .version("1.5.0")
+      .stringConf
+      .toSequence()
+      .createWithDefault(Nil)
 }

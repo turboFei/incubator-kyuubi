@@ -17,12 +17,15 @@
 
 package org.apache.kyuubi.operation
 
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 import org.apache.hive.service.rpc.thrift.TRowSet
 
 import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.KyuubiConf.ENGINE_TYPE
 import org.apache.kyuubi.config.KyuubiConf.OPERATION_QUERY_TIMEOUT
+import org.apache.kyuubi.engine.EngineType
 import org.apache.kyuubi.metrics.MetricsConstants.OPERATION_OPEN
 import org.apache.kyuubi.metrics.MetricsSystem
 import org.apache.kyuubi.operation.FetchOrientation.FetchOrientation
@@ -35,9 +38,27 @@ class KyuubiOperationManager private (name: String) extends OperationManager(nam
 
   private var queryTimeout: Option[Long] = None
 
+  private var _submitConfIgnoreList: Set[String] = _
+  private lazy val _submitConfIgnoreMatchList: Set[String] =
+    _submitConfIgnoreList.filter(_.endsWith(".*")).map(_.stripSuffix(".*"))
+
   override def initialize(conf: KyuubiConf): Unit = {
     queryTimeout = conf.get(OPERATION_QUERY_TIMEOUT).map(TimeUnit.MILLISECONDS.toSeconds)
+    _submitConfIgnoreList = conf.get(KyuubiConf.OPERATION_SUBMIT_CONF_IGNORE_LIST).toSet
     super.initialize(conf)
+  }
+
+  def validateSubmitConfigItem(key: String, value: String): Option[(String, String)] = {
+    if (_submitConfIgnoreMatchList.exists(key.startsWith) || _submitConfIgnoreList.contains(key)) {
+      warn(s"$key is a ignored key according to the server-side configuration")
+      None
+    } else {
+      Some((key, value))
+    }
+  }
+
+  def validateSubmitConfig(config: Map[String, String]): Map[String, String] = config.flatMap {
+    case (k, v) => validateSubmitConfigItem(k, v)
   }
 
   private def getQueryTimeout(clientQueryTimeout: Long): Long = {
@@ -57,8 +78,24 @@ class KyuubiOperationManager private (name: String) extends OperationManager(nam
       confOverlay: Map[String, String],
       runAsync: Boolean,
       queryTimeout: Long): Operation = {
+    val engineType = confOverlay.get(ENGINE_TYPE.key).getOrElse(
+      session.asInstanceOf[KyuubiSessionImpl].sessionConf.get(ENGINE_TYPE))
     val operation =
-      new ExecuteStatement(session, statement, confOverlay, runAsync, getQueryTimeout(queryTimeout))
+      EngineType.withName(engineType.toUpperCase(Locale.ROOT)) match {
+        case engType @ EngineType.SPARK_SUBMIT =>
+          new SubmitApplication(
+            session.asInstanceOf[KyuubiSessionImpl],
+            engType,
+            statement,
+            runAsync)
+        case _ =>
+          new ExecuteStatement(
+            session,
+            statement,
+            confOverlay,
+            runAsync,
+            getQueryTimeout(queryTimeout))
+      }
     addOperation(operation)
   }
 

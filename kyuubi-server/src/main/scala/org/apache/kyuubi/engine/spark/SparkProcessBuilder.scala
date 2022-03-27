@@ -150,7 +150,7 @@ class SparkProcessBuilder(
 
   val YARN_APP_NAME_REGEX: Regex = "application_\\d+_\\d+".r
 
-  private def useKeytab(): Boolean = {
+  protected def useKeytab(): Boolean = {
     val principal = conf.getOption(PRINCIPAL)
     val keytab = conf.getOption(KEYTAB)
     if (principal.isEmpty || keytab.isEmpty) {
@@ -215,12 +215,12 @@ object SparkProcessBuilder {
   final val APP_KEY = "spark.app.name"
   final val TAG_KEY = "spark.yarn.tags"
 
-  final private val CONF = "--conf"
-  final private val CLASS = "--class"
-  final private val PROXY_USER = "--proxy-user"
+  final val CONF = "--conf"
+  final val CLASS = "--class"
+  final val PROXY_USER = "--proxy-user"
   final private val SPARK_FILES = "spark.files"
   final private val PRINCIPAL = "spark.kerberos.principal"
   final private val KEYTAB = "spark.kerberos.keytab"
   // Get the appropriate spark-submit file
-  final private val SPARK_SUBMIT_FILE = if (Utils.isWindows) "spark-submit.cmd" else "spark-submit"
+  final val SPARK_SUBMIT_FILE = if (Utils.isWindows) "spark-submit.cmd" else "spark-submit"
 }

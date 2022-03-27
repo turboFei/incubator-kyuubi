@@ -93,18 +93,20 @@ final class KyuubiTBinaryFrontendService(
     val resp = new TOpenSessionResp
     try {
       val sessionHandle = getSessionHandle(req, resp)
-
+      val session = be.sessionManager.getSession(sessionHandle).asInstanceOf[KyuubiSessionImpl]
       val respConfiguration = new java.util.HashMap[String, String]()
-      val launchEngineOp = be.sessionManager.getSession(sessionHandle)
-        .asInstanceOf[KyuubiSessionImpl].launchEngineOp
 
-      val opHandleIdentifier = launchEngineOp.getHandle.identifier.toTHandleIdentifier
-      respConfiguration.put(
-        "kyuubi.session.engine.launch.handle.guid",
-        Base64.getMimeEncoder.encodeToString(opHandleIdentifier.getGuid))
-      respConfiguration.put(
-        "kyuubi.session.engine.launch.handle.secret",
-        Base64.getMimeEncoder.encodeToString(opHandleIdentifier.getSecret))
+      if (session.needLaunchRemoteEngine) {
+        val launchEngineOp = session.launchEngineOp
+
+        val opHandleIdentifier = launchEngineOp.getHandle.identifier.toTHandleIdentifier
+        respConfiguration.put(
+          "kyuubi.session.engine.launch.handle.guid",
+          Base64.getMimeEncoder.encodeToString(opHandleIdentifier.getGuid))
+        respConfiguration.put(
+          "kyuubi.session.engine.launch.handle.secret",
+          Base64.getMimeEncoder.encodeToString(opHandleIdentifier.getSecret))
+      }
 
       resp.setSessionHandle(sessionHandle.toTSessionHandle)
       resp.setConfiguration(respConfiguration)
