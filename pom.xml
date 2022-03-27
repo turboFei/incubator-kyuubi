@@ -153,6 +153,12 @@
         <trino.client.version>363</trino.client.version>
         <zookeeper.version>3.4.14</zookeeper.version>
 
+        <!-- apply to kyuubi-hive-jdbc/kyuubi-hive-jdbc-shaded module for hadoop-->
+        <hadoop.client.version>3.3.2</hadoop.client.version>
+        <jdbc.hadoop.client.artifactId>hadoop-client-api</jdbc.hadoop.client.artifactId>
+        <beeline.hadoop.client.artifactId>hadoop-client-runtime</beeline.hadoop.client.artifactId>
+        <hadoop.client.binary.version>hadoop3</hadoop.client.binary.version>
+
         <!-- apply to kyuubi-hive-jdbc/kyuubi-hive-beeline module -->
         <hive.client.version>2.3.9</hive.client.version>
         <hive.client.commons-lang.version>2.6</hive.client.commons-lang.version>
@@ -1946,6 +1952,21 @@
                 <module>dev/kyuubi-extension-spark-common</module>
                 <module>dev/kyuubi-extension-spark-3-2</module>
             </modules>
+        </profile>
+
+        <profile>
+            <id>hadoop-client-3</id>
+            <!-- Default kyuubi client hadoop profile. Uses global properties. -->
+        </profile>
+
+        <profile>
+            <id>hadoop-client-2</id>
+            <properties>
+                <hadoop.client.version>2.7.3.2.6.4.2.0.19</hadoop.client.version>
+                <jdbc.hadoop.client.artifactId>hadoop-common</jdbc.hadoop.client.artifactId>
+                <beeline.hadoop.client.artifactId>hadoop-common</beeline.hadoop.client.artifactId>
+                <hadoop.client.binary.version>hadoop2</hadoop.client.binary.version>
+            </properties>
         </profile>
 
         <profile>

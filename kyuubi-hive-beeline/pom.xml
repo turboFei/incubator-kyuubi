@@ -26,7 +26,7 @@
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>kyuubi-hive-beeline</artifactId>
+    <artifactId>kyuubi-hive-beeline_${hadoop.client.binary.version}</artifactId>
     <name>Kyuubi Project Hive Beeline</name>
     <packaging>jar</packaging>
     <url>https://kyuubi.apache.org/</url>
@@ -38,7 +38,7 @@
     <dependencies>
         <dependency>
             <groupId>org.apache.kyuubi</groupId>
-            <artifactId>kyuubi-hive-jdbc</artifactId>
+            <artifactId>kyuubi-hive-jdbc_${hadoop.client.binary.version}</artifactId>
             <version>${project.version}</version>
         </dependency>
 
@@ -189,18 +189,37 @@
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-1.2-api</artifactId>
         </dependency>
-
-        <dependency>
-            <groupId>org.apache.hadoop</groupId>
-            <artifactId>hadoop-client-runtime</artifactId>
-            <exclusions>
-                <exclusion>
-                    <groupId>*</groupId>
-                    <artifactId>*</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
     </dependencies>
+
+    <profiles>
+        <profile>
+            <id>hadoop-client-3</id>
+            <dependencies>
+                <dependency>
+                    <groupId>org.apache.hadoop</groupId>
+                    <artifactId>${beeline.hadoop.client.artifactId}</artifactId>
+                    <version>${hadoop.client.version}</version>
+                    <exclusions>
+                        <exclusion>
+                            <groupId>*</groupId>
+                            <artifactId>*</artifactId>
+                        </exclusion>
+                    </exclusions>
+                </dependency>
+            </dependencies>
+        </profile>
+
+        <profile>
+            <id>hadoop-client-2</id>
+            <dependencies>
+                <dependency>
+                    <groupId>org.apache.hadoop</groupId>
+                    <artifactId>${beeline.hadoop.client.artifactId}</artifactId>
+                    <version>${hadoop.client.version}</version>
+                </dependency>
+            </dependencies>
+        </profile>
+    </profiles>
 
     <build>
         <outputDirectory>target/classes</outputDirectory>

@@ -274,7 +274,7 @@
 
         <dependency>
             <groupId>org.apache.kyuubi</groupId>
-            <artifactId>kyuubi-hive-jdbc-shaded</artifactId>
+            <artifactId>kyuubi-hive-jdbc-shaded_${hadoop.client.binary.version}</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>

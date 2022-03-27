@@ -49,6 +49,7 @@ build/test
 target/
 dist/
 apache-kyuubi-*-bin*
+apache-kyuubi-*-beeline*
 *.gz
 logs/
 pid/
