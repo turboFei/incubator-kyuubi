@@ -32,6 +32,7 @@ import org.apache.kyuubi.config.KyuubiConf.SESSION_CONF_ADVISOR
 import org.apache.kyuubi.jdbc.KyuubiHiveDriver
 import org.apache.kyuubi.jdbc.hive.KyuubiConnection
 import org.apache.kyuubi.plugin.SessionConfAdvisor
+import org.apache.kyuubi.service.authentication.KyuubiAuthenticationFactory
 
 /**
  * UT with Connection level engine shared cost much time, only run basic jdbc tests.
@@ -246,6 +247,18 @@ class KyuubiOperationPerConnectionSuite extends WithKyuubiServer with HiveJDBCTe
         assert(rs.next())
         assert(rs.getString(2).equals("<undefined>"))
       }
+    }
+  }
+
+  test("test proxy batch account with unsupported exception") {
+    withSessionConf(Map(
+      KyuubiAuthenticationFactory.KYUUBI_PROXY_BATCH_ACCOUNT -> "b_stf"))(Map.empty)(Map.empty) {
+      val exception = intercept[SQLException] {
+        withJdbcStatement() { _ => // no-op
+        }
+      }
+      val verboseMessage = Utils.stringifyException(exception)
+      assert(verboseMessage.contains("batch account proxy is not supported"))
     }
   }
 }

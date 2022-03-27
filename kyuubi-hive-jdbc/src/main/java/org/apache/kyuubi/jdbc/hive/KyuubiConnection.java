@@ -78,6 +78,7 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
   public static final Logger LOG = LoggerFactory.getLogger(KyuubiConnection.class.getName());
   public static final String BEELINE_MODE_PROPERTY = "BEELINE_MODE";
   public static int DEFAULT_ENGINE_LOG_THREAD_TIMEOUT = 10 * 1000;
+  public static final String KYUUBI_PROXY_BATCH_ACCOUNT = "kyuubi.proxy.batchAccount";
 
   private String jdbcUriString;
   private String host;
@@ -751,6 +752,9 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
     Map<String, String> sessVars = connParams.getSessionVars();
     if (sessVars.containsKey(HiveAuthFactory.HS2_PROXY_USER)) {
       openConf.put(HiveAuthFactory.HS2_PROXY_USER, sessVars.get(HiveAuthFactory.HS2_PROXY_USER));
+    }
+    if (sessVars.containsKey(KYUUBI_PROXY_BATCH_ACCOUNT)) {
+      openConf.put(KYUUBI_PROXY_BATCH_ACCOUNT, sessVars.get(KYUUBI_PROXY_BATCH_ACCOUNT));
     }
     openReq.setConfiguration(openConf);
 

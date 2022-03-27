@@ -120,6 +120,7 @@ class KyuubiAuthenticationFactory(conf: KyuubiConf, isServer: Boolean = true) ex
 }
 object KyuubiAuthenticationFactory {
   val HS2_PROXY_USER = "hive.server2.proxy.user"
+  val KYUUBI_PROXY_BATCH_ACCOUNT = "kyuubi.proxy.batchAccount"
 
   @throws[KyuubiSQLException]
   def verifyProxyAccess(
@@ -149,5 +150,14 @@ object KyuubiAuthenticationFactory {
           "Failed to validate proxy privilege of " + realUser + " for " + proxyUser,
           e)
     }
+  }
+
+  def verifyBatchAccountAccess(
+      realUser: String,
+      batchAccount: String,
+      conf: KyuubiConf): Unit = {
+    AuthenticationProviderFactory.getBatchAccountAuthProvider(conf).map { batchAccountAuth =>
+      batchAccountAuth.authenticate(realUser, batchAccount)
+    }.getOrElse(throw new UnsupportedOperationException("batch account proxy is not supported"))
   }
 }

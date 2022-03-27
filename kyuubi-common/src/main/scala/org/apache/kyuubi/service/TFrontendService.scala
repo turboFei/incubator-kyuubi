@@ -140,22 +140,29 @@ abstract class TFrontendService(name: String)
       ipAddress: String,
       realUser: String): String = {
     val proxyUser = sessionConf.get(KyuubiAuthenticationFactory.HS2_PROXY_USER)
-    if (proxyUser == null) {
+    val batchAccount = sessionConf.get(KyuubiAuthenticationFactory.KYUUBI_PROXY_BATCH_ACCOUNT)
+    if (proxyUser == null && batchAccount == null) {
       realUser
-    } else {
+    } else if (proxyUser != null) {
       KyuubiAuthenticationFactory.verifyProxyAccess(
         realUser,
         proxyUser,
         ipAddress,
         getHadoopConf(sessionConf.asScala.toMap))
       proxyUser
+    } else {
+      KyuubiAuthenticationFactory.verifyBatchAccountAccess(
+        realUser,
+        batchAccount,
+        conf)
+      batchAccount
     }
   }
 
   private def getUserName(req: TOpenSessionReq): String = {
     val realUser: String =
       ServiceUtils.getShortName(authFactory.getRemoteUser.getOrElse(req.getUsername))
-    if (req.getConfiguration == null) {
+    if (req.getConfiguration == null || !isServer) {
       realUser
     } else {
       getProxyUser(req.getConfiguration, authFactory.getIpAddress.orNull, realUser)

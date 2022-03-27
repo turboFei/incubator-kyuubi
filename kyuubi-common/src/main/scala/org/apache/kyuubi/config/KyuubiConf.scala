@@ -448,6 +448,14 @@ object KyuubiConf {
       .stringConf
       .createOptional
 
+  val AUTHENTICATION_BATCH_ACCOUNT_CLASS: OptionalConfigEntry[String] =
+    buildConf("authentication.batchAccount.class")
+      .doc("The authentication class name for batch account authentication," +
+        " eBay internal requirement")
+      .version("1.5.0")
+      .stringConf
+      .createOptional
+
   val AUTHENTICATION_LDAP_URL: OptionalConfigEntry[String] = buildConf("authentication.ldap.url")
     .doc("SPACE character separated LDAP connection URL(s).")
     .version("1.0.0")
