@@ -32,6 +32,9 @@ class CredentialsRef(appUserCluster: AppUserCluster) {
   @volatile
   private var epoch = UNSET_EPOCH
 
+  @volatile
+  private var lastAccessTime: Long = System.currentTimeMillis()
+
   private var encodedCredentials: String = _
 
   private val credentialFuture = new AtomicReference[Future[Unit]]()
@@ -40,11 +43,19 @@ class CredentialsRef(appUserCluster: AppUserCluster) {
     credentialFuture.set(future)
   }
 
+  def updateLastAccessTime(): Unit = {
+    lastAccessTime = System.currentTimeMillis()
+  }
+
+  def getLastAccessTime: Long = lastAccessTime
+
   def getEpoch: Long = epoch
 
   def getAppUser: String = appUserCluster.appUser
 
   def getAppCluster: Option[String] = appUserCluster.appCluster
+
+  def getAppUserCluster: AppUserCluster = appUserCluster
 
   def getEncodedCredentials: String = {
     encodedCredentials
