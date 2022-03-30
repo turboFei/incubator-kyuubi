@@ -27,7 +27,7 @@ import org.apache.kyuubi.client.KyuubiSyncThriftClient
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf._
 import org.apache.kyuubi.engine.{EngineRef, EngineType}
-import org.apache.kyuubi.events.{EventLogging, KyuubiEvent, KyuubiSessionEvent}
+import org.apache.kyuubi.events.{EventBus, KyuubiEvent, KyuubiSessionEvent}
 import org.apache.kyuubi.ha.client.ZooKeeperClientProvider._
 import org.apache.kyuubi.metrics.MetricsConstants._
 import org.apache.kyuubi.metrics.MetricsSystem
@@ -107,7 +107,7 @@ class KyuubiSessionImpl(
     .newLaunchEngineOperation(this, sessionConf.get(SESSION_ENGINE_LAUNCH_ASYNC))
 
   private val sessionEvent = KyuubiSessionEvent(this)
-  EventLogging.onEvent(sessionEvent)
+  EventBus.post(sessionEvent)
 
   override def getSessionEvent: Option[KyuubiEvent] = {
     Option(sessionEvent)
@@ -157,7 +157,7 @@ class KyuubiSessionImpl(
       sessionEvent.remoteSessionId = _engineSessionHandle.identifier.toString
       sessionCluster.foreach(sessionEvent.sessionCluster = _)
       _client.engineId.foreach(e => sessionEvent.engineId = e)
-      EventLogging.onEvent(sessionEvent)
+      EventBus.post(sessionEvent)
     }
   }
 
@@ -203,7 +203,7 @@ class KyuubiSessionImpl(
       if (_client != null) _client.closeSession()
     } finally {
       sessionEvent.endTime = System.currentTimeMillis()
-      EventLogging.onEvent(sessionEvent)
+      EventBus.post(sessionEvent)
       MetricsSystem.tracing(_.decCount(MetricRegistry.name(CONN_OPEN, user)))
     }
   }
