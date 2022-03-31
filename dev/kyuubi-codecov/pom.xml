@@ -98,6 +98,12 @@
             <artifactId>kyuubi-hive-beeline_${hadoop.client.binary.version}</artifactId>
             <version>${project.version}</version>
         </dependency>
+
+        <dependency>
+            <groupId>org.apache.kyuubi</groupId>
+            <artifactId>kyuubi-spark-authz_${scala.binary.version}</artifactId>
+            <version>${project.version}</version>
+        </dependency>
     </dependencies>
 
     <profiles>
