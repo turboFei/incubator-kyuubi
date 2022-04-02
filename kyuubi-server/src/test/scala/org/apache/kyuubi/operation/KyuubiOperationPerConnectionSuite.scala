@@ -66,19 +66,6 @@ class KyuubiOperationPerConnectionSuite extends WithKyuubiServer with HiveJDBCTe
     }
   }
 
-  test("submit spark app timeout with last log output") {
-    withSessionConf()(Map(
-      KyuubiConf.ENGINE_INIT_TIMEOUT.key -> "2000",
-      KyuubiConf.SESSION_ENGINE_LAUNCH_ASYNC.key -> "false"))(Map.empty) {
-      val exception = intercept[SQLException] {
-        withJdbcStatement() { _ => // no-op
-        }
-      }
-      val verboseMessage = Utils.stringifyException(exception)
-      assert(verboseMessage.contains("Failed to detect the root cause"))
-    }
-  }
-
   test("client sync query cost time longer than engine.request.timeout") {
     withSessionConf(Map(
       KyuubiConf.ENGINE_REQUEST_TIMEOUT.key -> "PT5S"))(Map.empty)(Map.empty) {
