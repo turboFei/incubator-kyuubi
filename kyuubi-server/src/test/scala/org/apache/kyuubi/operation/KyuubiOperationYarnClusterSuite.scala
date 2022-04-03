@@ -17,10 +17,15 @@
 
 package org.apache.kyuubi.operation
 
+import java.sql.SQLException
+
+import org.apache.hadoop.yarn.client.api.YarnClient
+
 import org.apache.kyuubi.WithKyuubiServerOnYarn
 import org.apache.kyuubi.config.KyuubiConf
-import org.apache.kyuubi.config.KyuubiConf.ENGINE_INIT_TIMEOUT
+import org.apache.kyuubi.config.KyuubiConf._
 import org.apache.kyuubi.tags.YarnTest
+import org.apache.kyuubi.util.KyuubiHadoopUtils
 
 @YarnTest
 class KyuubiOperationYarnClusterSuite extends WithKyuubiServerOnYarn with SparkQueryTests {
@@ -30,6 +35,8 @@ class KyuubiOperationYarnClusterSuite extends WithKyuubiServerOnYarn with SparkQ
   override protected val kyuubiServerConf: KyuubiConf = {
     // TODO KYUUBI #745
     KyuubiConf().set(ENGINE_INIT_TIMEOUT, 600000L)
+      .set(SESSION_CLUSTER_MODE_ENABLED, true)
+      .set(SESSION_CLUSTER, "yarn")
   }
 
   override protected val connectionConf: Map[String, String] = Map(
@@ -49,6 +56,38 @@ class KyuubiOperationYarnClusterSuite extends WithKyuubiServerOnYarn with SparkQ
       val resultSet = statement.executeQuery("SELECT SESSION_USER() as su")
       assert(resultSet.next())
       assert(resultSet.getString("su") === user)
+    }
+  }
+
+  test("move engine queue") {
+    withSessionConf()(Map(
+      SESSION_ENGINE_LAUNCH_MOVE_QUEUE_ENABLED.key -> "true",
+      SESSION_ENGINE_LAUNCH_MOVE_QUEUE_INIT_QUEUE.key -> "default",
+      "spark.yarn.queue" -> "two_cores_queue"))(Map.empty) {
+      withJdbcStatement() { statement =>
+        val resultSet = statement.executeQuery("set spark.app.id")
+        assert(resultSet.next())
+        val applicationId = KyuubiHadoopUtils.getApplicationIdFromString(resultSet.getString(2))
+        val yarnClient = YarnClient.createYarnClient()
+        yarnClient.init(KyuubiHadoopUtils.newHadoopConf(conf, clusterOpt = Option("yarn")))
+        yarnClient.start()
+        val queue = yarnClient.getApplicationReport(applicationId).getQueue
+        assert(queue.equals("two_cores_queue"))
+        yarnClient.stop()
+      }
+    }
+  }
+
+  test("move engine to invalid queue") {
+    withSessionConf()(Map(
+      SESSION_ENGINE_LAUNCH_MOVE_QUEUE_ENABLED.key -> "true",
+      SESSION_ENGINE_LAUNCH_MOVE_QUEUE_INIT_QUEUE.key -> "default",
+      "spark.yarn.queue" -> "invalid_queue"))(Map.empty) {
+      val exception = intercept[SQLException] {
+        withJdbcStatement() { _ =>
+        }
+      }
+      assert(exception.getMessage.contains("The specified Queue: invalid_queue doesn't exist"))
     }
   }
 }

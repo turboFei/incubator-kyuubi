@@ -797,6 +797,28 @@ object KyuubiConf {
       .booleanConf
       .createWithDefault(true)
 
+  val SESSION_ENGINE_LAUNCH_MOVE_QUEUE_ENABLED: ConfigEntry[Boolean] =
+    buildConf("session.engine.launch.moveQueue.enabled")
+      .doc("When opening kyuubi session, whether to launch engine at first and then move queue." +
+        " Note that, it is only for yarn resource manger.")
+      .version("1.4.0")
+      .booleanConf
+      .createWithDefault(false)
+
+  val SESSION_ENGINE_LAUNCH_MOVE_QUEUE_INIT_QUEUE: OptionalConfigEntry[String] =
+    buildConf("session.engine.launch.moveQueue.initQueue")
+      .doc("When launch engine and move queue, the init queue.")
+      .version("1.6.0")
+      .stringConf
+      .createOptional
+
+  val SESSION_ENGINE_LAUNCH_MOVE_QUEUE_TIMEOUT: ConfigEntry[Long] =
+    buildConf("session.engine.launch.moveQueue.timeout")
+      .doc("When launch engine and move queue, the final queue.")
+      .version("1.6.0")
+      .timeConf
+      .createWithDefaultString("PT2M")
+
   val SERVER_EXEC_POOL_SIZE: ConfigEntry[Int] =
     buildConf("backend.server.exec.pool.size")
       .doc("Number of threads in the operation execution thread pool of Kyuubi server")

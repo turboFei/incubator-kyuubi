@@ -30,7 +30,7 @@ import org.apache.hadoop.security.UserGroupInformation
 
 import org.apache.kyuubi._
 import org.apache.kyuubi.config.KyuubiConf
-import org.apache.kyuubi.config.KyuubiConf.ENGINE_SPARK_MAIN_RESOURCE
+import org.apache.kyuubi.config.KyuubiConf._
 import org.apache.kyuubi.engine.ProcBuilder
 import org.apache.kyuubi.ha.HighAvailabilityConf
 import org.apache.kyuubi.ha.client.ZooKeeperAuthTypes
@@ -141,6 +141,16 @@ class SparkProcessBuilder(
       buffer += proxyUser
     }
 
+    if (conf.get(SESSION_ENGINE_LAUNCH_MOVE_QUEUE_ENABLED)) {
+      // only use init queue if the spark.yarn.queue is specified
+      if (allConf.get(YARN_QUEUE).isDefined) {
+        conf.get(SESSION_ENGINE_LAUNCH_MOVE_QUEUE_INIT_QUEUE).foreach { initQueue =>
+          buffer += CONF
+          buffer += s"$YARN_QUEUE=$initQueue"
+        }
+      }
+    }
+
     mainResource.foreach { r => buffer += r }
 
     buffer.toArray
@@ -221,6 +231,7 @@ object SparkProcessBuilder {
   final private val SPARK_FILES = "spark.files"
   final private val PRINCIPAL = "spark.kerberos.principal"
   final private val KEYTAB = "spark.kerberos.keytab"
+  final private val YARN_QUEUE = "spark.yarn.queue"
   // Get the appropriate spark-submit file
   final val SPARK_SUBMIT_FILE = if (Utils.isWindows) "spark-submit.cmd" else "spark-submit"
 }

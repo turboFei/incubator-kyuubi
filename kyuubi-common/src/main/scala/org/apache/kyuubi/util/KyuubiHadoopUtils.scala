@@ -27,6 +27,7 @@ import org.apache.hadoop.hdfs.security.token.delegation.DelegationTokenIdentifie
 import org.apache.hadoop.io.Text
 import org.apache.hadoop.security.{Credentials, SecurityUtil, UserGroupInformation}
 import org.apache.hadoop.security.token.{Token, TokenIdentifier}
+import org.apache.hadoop.yarn.api.records.ApplicationId
 
 import org.apache.kyuubi.Utils
 import org.apache.kyuubi.config.KyuubiConf
@@ -122,5 +123,34 @@ object KyuubiHadoopUtils {
     val in = new DataInputStream(buf)
     tokenIdentifier.readFields(in)
     tokenIdentifier.getIssueDate
+  }
+
+  /**
+   * Copy from Application.fromString, it is involved from Hadoop-2.8
+   * However, ebay hadoop dependency version is hadoop-2.7.3
+   */
+  def getApplicationIdFromString(appIdStr: String): ApplicationId = {
+    val appIdStrPrefix = "application"
+    val APPLICATION_ID_PREFIX = appIdStrPrefix + '_'
+    if (!appIdStr.startsWith(APPLICATION_ID_PREFIX)) {
+      throw new IllegalArgumentException("Invalid ApplicationId prefix: "
+        + appIdStr + ". The valid ApplicationId should start with prefix "
+        + appIdStrPrefix);
+    }
+
+    try {
+      val pos1 = APPLICATION_ID_PREFIX.length() - 1
+      val pos2 = appIdStr.indexOf('_', pos1 + 1)
+      if (pos2 < 0) {
+        throw new IllegalArgumentException("Invalid ApplicationId: "
+          + appIdStr)
+      }
+      val rmId = appIdStr.substring(pos1 + 1, pos2).toLong
+      val appId = appIdStr.substring(pos2 + 1).toInt
+      ApplicationId.newInstance(rmId, appId)
+    } catch {
+      case n: NumberFormatException =>
+        throw new IllegalArgumentException("Invalid ApplicationId: " + appIdStr, n)
+    }
   }
 }

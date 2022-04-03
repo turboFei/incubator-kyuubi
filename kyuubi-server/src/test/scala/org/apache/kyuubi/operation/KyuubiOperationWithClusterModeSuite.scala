@@ -50,7 +50,7 @@ class KyuubiOperationWithClusterModeSuite extends WithKyuubiServer with HiveJDBC
       }
       assert(sqlException.getMessage.contains(
         "Failed to get properties file for cluster [invalid-cluster]"))
-      assert(sqlException.getMessage.contains("should be one of [test]"))
+      assert(sqlException.getMessage.contains("should be one of [test,yarn]"))
     }
   }
 
@@ -61,7 +61,7 @@ class KyuubiOperationWithClusterModeSuite extends WithKyuubiServer with HiveJDBC
         withJdbcStatement() { _ =>
         }
       }
-      assert(sqlException.getMessage.contains("should be one of [test]"))
+      assert(sqlException.getMessage.contains("should be one of [test,yarn]"))
     }
   }
 
@@ -72,7 +72,7 @@ class KyuubiOperationWithClusterModeSuite extends WithKyuubiServer with HiveJDBC
         withJdbcStatement() { _ =>
         }
       }
-      assert(sqlException.getMessage.contains("should be one of [test]"))
+      assert(sqlException.getMessage.contains("should be one of [test,yarn]"))
     }
   }
 
