@@ -47,7 +47,7 @@ class KyuubiSessionImpl(
 
   val sessionCluster =
     if (sessionManager.sessionClusterModeEnabled) {
-      normalizedConf.get(SESSION_CLUSTER.key)
+      normalizedConf.get(SESSION_CLUSTER.key).orElse(sessionConf.get(SESSION_CLUSTER))
     } else {
       None
     }

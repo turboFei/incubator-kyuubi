@@ -28,6 +28,7 @@ class KyuubiOperationWithClusterModeSuite extends WithKyuubiServer with HiveJDBC
   override protected val conf: KyuubiConf = {
     KyuubiConf().set(KyuubiConf.ENGINE_SHARE_LEVEL, "connection")
       .set(KyuubiConf.SESSION_CLUSTER_MODE_ENABLED, true)
+      .set(KyuubiConf.SESSION_CLUSTER, "invalid-cluster")
   }
 
   test("open session with cluster selector") {
@@ -47,6 +48,8 @@ class KyuubiOperationWithClusterModeSuite extends WithKyuubiServer with HiveJDBC
         withJdbcStatement() { _ =>
         }
       }
+      assert(sqlException.getMessage.contains(
+        "Failed to get properties file for cluster [invalid-cluster]"))
       assert(sqlException.getMessage.contains("should be one of [test]"))
     }
   }
