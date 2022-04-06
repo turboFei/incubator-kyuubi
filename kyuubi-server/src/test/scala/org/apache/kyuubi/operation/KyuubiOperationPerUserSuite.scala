@@ -139,7 +139,7 @@ class KyuubiOperationPerUserSuite extends WithKyuubiServer with SparkQueryTests 
     assert(r1 !== r2)
   }
 
-  test("HADP-44628: Enable the timeout for KyuubiConnection::isValid") {
+  ignore("HADP-44628: Enable the timeout for KyuubiConnection::isValid") {
     withJdbcStatement() { statement =>
       val conn = statement.getConnection
       assert(conn.isInstanceOf[KyuubiConnection])
