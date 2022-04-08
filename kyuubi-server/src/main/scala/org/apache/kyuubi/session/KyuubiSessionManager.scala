@@ -45,6 +45,8 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
     super.initialize(conf)
   }
 
+  def openBatchSession()
+
   override def openSession(
       protocol: TProtocolVersion,
       user: String,

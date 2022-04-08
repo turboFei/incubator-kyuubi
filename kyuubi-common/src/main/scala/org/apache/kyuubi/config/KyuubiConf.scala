@@ -757,6 +757,18 @@ object KyuubiConf {
       .toSequence()
       .createWithDefault(Nil)
 
+  val SESSION_BATCH_CONF_IGNORE_LIST: ConfigEntry[Seq[String]] =
+    buildConf("kyuubi.session.batch.conf.ignore.list")
+      .doc("A comma separated list of ignored keys. If the batch job submit command conf contains" +
+        " any of them, the key and the corresponding value will be removed silently during" +
+        " executing submission." +
+        " Note that: some config items could be defined in server side with `kyuubi.batchConf.`" +
+        " prefix")
+      .version("1.6.0")
+      .stringConf
+      .toSequence()
+      .createWithDefault(Nil)
+
   val SESSION_CONF_RESTRICT_LIST: ConfigEntry[Seq[String]] =
     buildConf("kyuubi.session.conf.restrict.list")
       .doc("A comma separated list of restricted keys. If the client connection contains any of" +
