@@ -139,6 +139,10 @@ abstract class SessionManager(name: String) extends CompositeService(name) {
   private lazy val _confIgnoreMatchList: Set[String] =
     _confIgnoreList.filter(_.endsWith(".*")).map(_.stripSuffix(".*"))
 
+  private var _batchConfIgnoreList: Set[String] = _
+  private lazy val _batchConfIgnoreMatchList: Set[String] =
+    _batchConfIgnoreList.filter(_.endsWith(".*")).map(_.stripSuffix(".*"))
+
   // strip prefix and validate whether if key is restricted, ignored or valid
   def validateKey(key: String, value: String): Option[(String, String)] = {
     val normalizedKey =
@@ -178,6 +182,19 @@ abstract class SessionManager(name: String) extends CompositeService(name) {
     case (k, v) => validateKey(k, v)
   }
 
+  def validateBatchConfigItem(key: String, value: String): Option[(String, String)] = {
+    if (_batchConfIgnoreList.exists(key.startsWith) || _batchConfIgnoreMatchList.contains(key)) {
+      warn(s"$key is a ignored key according to the server-side configuration")
+      None
+    } else {
+      Some((key, value))
+    }
+  }
+
+  def validateBatchConfig(config: Map[String, String]): Map[String, String] = config.flatMap {
+    case (k, v) => validateBatchConfigItem(k, v)
+  }
+
   override def initialize(conf: KyuubiConf): Unit = synchronized {
     addService(operationManager)
     initOperationLogRootDir()
@@ -204,6 +221,8 @@ abstract class SessionManager(name: String) extends CompositeService(name) {
 
     _confRestrictList = conf.get(SESSION_CONF_RESTRICT_LIST).toSet
     _confIgnoreList = conf.get(SESSION_CONF_IGNORE_LIST).toSet
+
+    _batchConfIgnoreList = conf.get(SESSION_BATCH_CONF_IGNORE_LIST).toSet
 
     execPool = ThreadUtils.newDaemonQueuedThreadPool(
       poolSize,

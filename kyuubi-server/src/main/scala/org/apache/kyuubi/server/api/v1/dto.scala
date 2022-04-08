@@ -105,6 +105,7 @@ case class Row(fields: Seq[Field])
 case class Field(dataType: String, value: Any)
 
 case class BatchRequest(
+    batchType: String,
     resource: String,
     proxyUser: String,
     className: String,

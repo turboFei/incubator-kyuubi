@@ -103,6 +103,10 @@ case class KyuubiConf(loadSysDefault: Boolean = true) extends Logging {
     sys.env ++ getAllWithPrefix(KYUUBI_ENGINE_ENV_PREFIX, "")
   }
 
+  def getBatchConf: Map[String, String] = {
+    getAllWithPrefix(KYUUBI_BATCH_CONF_PREFIX, "")
+  }
+
   /**
    * Retrieve key-value pairs from [[KyuubiConf]] starting with `dropped.remainder`, and put them to
    * the result map with the `dropped` of key being dropped.
@@ -165,6 +169,7 @@ object KyuubiConf {
   final val KYUUBI_CONF_FILE_NAME = "kyuubi-defaults.conf"
   final val KYUUBI_HOME = "KYUUBI_HOME"
   final val KYUUBI_ENGINE_ENV_PREFIX = "kyuubi.engineEnv"
+  final val KYUUBI_BATCH_CONF_PREFIX = "kyuubi.batchConf"
 
   val kyuubiConfEntries: java.util.Map[String, ConfigEntry[_]] =
     java.util.Collections.synchronizedMap(new java.util.HashMap[String, ConfigEntry[_]]())

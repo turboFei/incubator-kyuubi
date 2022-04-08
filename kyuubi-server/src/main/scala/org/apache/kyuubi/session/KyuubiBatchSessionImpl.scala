@@ -25,7 +25,6 @@ import org.apache.kyuubi.events.{EventBus, KyuubiEvent, KyuubiSessionEvent}
 import org.apache.kyuubi.metrics.MetricsConstants._
 import org.apache.kyuubi.metrics.MetricsSystem
 
-
 class KyuubiBatchSessionImpl(
     protocol: TProtocolVersion,
     user: String,
@@ -35,6 +34,14 @@ class KyuubiBatchSessionImpl(
     sessionManager: KyuubiSessionManager,
     sessionConf: KyuubiConf)
   extends AbstractSession(protocol, user, password, ipAddress, conf, sessionManager) {
+
+  override val normalizedConf: Map[String, String] = sessionManager.validateBatchConfig(conf)
+
+  // TODO: Leverage the session conf advisor
+
+  private[kyuubi] val optimizedConf: Map[String, String] = {
+    normalizedConf ++ sessionConf.getBatchConf
+  }
 
   private val sessionEvent = KyuubiSessionEvent(this)
   EventBus.post(sessionEvent)
