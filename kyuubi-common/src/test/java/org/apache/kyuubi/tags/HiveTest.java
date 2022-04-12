@@ -15,21 +15,15 @@
  * limitations under the License.
  */
 
-package org.apache.kyuubi.engine.hive.operation
+package org.apache.kyuubi.tags;
 
-import org.apache.kyuubi.HiveEngineTests
-import org.apache.kyuubi.engine.hive.HiveSQLEngine
-import org.apache.kyuubi.tags.HiveTest
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+import org.scalatest.TagAnnotation;
 
-@HiveTest
-class HiveOperationSuite extends HiveEngineTests {
-
-  override def beforeAll(): Unit = {
-    HiveSQLEngine.startEngine()
-    super.beforeAll()
-  }
-
-  override protected def jdbcUrl: String = {
-    "jdbc:hive2://" + HiveSQLEngine.currentEngine.get.frontendServices.head.connectionUrl + "/;"
-  }
-}
+@TagAnnotation
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.METHOD, ElementType.TYPE})
+public @interface HiveTest {}
