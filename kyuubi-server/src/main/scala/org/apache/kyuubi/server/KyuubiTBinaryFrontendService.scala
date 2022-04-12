@@ -23,7 +23,7 @@ import java.util.concurrent.ConcurrentHashMap
 import scala.collection.JavaConverters._
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.hive.service.rpc.thrift.{TOpenSessionReq, TOpenSessionResp}
+import org.apache.hive.service.rpc.thrift.{TOpenSessionReq, TOpenSessionResp, TRenewDelegationTokenReq, TRenewDelegationTokenResp}
 
 import org.apache.kyuubi.{KyuubiSQLException, Utils}
 import org.apache.kyuubi.config.KyuubiConf
@@ -121,4 +121,11 @@ final class KyuubiTBinaryFrontendService(
   }
 
   override protected def isServer(): Boolean = true
+
+  override def RenewDelegationToken(req: TRenewDelegationTokenReq): TRenewDelegationTokenResp = {
+    debug(req.toString)
+    val resp = new TRenewDelegationTokenResp
+    resp.setStatus(notSupportTokenErrorStatus)
+    resp
+  }
 }
