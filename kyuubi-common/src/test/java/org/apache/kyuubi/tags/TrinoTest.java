@@ -15,17 +15,15 @@
  * limitations under the License.
  */
 
-package org.apache.kyuubi.engine.trino.util;
+package org.apache.kyuubi.tags;
 
-import com.google.common.base.Preconditions;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+import org.scalatest.TagAnnotation;
 
-public class PreconditionsWrapper {
-  /**
-   * To avoid ambiguous reference to overloaded definition in scala. {@link
-   * Preconditions#checkArgument(boolean, Object)} {@link Preconditions#checkArgument(boolean,
-   * String, Object...)}
-   */
-  public static void checkArgument(boolean expression, Object errorMessage) {
-    Preconditions.checkArgument(expression, errorMessage);
-  }
-}
+@TagAnnotation
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.METHOD, ElementType.TYPE})
+public @interface TrinoTest {}
