@@ -48,7 +48,9 @@ class SparkBatchProcessBuilder(
     buffer += mainClass
 
     val batchJobTag = batchRequest.conf.get(TAG_KEY).map(_ + ",").getOrElse("") + batchId
-    val allConf = batchRequest.conf ++ Map(TAG_KEY -> batchJobTag) ++ procConf()
+
+    val allConf =
+      batchRequest.conf ++ Map(TAG_KEY -> batchJobTag) ++ sparkAppNameConf() ++ procConf()
 
     allConf.foreach { case (k, v) =>
       buffer += CONF
@@ -60,15 +62,21 @@ class SparkBatchProcessBuilder(
 
     mainResource.foreach { r => buffer += r }
 
-    batchRequest.args.asScala.foreach { arg => buffer += arg }
+    batchRequest.args.foreach { arg => buffer += arg }
 
     buffer.toArray
+  }
+
+  private def sparkAppNameConf(): Map[String, String] = {
+    Option(batchRequest.name).filterNot(_.isEmpty).map { appName =>
+      Map(APP_KEY -> appName)
+    }.getOrElse(Map())
   }
 
   override protected def module: String = "kyuubi-spark-batch-submit"
 
   private[kyuubi] def getApplicationIdAndUrl(): Option[(String, String)] = {
-    batchRequest.conf.get("spark.master") match {
+    batchRequest.conf.get(MASTER_KEY).orElse(getSparkDefaultsConf().get(MASTER_KEY)) match {
       case Some("yarn") =>
         val yarnClient = getYarnClient
         val yarnConf = new YarnConfiguration(KyuubiHadoopUtils.newHadoopConf(

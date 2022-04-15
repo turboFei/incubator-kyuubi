@@ -840,6 +840,13 @@ object KyuubiConf {
       .timeConf
       .createWithDefaultString("PT2M")
 
+  val BATCH_APPLICATION_CHECK_INTERVAL: ConfigEntry[Long] =
+    buildConf("kyuubi.batch.application.check.interval")
+      .doc("The interval to check batch job application information.")
+      .version("1.6.0")
+      .timeConf
+      .createWithDefaultString("PT5S")
+
   val SERVER_EXEC_POOL_SIZE: ConfigEntry[Int] =
     buildConf("kyuubi.backend.server.exec.pool.size")
       .doc("Number of threads in the operation execution thread pool of Kyuubi server")
