@@ -103,6 +103,11 @@ case class KyuubiConf(loadSysDefault: Boolean = true) extends Logging {
     sys.env ++ getAllWithPrefix(KYUUBI_ENGINE_ENV_PREFIX, "")
   }
 
+  /** Get all batch conf as map */
+  def getBatchConf(batchType: String): Map[String, String] = {
+    getAllWithPrefix(s"$KYUUBI_BATCH_CONF_PREFIX.${batchType.toLowerCase(Locale.ROOT)}", "")
+  }
+
   /**
    * Retrieve key-value pairs from [[KyuubiConf]] starting with `dropped.remainder`, and put them to
    * the result map with the `dropped` of key being dropped.
@@ -166,6 +171,7 @@ object KyuubiConf {
   final val KYUUBI_CONF_FILE_NAME = "kyuubi-defaults.conf"
   final val KYUUBI_HOME = "KYUUBI_HOME"
   final val KYUUBI_ENGINE_ENV_PREFIX = "kyuubi.engineEnv"
+  final val KYUUBI_BATCH_CONF_PREFIX = "kyuubi.batchConf"
 
   /** the cluster default file name prefix */
   final val KYUUBI_CLUSTER_CONF_FILE_NAME_PREFIX = KYUUBI_CONF_FILE_NAME + "."
@@ -846,6 +852,21 @@ object KyuubiConf {
       .version("1.6.0")
       .timeConf
       .createWithDefaultString("PT5S")
+
+  val BATCH_CONF_IGNORE_LIST: ConfigEntry[Seq[String]] =
+    buildConf("kyuubi.batch.conf.ignore.list")
+      .doc("A comma separated list of ignored keys for batch conf. If the batch conf contains" +
+        " any of them, the key and the corresponding value will be removed silently during batch" +
+        " job submission." +
+        " Note that this rule is for server-side protection defined via administrators to" +
+        " prevent some essential configs from tampering." +
+        " You can also pre-define some config for batch job submission with prefix:" +
+        " kyuubi.batchConf.[batchType]. For example, you can pre-define `spark.master`" +
+        " for spark batch job with key `kyuubi.batchConf.spark.spark.master`.")
+      .version("1.6.0")
+      .stringConf
+      .toSequence()
+      .createWithDefault(Nil)
 
   val SERVER_EXEC_POOL_SIZE: ConfigEntry[Int] =
     buildConf("kyuubi.backend.server.exec.pool.size")
