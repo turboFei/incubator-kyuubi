@@ -25,6 +25,8 @@ import java.util.Properties
 
 import org.apache.hadoop.security.UserGroupInformation
 
+import org.apache.kyuubi.config.KyuubiConf
+
 class UtilsSuite extends KyuubiFunSuite {
 
   test("build information check") {
@@ -148,5 +150,21 @@ class UtilsSuite extends KyuubiFunSuite {
 
   test("getDefaultPropertiesFileForCluster") {
     assert(Utils.getDefaultPropertiesFileForCluster(Option("test")).nonEmpty)
+  }
+
+  test("test args parser") {
+    val args = Array[String]("--conf", "k1=v1", "--conf", " k2 = v2")
+    val conf = new KyuubiConf()
+    Utils.fromCommandLineArgs(args, conf)
+    assert(conf.getOption("k1").get == "v1")
+    assert(conf.getOption("k2").get == "v2")
+
+    val args1 = Array[String]("--conf", "k1=v1", "--conf")
+    val exception1 = intercept[IllegalArgumentException](Utils.fromCommandLineArgs(args1, conf))
+    assert(exception1.getMessage.contains("Illegal size of arguments"))
+
+    val args2 = Array[String]("--conf", "k1=v1", "--conf", "a")
+    val exception2 = intercept[IllegalArgumentException](Utils.fromCommandLineArgs(args2, conf))
+    assert(exception2.getMessage.contains("Illegal argument: a"))
   }
 }
