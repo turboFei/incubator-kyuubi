@@ -152,7 +152,8 @@ class KyuubiSessionImpl(
             e)
           throw e
       }
-      logSessionInfo(s"Connected to engine [$host:$port] with ${_engineSessionHandle}")
+      logSessionInfo(s"Connected to engine [$host:$port]/[${client.engineId.getOrElse("")}]" +
+        s" with ${_engineSessionHandle}]")
       sessionEvent.openedTime = System.currentTimeMillis()
       sessionEvent.remoteSessionId = _engineSessionHandle.identifier.toString
       sessionCluster.foreach(sessionEvent.sessionCluster = _)
