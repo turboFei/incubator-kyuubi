@@ -172,8 +172,4 @@ class ExecuteStatement(
     super.setState(newState)
     EventLogging.onEvent(KyuubiOperationEvent(this))
   }
-
-  override def close(): Unit = {
-    super.close()
-  }
 }
