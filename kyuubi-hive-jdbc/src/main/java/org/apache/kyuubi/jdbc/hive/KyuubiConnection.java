@@ -352,21 +352,18 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
   }
 
   public String getSparkURL() throws SQLException {
-    KyuubiStatement st = (KyuubiStatement) createStatement();
-    String scalaCode =
-        "spark.sparkContext.getConf.getOption(\n"
-            + "\"spark.org.apache.hadoop.yarn.server.webproxy.amfilter.AmIpFilter.param.PROXY_URI_BASES\")\n"
-            + ".orElse(sc.uiWebUrl).getOrElse(\"\").split(\",\").head";
-    String url = "";
-    ResultSet rs = st.executeScala(scalaCode);
-    if (rs.next()) {
-      String result = rs.getString(1);
-      String[] arr = result.split("=");
-      if (arr.length == 2) {
-        url = arr[arr.length - 1];
+    try (KyuubiStatement st = (KyuubiStatement) createStatement()) {
+      String scalaCode =
+          "print(spark.sparkContext.getConf.getOption(\n"
+              + "\"spark.org.apache.hadoop.yarn.server.webproxy.amfilter.AmIpFilter.param.PROXY_URI_BASES\")\n"
+              + ".orElse(sc.uiWebUrl).getOrElse(\"\").split(\",\").head)";
+      String url = "";
+      ResultSet rs = st.executeScala(scalaCode);
+      if (rs.next()) {
+        url = rs.getString(1);
       }
+      return url;
     }
-    return url;
   }
 
   public static List<String> parseInitFile(String initFile) throws IOException {
