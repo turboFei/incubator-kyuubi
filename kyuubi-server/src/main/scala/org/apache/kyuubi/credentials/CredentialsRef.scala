@@ -49,6 +49,10 @@ class CredentialsRef(appUserCluster: AppUserCluster) {
 
   def getLastAccessTime: Long = lastAccessTime
 
+  def getNoOperationTime: Long = {
+    System.currentTimeMillis() - lastAccessTime
+  }
+
   def getEpoch: Long = epoch
 
   def getAppUser: String = appUserCluster.appUser
