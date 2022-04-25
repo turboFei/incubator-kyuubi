@@ -22,7 +22,6 @@ import java.sql.SQLException
 import org.apache.hadoop.yarn.client.api.YarnClient
 
 import org.apache.kyuubi.WithKyuubiServerOnYarn
-import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf._
 import org.apache.kyuubi.tags.YarnTest
 import org.apache.kyuubi.util.KyuubiHadoopUtils
@@ -31,17 +30,6 @@ import org.apache.kyuubi.util.KyuubiHadoopUtils
 class KyuubiOperationYarnClusterSuite extends WithKyuubiServerOnYarn with SparkQueryTests {
 
   override protected def jdbcUrl: String = getJdbcUrl
-
-  override protected val kyuubiServerConf: KyuubiConf = {
-    // TODO KYUUBI #745
-    KyuubiConf().set(ENGINE_INIT_TIMEOUT, 600000L)
-      .set(SESSION_CLUSTER_MODE_ENABLED, true)
-      .set(SESSION_CLUSTER, "yarn")
-  }
-
-  override protected val connectionConf: Map[String, String] = Map(
-    "spark.master" -> "yarn",
-    "spark.executor.instances" -> "1")
 
   test("KYUUBI #527- Support test with mini yarn cluster") {
     withJdbcStatement() { statement =>

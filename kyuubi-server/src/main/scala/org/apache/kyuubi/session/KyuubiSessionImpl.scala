@@ -95,7 +95,8 @@ class KyuubiSessionImpl(
     case (key, value) => sessionConf.set(key, value)
   }
 
-  val engine: EngineRef = new EngineRef(sessionConf, user)
+  val engine: EngineRef =
+    new EngineRef(sessionConf, user, handle.identifier.toString, sessionManager.applicationManager)
   private[kyuubi] val launchEngineOp = sessionManager.operationManager
     .newLaunchEngineOperation(this, sessionConf.get(SESSION_ENGINE_LAUNCH_ASYNC))
 

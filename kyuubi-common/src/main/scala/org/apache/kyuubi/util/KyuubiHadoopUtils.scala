@@ -28,6 +28,7 @@ import org.apache.hadoop.io.Text
 import org.apache.hadoop.security.{Credentials, SecurityUtil, UserGroupInformation}
 import org.apache.hadoop.security.token.{Token, TokenIdentifier}
 import org.apache.hadoop.yarn.api.records.ApplicationId
+import org.apache.hadoop.yarn.conf.YarnConfiguration
 
 import org.apache.kyuubi.Utils
 import org.apache.kyuubi.config.KyuubiConf
@@ -82,6 +83,10 @@ object KyuubiHadoopUtils {
         .foreach { case (k, v) => hadoopConf.set(k, v) }
       hadoopConf
     }
+  }
+
+  def newYarnConfiguration(conf: KyuubiConf): YarnConfiguration = {
+    new YarnConfiguration(newHadoopConf(conf))
   }
 
   def getServerPrincipal(principal: String): String = {
