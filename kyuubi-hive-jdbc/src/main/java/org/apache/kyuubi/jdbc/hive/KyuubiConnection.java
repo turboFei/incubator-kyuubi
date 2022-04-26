@@ -1653,8 +1653,7 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
 
   @Override
   public boolean isWrapperFor(Class<?> iface) throws SQLException {
-    // TODO Auto-generated method stub
-    throw new SQLFeatureNotSupportedException("Method not supported");
+    return iface.isInstance(this);
   }
 
   /*
@@ -1665,8 +1664,11 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
 
   @Override
   public <T> T unwrap(Class<T> iface) throws SQLException {
-    // TODO Auto-generated method stub
-    throw new SQLFeatureNotSupportedException("Method not supported");
+    if (!isWrapperFor(iface)) {
+      throw new SQLException(
+          this.getClass().getName() + " not unwrappable from " + iface.getName());
+    }
+    return iface.cast(this);
   }
 
   public TProtocolVersion getProtocol() {
