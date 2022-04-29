@@ -48,7 +48,6 @@ class KyuubiBatchYarnClusterSuite extends WithKyuubiServerOnYarn {
     val batchRequest = BatchRequest(
       "spark",
       sparkProcessBuilder.mainResource.get,
-      "kyuubi",
       sparkProcessBuilder.mainClass,
       "spark-batch-submission",
       Map(
@@ -59,7 +58,7 @@ class KyuubiBatchYarnClusterSuite extends WithKyuubiServerOnYarn {
 
     val sessionHandle = sessionManager().openBatchSession(
       TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V1,
-      batchRequest.proxyUser,
+      "kyuubi",
       "passwd",
       "localhost",
       batchRequest.conf,

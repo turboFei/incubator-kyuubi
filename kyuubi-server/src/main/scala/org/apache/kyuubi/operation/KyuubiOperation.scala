@@ -56,8 +56,12 @@ abstract class KyuubiOperation(opType: OperationType, session: Session)
 
   def remoteOpHandle(): TOperationHandle = _remoteOpHandle
 
-  protected var progressUpdateEnabled: Boolean = session.asInstanceOf[KyuubiSessionImpl]
-    .sessionConf.get(KyuubiConf.OPERATION_PROGRESS_PERCENTAGE_ENABLED)
+  // TODO: Backport from community version
+  protected var progressUpdateEnabled: Boolean = session match {
+    case ks: KyuubiSessionImpl =>
+      ks.sessionConf.get(KyuubiConf.OPERATION_PROGRESS_PERCENTAGE_ENABLED)
+    case _ => false
+  }
 
   protected def getProgressUpdate: Boolean = progressUpdateEnabled
 
