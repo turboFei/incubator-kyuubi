@@ -33,7 +33,6 @@ public class KyuubiBeeLine extends BeeLine {
       ResourceBundle.getBundle(BeeLine.class.getSimpleName());
   protected KyuubiCommands commands = new KyuubiCommands(this);
   private Driver defaultDriver = null;
-  public static final String SPARK_SUBMIT_COMMAND_PREFIX = "sparksubmit";
   public static final String SCALA_COMMAND_PREFIX = "scala";
   ResourceBundle kyuubiResourceBundle = new KyuubiBeelineResourceBundle();
 
@@ -55,11 +54,6 @@ public class KyuubiBeeLine extends BeeLine {
       modifiers.setInt(resourceBundleField, resourceBundleField.getModifiers() & ~Modifier.FINAL);
       resourceBundleField.set(null, kyuubiResourceBundle);
 
-      ReflectiveCommandHandler sparkSubmitHandler =
-          new ReflectiveCommandHandler(
-              this,
-              new String[] {"sparksubmit"},
-              new Completer[] {new StringsCompleter(getSparkSubmitExample())});
       ReflectiveCommandHandler scalaHandler =
           new ReflectiveCommandHandler(
               this,
@@ -70,7 +64,6 @@ public class KyuubiBeeLine extends BeeLine {
       commandHandlersField.setAccessible(true);
       List<CommandHandler> commandHandlers = new ArrayList<CommandHandler>();
       commandHandlers.addAll(Arrays.asList((CommandHandler[]) commandHandlersField.get(this)));
-      commandHandlers.add(sparkSubmitHandler);
       commandHandlers.add(scalaHandler);
       commandHandlersField.set(
           this, commandHandlers.toArray(new CommandHandler[commandHandlers.size()]));
@@ -135,18 +128,6 @@ public class KyuubiBeeLine extends BeeLine {
         });
   }
 
-  public String getSparkSubmitExample() {
-    return "{\n"
-        + "  \"mainClass\": \"org.apache.spark.examples.SparkPi\",\n"
-        + "  \"conf\": {\n"
-        + "    \"spark.driver.memory\": \"1g\"\n"
-        + "  },\n"
-        + "  \"resource\": \"viewfs://apollo-rno/user/b_stf/spark-examples_2.12-3.1.1.0.5.0.jar\",\n"
-        + "  \"args\": [\"1\" ],\n"
-        + "  \"returnOnSubmitted\": \"true\"\n"
-        + "}\n";
-  }
-
   static class KyuubiBeelineResourceBundle extends ListResourceBundle {
     private Object[][] contents = new Object[beelineResourceBundle.keySet().size() + 2][];
 
@@ -157,7 +138,6 @@ public class KyuubiBeeLine extends BeeLine {
         i++;
       }
       contents[i] = new Object[] {"help-scala", "Scala code"};
-      contents[i + 1] = new Object[] {"help-sparksubmit", "Spark submit command"};
     }
 
     @Override

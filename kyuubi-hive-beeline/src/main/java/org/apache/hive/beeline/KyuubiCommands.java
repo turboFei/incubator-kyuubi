@@ -109,15 +109,6 @@ public class KyuubiCommands extends Commands {
     return true;
   }
 
-  private boolean isSparkSubmitCommand(String line) {
-    if (line.startsWith(BeeLine.COMMAND_PREFIX)) {
-      line = line.substring(BeeLine.COMMAND_PREFIX.length()).trim();
-      String[] arr = line.split("\\s+");
-      return arr.length >= 1 && arr[0].equalsIgnoreCase(KyuubiBeeLine.SPARK_SUBMIT_COMMAND_PREFIX);
-    }
-    return false;
-  }
-
   private boolean isScalaCommand(String line) {
     if (line.startsWith(BeeLine.COMMAND_PREFIX)) {
       line = line.substring(BeeLine.COMMAND_PREFIX.length()).trim();
@@ -130,7 +121,6 @@ public class KyuubiCommands extends Commands {
   // Return false only occurred error when execution the sql and the sql should follow the rules
   // of beeline.
   private boolean executeInternal(String sql, boolean call) {
-    boolean isSparkSubmit = false;
     boolean isScala = false;
 
     if (!beeLine.isBeeLine()) {
@@ -152,17 +142,14 @@ public class KyuubiCommands extends Commands {
     }
 
     if (sql.startsWith(BeeLine.COMMAND_PREFIX)) {
-      isSparkSubmit = isSparkSubmitCommand(sql);
       isScala = isScalaCommand(sql);
-      if (!isSparkSubmit && !isScala) {
+      if (!isScala) {
         return beeLine.execCommandWithPrefix(sql);
       }
       sql = sql.substring(BeeLine.COMMAND_PREFIX.length());
     }
 
-    if (isSparkSubmit) {
-      sql = sql.trim().substring(KyuubiBeeLine.SPARK_SUBMIT_COMMAND_PREFIX.length());
-    } else if (isScala) {
+    if (isScala) {
       sql = sql.trim().substring(KyuubiBeeLine.SCALA_COMMAND_PREFIX.length());
     } else {
       String prefix = call ? "call" : "sql";
@@ -198,9 +185,7 @@ public class KyuubiCommands extends Commands {
         } else {
           stmnt = beeLine.createStatement();
           if (beeLine.getOpts().isSilent()) {
-            if (isSparkSubmit) {
-              hasResults = ((KyuubiStatement) stmnt).executeSparkSubmit(sql);
-            } else if (isScala) {
+            if (isScala) {
               ((KyuubiStatement) stmnt).executeScala(sql);
               hasResults = true;
             } else {
@@ -217,9 +202,7 @@ public class KyuubiCommands extends Commands {
               kyuubiStatement.setInPlaceUpdateStream(
                   new KyuubiBeelineInPlaceUpdateStream(beeLine.getErrorStream(), eventNotifier));
             }
-            if (isSparkSubmit) {
-              hasResults = ((KyuubiStatement) stmnt).executeSparkSubmit(sql);
-            } else if (isScala) {
+            if (isScala) {
               ((KyuubiStatement) stmnt).executeScala(sql);
               hasResults = true;
             } else {

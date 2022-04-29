@@ -506,18 +506,6 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
     return resultSet;
   }
 
-  public boolean executeSparkSubmit(String submitCommand) throws SQLException {
-    return executeWithConfOverlay(
-        submitCommand, Collections.singletonMap("kyuubi.engine.type", "SPARK_SUBMIT"));
-  }
-
-  public ResultSet executeSparkSubmitCommand(String submitCommand) throws SQLException {
-    if (!executeSparkSubmit(submitCommand)) {
-      throw new SQLException("The query did not generate a result set!");
-    }
-    return resultSet;
-  }
-
   /*
    * (non-Javadoc)
    *
