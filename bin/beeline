@@ -39,6 +39,10 @@ if [[ -z "$KYUUBI_BEELINE_JARS" ]]; then
   fi
 fi
 
+if [[ -z "${HADOOP_CONF_DIR}" ]]; then
+  HADOOP_CONF_DIR="${KYUUBI_HOME}/conf"
+fi
+
 if [[ -z ${YARN_CONF_DIR} ]]; then
   KYUUBI_BEELINE_CLASSPATH="${KYUUBI_BEELINE_JARS}/*:${HADOOP_CONF_DIR}"
 else
