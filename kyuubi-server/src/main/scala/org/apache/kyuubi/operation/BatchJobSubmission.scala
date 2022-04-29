@@ -51,7 +51,10 @@ class BatchJobSubmission(session: KyuubiBatchSessionImpl, batchRequest: BatchReq
   private val batchId: String = session.handle.identifier.toString
 
   private[kyuubi] def currentApplicationState: Option[Map[String, String]] = {
-    applicationManager.getApplicationInfo(builder.clusterManager(), batchId)
+    applicationManager.getApplicationInfo(
+      builder.clusterManager(),
+      batchId,
+      session.sessionConf.get(KyuubiConf.SESSION_CLUSTER))
   }
 
   private val applicationCheckInterval =

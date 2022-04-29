@@ -17,34 +17,48 @@
 
 package org.apache.kyuubi.engine
 
+import java.util.concurrent.ConcurrentHashMap
+
 import scala.collection.JavaConverters._
 
 import org.apache.hadoop.yarn.client.api.YarnClient
 
-import org.apache.kyuubi.Logging
+import org.apache.kyuubi.{Logging, Utils}
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.engine.ApplicationOperation._
 import org.apache.kyuubi.util.KyuubiHadoopUtils
 
 class YarnApplicationOperation extends ApplicationOperation with Logging {
 
-  @volatile private var yarnClient: YarnClient = _
+  private val yarnClients = new ConcurrentHashMap[Option[String], YarnClient]()
 
   override def initialize(conf: KyuubiConf): Unit = {
-    val yarnConf = KyuubiHadoopUtils.newYarnConfiguration(conf)
-    // YarnClient is thread-safe
-    val c = YarnClient.createYarnClient()
-    c.init(yarnConf)
-    c.start()
-    yarnClient = c
-    info(s"Successfully initialized yarn client: ${c.getServiceState}")
+    val clusterOptList =
+      if (conf.get(KyuubiConf.SESSION_CLUSTER_MODE_ENABLED)) {
+        Utils.getDefinedPropertiesClusterList().map(Option(_))
+      } else {
+        List(None)
+      }
+
+    clusterOptList.foreach { clusterOpt =>
+      val yarnConf = KyuubiHadoopUtils.newYarnConfiguration(conf, clusterOpt = clusterOpt)
+      // YarnClient is thread-safe
+      val c = YarnClient.createYarnClient()
+      c.init(yarnConf)
+      c.start()
+      yarnClients.put(clusterOpt, c)
+      info(s"Successfully initialized yarn client: ${c.getServiceState} for" +
+        s" cluster: ${clusterOpt.getOrElse("")}")
+    }
   }
 
-  override def isSupported(clusterManager: Option[String]): Boolean = {
-    yarnClient != null && clusterManager.nonEmpty && "yarn".equalsIgnoreCase(clusterManager.get)
+  override def isSupported(clusterManager: Option[String], clusterOpt: Option[String]): Boolean = {
+    yarnClients.get(clusterOpt) != null && clusterManager.nonEmpty && "yarn".equalsIgnoreCase(
+      clusterManager.get)
   }
 
-  override def killApplicationByTag(tag: String): KillResponse = {
+  override def killApplicationByTag(tag: String, clusterOpt: Option[String]): KillResponse = {
+    val yarnClient = yarnClients.get(clusterOpt)
     if (yarnClient != null) {
       try {
         val reports = yarnClient.getApplications(null, null, Set(tag).asJava)
@@ -72,7 +86,10 @@ class YarnApplicationOperation extends ApplicationOperation with Logging {
     }
   }
 
-  override def getApplicationInfoByTag(tag: String): Map[String, String] = {
+  override def getApplicationInfoByTag(
+      tag: String,
+      clusterOpt: Option[String]): Map[String, String] = {
+    val yarnClient = yarnClients.get(clusterOpt)
     if (yarnClient != null) {
       debug(s"Getting application info from Yarn cluster by $tag tag")
       val reports = yarnClient.getApplications(null, null, Set(tag).asJava)
@@ -96,11 +113,13 @@ class YarnApplicationOperation extends ApplicationOperation with Logging {
   }
 
   override def stop(): Unit = {
-    if (yarnClient != null) {
-      try {
-        yarnClient.stop()
-      } catch {
-        case e: Exception => error(e.getMessage)
+    if (!yarnClients.isEmpty) {
+      yarnClients.asScala.values.foreach { yarnClient =>
+        try {
+          yarnClient.stop()
+        } catch {
+          case e: Exception => error(e.getMessage)
+        }
       }
     }
   }

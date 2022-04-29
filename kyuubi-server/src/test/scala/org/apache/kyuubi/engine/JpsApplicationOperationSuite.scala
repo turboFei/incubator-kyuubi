@@ -39,10 +39,10 @@ class JpsApplicationOperationSuite extends KyuubiFunSuite {
   jps.initialize(null)
 
   test("JpsApplicationOperation with jstat") {
-    assert(jps.isSupported(None))
-    assert(jps.isSupported(Some("local")))
-    assert(!jps.killApplicationByTag(null)._1)
-    assert(!jps.killApplicationByTag("have a space")._1)
+    assert(jps.isSupported(None, None))
+    assert(jps.isSupported(Some("local"), None))
+    assert(!jps.killApplicationByTag(null, None)._1)
+    assert(!jps.killApplicationByTag("have a space", None)._1)
     val currentProcess = ManagementFactory.getRuntimeMXBean.getName
     val currentPid = currentProcess.splitAt(currentProcess.indexOf("@"))._1
 
@@ -52,14 +52,14 @@ class JpsApplicationOperationSuite extends KyuubiFunSuite {
       }
     }.start()
 
-    val desc1 = jps.getApplicationInfoByTag("sun.tools.jstat.Jstat")
+    val desc1 = jps.getApplicationInfoByTag("sun.tools.jstat.Jstat", None)
     assert(desc1.contains("id"))
     assert(desc1.contains("name"))
     assert(desc1("state") === "RUNNING")
 
-    jps.killApplicationByTag("sun.tools.jstat.Jstat")
+    jps.killApplicationByTag("sun.tools.jstat.Jstat", None)
 
-    val desc2 = jps.getApplicationInfoByTag("sun.tools.jstat.Jstat")
+    val desc2 = jps.getApplicationInfoByTag("sun.tools.jstat.Jstat", None)
     assert(!desc2.contains("id"))
     assert(!desc2.contains("name"))
     assert(desc2("state") === "FINISHED")
@@ -75,23 +75,23 @@ class JpsApplicationOperationSuite extends KyuubiFunSuite {
     val builder = new SparkProcessBuilder(user, conf)
     builder.start
 
-    assert(jps.isSupported(builder.clusterManager()))
+    assert(jps.isSupported(builder.clusterManager(), None))
     eventually(Timeout(10.seconds)) {
-      val desc1 = jps.getApplicationInfoByTag(id)
+      val desc1 = jps.getApplicationInfoByTag(id, None)
       assert(desc1.contains("id"))
       assert(desc1("name").contains(id))
       assert(desc1("state") === "RUNNING")
     }
 
-    val response = jps.killApplicationByTag(id)
+    val response = jps.killApplicationByTag(id, None)
     assert(response._1, response._2)
     assert(response._2 startsWith "Succeeded to terminate:")
 
-    val desc2 = jps.getApplicationInfoByTag(id)
+    val desc2 = jps.getApplicationInfoByTag(id, None)
     assert(!desc2.contains("id"))
     assert(!desc2.contains("name"))
     assert(desc2("state") === "FINISHED")
-    val response2 = jps.killApplicationByTag(id)
+    val response2 = jps.killApplicationByTag(id, None)
     assert(!response2._1)
     assert(response2._2 === ApplicationOperation.NOT_FOUND)
   }

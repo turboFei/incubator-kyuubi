@@ -85,8 +85,10 @@ object KyuubiHadoopUtils {
     }
   }
 
-  def newYarnConfiguration(conf: KyuubiConf): YarnConfiguration = {
-    new YarnConfiguration(newHadoopConf(conf))
+  def newYarnConfiguration(
+      conf: KyuubiConf,
+      clusterOpt: Option[String] = None): YarnConfiguration = {
+    new YarnConfiguration(newHadoopConf(conf, clusterOpt = clusterOpt))
   }
 
   def getServerPrincipal(principal: String): String = {

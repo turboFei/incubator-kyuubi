@@ -36,7 +36,7 @@ trait ApplicationOperation {
    *
    * @param clusterManager the underlying cluster manager or just local instance
    */
-  def isSupported(clusterManager: Option[String]): Boolean
+  def isSupported(clusterManager: Option[String], clusterOpt: Option[String]): Boolean
 
   /**
    * Kill the app/engine by the unique application tag
@@ -49,7 +49,7 @@ trait ApplicationOperation {
    *
    * @note For implementations, please suppress exceptions and always return KillResponse
    */
-  def killApplicationByTag(tag: String): KillResponse
+  def killApplicationByTag(tag: String, clusterOpt: Option[String]): KillResponse
 
   /**
    * Get the engine/application status by the unique application tag
@@ -57,7 +57,7 @@ trait ApplicationOperation {
    * @param tag the unique application tag for engine instance.
    * @return a map contains the application status
    */
-  def getApplicationInfoByTag(tag: String): Map[String, String]
+  def getApplicationInfoByTag(tag: String, clusterOpt: Option[String]): Map[String, String]
 }
 
 object ApplicationOperation {
