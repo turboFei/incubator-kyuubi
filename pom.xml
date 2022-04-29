@@ -2000,7 +2000,7 @@
         <profile>
             <id>hadoop-client-2</id>
             <properties>
-                <hadoop.client.version>2.7.3.2.6.4.2.0.19</hadoop.client.version>
+                <hadoop.client.version>2.7.3.2.6.4.2.0.27</hadoop.client.version>
                 <jdbc.hadoop.client.artifactId>hadoop-common</jdbc.hadoop.client.artifactId>
                 <beeline.hadoop.client.artifactId>hadoop-common</beeline.hadoop.client.artifactId>
                 <hadoop.client.binary.version>hadoop2</hadoop.client.binary.version>
