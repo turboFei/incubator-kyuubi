@@ -79,12 +79,12 @@ class KyuubiOperationWithClusterModeSuite extends WithKyuubiServer with HiveJDBC
   test("HADP-44681: The client conf should overwrite the server defined configuration") {
     withSessionConf(Map.empty)(Map.empty)(Map(
       KyuubiConf.SESSION_CLUSTER.key -> "test",
-      "spark.master" -> "yarn")) {
-      val exception = intercept[Exception] {
-        withJdbcStatement() { _ =>
-        }
+      "spark.sql.kyuubi.session.cluster.test" -> "false")) {
+      withJdbcStatement() { statement =>
+        val rs = statement.executeQuery("set spark.sql.kyuubi.session.cluster.test")
+        assert(rs.next())
+        assert(rs.getString(2).equals("false"))
       }
-      assert(exception.getMessage.contains("yarn"))
     }
   }
 
