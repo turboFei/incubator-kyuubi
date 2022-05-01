@@ -70,7 +70,7 @@ class BatchJobSubmission(session: KyuubiBatchSessionImpl, batchRequest: BatchReq
     applicationManager.getApplicationInfo(
       builder.clusterManager(),
       batchId,
-      session.sessionConf.get(KyuubiConf.SESSION_CLUSTER))
+      session.sessionCluster)
   }
 
   private val applicationCheckInterval =

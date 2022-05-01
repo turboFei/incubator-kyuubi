@@ -20,7 +20,9 @@ package org.apache.kyuubi.session
 import com.codahale.metrics.MetricRegistry
 import org.apache.hive.service.rpc.thrift.TProtocolVersion
 
+import org.apache.kyuubi.{KyuubiSQLException, Utils}
 import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.KyuubiConf._
 import org.apache.kyuubi.events.{EventBus, KyuubiSessionEvent}
 import org.apache.kyuubi.metrics.MetricsConstants.{CONN_OPEN, CONN_TOTAL}
 import org.apache.kyuubi.metrics.MetricsSystem
@@ -42,10 +44,41 @@ class KyuubiBatchSessionImpl(
   override val normalizedConf: Map[String, String] =
     sessionManager.validateBatchConf(Option(batchRequest.conf).getOrElse(Map.empty))
 
+  val sessionCluster =
+    if (sessionManager.sessionClusterModeEnabled) {
+      normalizedConf.get(SESSION_CLUSTER.key).orElse(sessionConf.get(SESSION_CLUSTER))
+    } else {
+      None
+    }
+
+  if (sessionManager.sessionClusterModeEnabled) {
+    var gotClusterPropertiesFile = false
+
+    val sessionClusterConf = KyuubiConf(false)
+    Utils.getDefaultPropertiesFileForCluster(sessionCluster).foreach { clusterPropertiesFile =>
+      gotClusterPropertiesFile = true
+      Utils.getPropertiesFromFile(Option(clusterPropertiesFile)).foreach {
+        case (key, value) => sessionClusterConf.set(key, value)
+      }
+    }
+
+    if (!gotClusterPropertiesFile) {
+      val clusterList = Utils.getDefinedPropertiesClusterList()
+      throw KyuubiSQLException(
+        s"Please specify the cluster to access with session conf[${SESSION_CLUSTER.key}]," +
+          s" which should be one of ${clusterList.mkString("[", ",", "]")}")
+    }
+
+    sessionClusterConf.getUserDefaults(user).getAll.foreach { case (key, value) =>
+      sessionConf.set(key, value)
+    }
+  }
+
   private[kyuubi] lazy val batchJobSubmissionOp = sessionManager.operationManager
     .newBatchJobSubmissionOperation(this, batchRequest.copy(conf = normalizedConf))
 
   private val sessionEvent = KyuubiSessionEvent(this)
+  sessionCluster.foreach(sessionEvent.sessionCluster = _)
   EventBus.post(sessionEvent)
 
   override def getSessionEvent: Option[KyuubiSessionEvent] = {

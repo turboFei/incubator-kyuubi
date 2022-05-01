@@ -65,7 +65,7 @@ final class KyuubiTBinaryFrontendService(
   override protected def getHadoopConf(sessionConf: Map[String, String]): Configuration = {
     if (conf.get(SESSION_CLUSTER_MODE_ENABLED)) {
       val normalizedConf = be.sessionManager.validateAndNormalizeConf(sessionConf)
-      val clusterOpt = normalizedConf.get(SESSION_CLUSTER.key)
+      val clusterOpt = normalizedConf.get(SESSION_CLUSTER.key).orElse(conf.get(SESSION_CLUSTER))
 
       // if the cluster hadoop conf is not loaded but in the cluster list, load it later
       val clusterInvalid = clusterOpt.isEmpty || (

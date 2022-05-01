@@ -18,15 +18,18 @@
 package org.apache.kyuubi.server
 
 import java.util.EnumSet
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.servlet.DispatcherType
+
+import scala.collection.JavaConverters._
 
 import org.apache.hadoop.conf.Configuration
 import org.eclipse.jetty.servlet.FilterHolder
 
-import org.apache.kyuubi.{KyuubiException, Utils}
+import org.apache.kyuubi.{KyuubiException, KyuubiSQLException, Utils}
 import org.apache.kyuubi.config.KyuubiConf
-import org.apache.kyuubi.config.KyuubiConf.{FRONTEND_REST_BIND_HOST, FRONTEND_REST_BIND_PORT}
+import org.apache.kyuubi.config.KyuubiConf.{FRONTEND_REST_BIND_HOST, FRONTEND_REST_BIND_PORT, SESSION_CLUSTER, SESSION_CLUSTER_MODE_ENABLED}
 import org.apache.kyuubi.server.api.v1.ApiRootResource
 import org.apache.kyuubi.server.http.authentication.{AuthenticationFilter, KyuubiHttpAuthenticationFactory}
 import org.apache.kyuubi.server.ui.JettyServer
@@ -45,7 +48,33 @@ class KyuubiRestFrontendService(override val serverable: Serverable)
 
   private val isStarted = new AtomicBoolean(false)
 
+  private val clusterHadoopConf = new ConcurrentHashMap[String, Configuration]().asScala
   private lazy val hadoopConf: Configuration = KyuubiHadoopUtils.newHadoopConf(conf)
+
+  private def getHadoopConf(sessionConf: Map[String, String]): Configuration = {
+    if (conf.get(SESSION_CLUSTER_MODE_ENABLED)) {
+      val normalizedConf = be.sessionManager.validateBatchConf(sessionConf)
+      val clusterOpt = normalizedConf.get(SESSION_CLUSTER.key).orElse(conf.get(SESSION_CLUSTER))
+
+      // if the cluster hadoop conf is not loaded but in the cluster list, load it later
+      val clusterInvalid = clusterOpt.isEmpty || (
+        !clusterHadoopConf.contains(clusterOpt.get) ||
+          !Utils.getDefinedPropertiesClusterList().contains(clusterOpt.get))
+
+      if (clusterInvalid) {
+        val clusterList = Utils.getDefinedPropertiesClusterList()
+        throw KyuubiSQLException(
+          s"Please specify the cluster to access with session conf[${SESSION_CLUSTER.key}]," +
+            s" which should be one of ${clusterList.mkString("[", ",", "]")}," +
+            s" current value is $clusterOpt")
+      }
+      clusterHadoopConf.getOrElseUpdate(
+        clusterOpt.get,
+        KyuubiHadoopUtils.newHadoopConf(conf, clusterOpt = clusterOpt))
+    } else {
+      hadoopConf
+    }
+  }
 
   override def initialize(conf: KyuubiConf): Unit = synchronized {
     val host = conf.get(FRONTEND_REST_BIND_HOST)
@@ -107,7 +136,11 @@ class KyuubiRestFrontendService(override val serverable: Serverable)
       realUser
     } else {
       sessionConf.get(KyuubiAuthenticationFactory.HS2_PROXY_USER).map { proxyUser =>
-        KyuubiAuthenticationFactory.verifyProxyAccess(realUser, proxyUser, ipAddress, hadoopConf)
+        KyuubiAuthenticationFactory.verifyProxyAccess(
+          realUser,
+          proxyUser,
+          ipAddress,
+          getHadoopConf(sessionConf))
         proxyUser
       }.getOrElse(realUser)
     }
