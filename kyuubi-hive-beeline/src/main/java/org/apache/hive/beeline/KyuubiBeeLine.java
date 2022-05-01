@@ -137,7 +137,7 @@ public class KyuubiBeeLine extends BeeLine {
   }
 
   static class KyuubiBeelineResourceBundle extends ListResourceBundle {
-    private Object[][] contents = new Object[beelineResourceBundle.keySet().size() + 2][];
+    private Object[][] contents = new Object[beelineResourceBundle.keySet().size() + 1][];
 
     public KyuubiBeelineResourceBundle() {
       int i = 0;
