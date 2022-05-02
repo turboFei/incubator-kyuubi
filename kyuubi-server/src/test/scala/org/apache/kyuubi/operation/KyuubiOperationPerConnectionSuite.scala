@@ -24,16 +24,20 @@ import java.util.Properties
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.apache.hive.service.rpc.thrift.{TExecuteStatementReq, TFetchResultsReq, TGetOperationStatusReq, TOperationState, TStatusCode}
 import org.scalatest.time.SpanSugar.convertIntToGrainOfTime
 
 import org.apache.kyuubi.{Utils, WithKyuubiServer}
 import org.apache.kyuubi.config.KyuubiConf
-import org.apache.kyuubi.config.KyuubiConf.SESSION_CONF_ADVISOR
+import org.apache.kyuubi.config.KyuubiConf.{ENGINE_CHECK_INTERVAL, ENGINE_SPARK_MAX_LIFETIME, SESSION_CONF_ADVISOR}
+import org.apache.kyuubi.engine.spark.SparkProcessBuilder
 import org.apache.kyuubi.jdbc.KyuubiHiveDriver
 import org.apache.kyuubi.jdbc.hive.KyuubiConnection
 import org.apache.kyuubi.jdbc.hive.logs.KyuubiEngineLogListener
 import org.apache.kyuubi.plugin.SessionConfAdvisor
+import org.apache.kyuubi.server.api.v1.BatchRequest
 import org.apache.kyuubi.service.authentication.KyuubiAuthenticationFactory
 
 /**
@@ -286,6 +290,28 @@ class KyuubiOperationPerConnectionSuite extends WithKyuubiServer with HiveJDBCTe
         assert(sparkUrl.nonEmpty)
       }
     }
+  }
+
+  test("submit batch job with kyuubi connection") {
+    val sparkProcessBuilder = new SparkProcessBuilder("kyuubi", conf)
+    val batchRequest = BatchRequest(
+      "spark",
+      sparkProcessBuilder.mainResource.get,
+      sparkProcessBuilder.mainClass,
+      "spark-batch-submission",
+      Map(
+        "spark.master" -> "local",
+        s"spark.${ENGINE_SPARK_MAX_LIFETIME.key}" -> "5000",
+        s"spark.${ENGINE_CHECK_INTERVAL.key}" -> "1000"),
+      Seq.empty[String])
+
+    val batchRequestBody = new ObjectMapper().registerModule(DefaultScalaModule)
+      .writeValueAsString(batchRequest)
+    val prop = new Properties()
+    prop.setProperty(KyuubiConnection.KYUUBI_BATCH_REQUEST_PROPERTY, batchRequestBody)
+    val kyuubiConnection = new KyuubiConnection(jdbcUrlWithConf, prop, null)
+    kyuubiConnection.waitLaunchEngineToComplete()
+    assert(kyuubiConnection.isClosed)
   }
 }
 

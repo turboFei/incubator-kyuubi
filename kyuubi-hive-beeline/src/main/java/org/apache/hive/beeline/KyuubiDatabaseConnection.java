@@ -19,6 +19,7 @@ package org.apache.hive.beeline;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Map;
 import java.util.Properties;
@@ -41,6 +42,10 @@ public class KyuubiDatabaseConnection extends DatabaseConnection {
     this.driver = driver;
     this.url = url;
     this.info = info;
+    if (beeLine.kyuubiBatchRequest != null) {
+      this.info.setProperty(
+          KyuubiConnection.KYUUBI_BATCH_REQUEST_PROPERTY, beeLine.kyuubiBatchRequest);
+    }
   }
 
   @Override
@@ -145,6 +150,11 @@ public class KyuubiDatabaseConnection extends DatabaseConnection {
     kyuubiConnection.waitLaunchEngineToComplete();
     logThread.interrupt();
     kyuubiConnection.executeInitSql();
+
+    ResultSet resultSet = kyuubiConnection.getLaunchEngineOpResult();
+    if (resultSet != null) {
+      beeLine.print(resultSet);
+    }
 
     return kyuubiConnection;
   }

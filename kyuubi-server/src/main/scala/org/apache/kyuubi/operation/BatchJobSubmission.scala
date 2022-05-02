@@ -28,7 +28,7 @@ import org.apache.kyuubi.KyuubiException
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.engine.{ApplicationOperation, ProcBuilder}
 import org.apache.kyuubi.engine.spark.SparkBatchProcessBuilder
-import org.apache.kyuubi.operation.FetchOrientation.FetchOrientation
+import org.apache.kyuubi.operation.FetchOrientation._
 import org.apache.kyuubi.operation.log.OperationLog
 import org.apache.kyuubi.server.api.v1.BatchRequest
 import org.apache.kyuubi.session.{KyuubiBatchSessionImpl, KyuubiSessionManager}
@@ -49,6 +49,8 @@ class BatchJobSubmission(session: KyuubiBatchSessionImpl, batchRequest: BatchReq
   private[kyuubi] val batchId: String = session.handle.identifier.toString
 
   private[kyuubi] val batchType: String = batchRequest.batchType
+
+  private var resultFetched: Boolean = false
 
   private val builder: ProcBuilder = {
     Option(batchType).map(_.toUpperCase(Locale.ROOT)) match {
@@ -141,6 +143,22 @@ class BatchJobSubmission(session: KyuubiBatchSessionImpl, batchRequest: BatchReq
   }
 
   override def getNextRowSet(order: FetchOrientation, rowSetSize: Int): TRowSet = {
+    validateDefaultFetchOrientation(order)
+    assertState(OperationState.FINISHED)
+    setHasResultSet(true)
+    order match {
+      case FETCH_NEXT =>
+        if (!resultFetched) {
+          resultFetched = true
+          rowSet()
+        } else {
+          ThriftUtils.EMPTY_ROW_SET
+        }
+      case _ => rowSet
+    }
+  }
+
+  private def rowSet(): TRowSet = {
     currentApplicationState.map { state =>
       val tRow = new TRowSet(0, new JArrayList[TRow](state.size))
       Seq(state.keys, state.values).map(_.toSeq.asJava).foreach { col =>

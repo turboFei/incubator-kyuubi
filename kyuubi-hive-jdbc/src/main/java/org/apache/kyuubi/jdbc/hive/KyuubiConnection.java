@@ -77,6 +77,7 @@ import org.slf4j.LoggerFactory;
 public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
   public static final Logger LOG = LoggerFactory.getLogger(KyuubiConnection.class.getName());
   public static final String BEELINE_MODE_PROPERTY = "BEELINE_MODE";
+  public static final String KYUUBI_BATCH_REQUEST_PROPERTY = "kyuubi.batch.request";
   public static int DEFAULT_ENGINE_LOG_THREAD_TIMEOUT = 10 * 1000;
   public static final String KYUUBI_PROXY_BATCH_ACCOUNT = "kyuubi.proxy.batchAccount";
 
@@ -110,6 +111,9 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
   private boolean isBeeLineMode;
   private boolean fastConnectMode;
 
+  private String batchRequest;
+  private boolean isBatchMode = false;
+
   private List<KyuubiEngineLogListener> engineLogListeners = new LinkedList();
 
   public KyuubiConnection(String url, Properties info) throws SQLException {
@@ -125,6 +129,7 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
       throw new SQLException(e);
     }
     isBeeLineMode = Boolean.parseBoolean(info.getProperty(BEELINE_MODE_PROPERTY));
+    batchRequest = info.getProperty(KYUUBI_BATCH_REQUEST_PROPERTY);
     fastConnectMode = Boolean.parseBoolean(info.getProperty(FAST_CONNECT_MODE));
     jdbcUriString = connParams.getJdbcUriString();
     // JDBC URL: jdbc:hive2://<host>:<port>/dbName;sess_var_list?hive_conf_list#hive_var_list
@@ -158,7 +163,9 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
 
     if (listeners != null) {
       for (KyuubiEngineLogListener listener : listeners) {
-        engineLogListeners.add(listener);
+        if (listener != null) {
+          engineLogListeners.add(listener);
+        }
       }
     }
 
@@ -171,7 +178,7 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
       // open client session
       openSession();
       showLaunchEngineLog();
-      if (!fastConnectMode) {
+      if (!fastConnectMode || isBatchMode) {
         waitLaunchEngineToComplete();
       }
       executeInitSql();
@@ -197,7 +204,7 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
           openSession();
           if (!isBeeLineMode) {
             showLaunchEngineLog();
-            if (!fastConnectMode) {
+            if (!fastConnectMode || isBatchMode) {
               waitLaunchEngineToComplete();
             }
             executeInitSql();
@@ -807,6 +814,10 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
     if (sessVars.containsKey(KYUUBI_PROXY_BATCH_ACCOUNT)) {
       openConf.put(KYUUBI_PROXY_BATCH_ACCOUNT, sessVars.get(KYUUBI_PROXY_BATCH_ACCOUNT));
     }
+    // set the batch request
+    if (batchRequest != null) {
+      openConf.put(KYUUBI_BATCH_REQUEST_PROPERTY, batchRequest);
+    }
     openReq.setConfiguration(openConf);
 
     // Store the user name in the open request in case no non-sasl authentication
@@ -838,15 +849,29 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
           openRespConf.get("kyuubi.session.engine.launch.handle.guid");
       String launchEngineOpHandleSecret =
           openRespConf.get("kyuubi.session.engine.launch.handle.secret");
+      // Get batch operation handle
+      String batchOpHandleGuid = openRespConf.get("kyuubi.batch.handle.guid");
+      String batchOpHandleSecret = openRespConf.get("kyuubi.batch.handle.secret");
 
-      if (launchEngineOpHandleGuid != null && launchEngineOpHandleSecret != null) {
+      if ((launchEngineOpHandleGuid != null && launchEngineOpHandleSecret != null)
+          || (batchOpHandleGuid != null && batchOpHandleSecret != null)) {
         try {
-          byte[] guidBytes = Base64.getMimeDecoder().decode(launchEngineOpHandleGuid);
-          byte[] secretBytes = Base64.getMimeDecoder().decode(launchEngineOpHandleSecret);
-          THandleIdentifier handleIdentifier =
-              new THandleIdentifier(ByteBuffer.wrap(guidBytes), ByteBuffer.wrap(secretBytes));
-          launchEngineOpHandle =
-              new TOperationHandle(handleIdentifier, TOperationType.UNKNOWN, false);
+          if (launchEngineOpHandleGuid != null && launchEngineOpHandleSecret != null) {
+            byte[] guidBytes = Base64.getMimeDecoder().decode(launchEngineOpHandleGuid);
+            byte[] secretBytes = Base64.getMimeDecoder().decode(launchEngineOpHandleSecret);
+            THandleIdentifier handleIdentifier =
+                new THandleIdentifier(ByteBuffer.wrap(guidBytes), ByteBuffer.wrap(secretBytes));
+            launchEngineOpHandle =
+                new TOperationHandle(handleIdentifier, TOperationType.UNKNOWN, false);
+          } else {
+            byte[] guidBytes = Base64.getMimeDecoder().decode(batchOpHandleGuid);
+            byte[] secretBytes = Base64.getMimeDecoder().decode(batchOpHandleSecret);
+            THandleIdentifier handleIdentifier =
+                new THandleIdentifier(ByteBuffer.wrap(guidBytes), ByteBuffer.wrap(secretBytes));
+            isBatchMode = true;
+            launchEngineOpHandle =
+                new TOperationHandle(handleIdentifier, TOperationType.UNKNOWN, true);
+          }
         } catch (Exception e) {
           LOG.error("Failed to decode launch engine operation handle from open session resp", e);
         }
@@ -1765,6 +1790,28 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
           throw new SQLException(e.getMessage(), "08S01", e);
         }
       }
+    }
+
+    // for batch mode, close the session when batch operation completed
+    // for beeline mode, close the connection by beeline
+    if (isBatchMode && !isBeeLineMode) {
+      close();
+    }
+  }
+
+  public ResultSet getLaunchEngineOpResult() {
+    if (!isClosed && isBatchMode) {
+      try {
+        return new KyuubiQueryResultSet.Builder(this)
+            .setClient(client)
+            .setStmtHandle(launchEngineOpHandle)
+            .build();
+      } catch (Exception e) {
+        LOG.error("Error fetching batch submission result", e);
+        return null;
+      }
+    } else {
+      return null;
     }
   }
 }
