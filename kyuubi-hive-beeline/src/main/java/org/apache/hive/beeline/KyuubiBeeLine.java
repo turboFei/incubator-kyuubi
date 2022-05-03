@@ -38,6 +38,7 @@ import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.OptionBuilder;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
+import org.apache.kyuubi.jdbc.hive.KyuubiConnection;
 
 public class KyuubiBeeLine extends BeeLine {
   private static final ResourceBundle resourceBundle =
@@ -216,15 +217,30 @@ public class KyuubiBeeLine extends BeeLine {
             BeeLine.class.getDeclaredMethod(
                 "connectUsingArgs", BeelineParser.class, CommandLine.class);
         connectUsingArgsMethod.setAccessible(true);
-        connSuccessful = (boolean) connectUsingArgsMethod.invoke(this, beelineParser, cl);
-        if (connSuccessful) {
-          boolean success = this.commands.close(null);
+        connectUsingArgsMethod.invoke(this, beelineParser, cl);
+
+        DatabaseConnection databaseConnection = getDatabaseConnection();
+        Field connectionField = DatabaseConnection.class.getDeclaredField("connection");
+        connectionField.setAccessible(true);
+
+        if (databaseConnection != null && connectionField.get(databaseConnection) != null) {
+          KyuubiConnection kyuubiConnection =
+              (KyuubiConnection) connectionField.get(databaseConnection);
+          if (!kyuubiConnection.isBatchTerminated()) {
+            error(
+                "!!! The kyuubi batch job does not terminate normally, please check the log. !!!");
+          } else if (!kyuubiConnection.isBatchSucceed()) {
+            error("!!! The kyuubi batch job fails, please check the log. !!!");
+          }
+          int exitCode =
+              kyuubiConnection.isBatchTerminated()
+                  ? (kyuubiConnection.isBatchSucceed() ? 0 : 1)
+                  : 1;
           close();
-          int exitCode = success ? 0 : 1;
           System.exit(exitCode);
         } else {
           close();
-          error("Error submitting batch with request:" + kyuubiBatchRequest);
+          error("!!! The connection is not established successfully, please check the log. !!!");
           System.exit(1);
         }
       }

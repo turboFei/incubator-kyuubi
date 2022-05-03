@@ -147,13 +147,28 @@ public class KyuubiDatabaseConnection extends DatabaseConnection {
     logThread.start();
     kyuubiConnection.setEngineLogThread(logThread);
 
-    kyuubiConnection.waitLaunchEngineToComplete();
+    try {
+      kyuubiConnection.waitLaunchEngineToComplete();
+    } catch (Throwable t) {
+      // for batch mode, do not throw exception in beeline and set the kyuubi connection
+      if (!kyuubiConnection.isBatchMode()) {
+        throw t;
+      }
+    }
     logThread.interrupt();
-    kyuubiConnection.executeInitSql();
+    if (!kyuubiConnection.isBatchMode()) {
+      kyuubiConnection.executeInitSql();
+    }
 
-    ResultSet resultSet = kyuubiConnection.getLaunchEngineOpResult();
-    if (resultSet != null) {
-      beeLine.print(resultSet);
+    ResultSet batchResultSet = kyuubiConnection.getBatchResultSet();
+    if (batchResultSet != null) {
+      try {
+        // wait the log thread down to prevent impact the batch result format
+        logThread.join(KyuubiConnection.DEFAULT_ENGINE_LOG_THREAD_TIMEOUT);
+      } catch (Exception e) {
+      }
+      beeLine.info("The kyuubi batch job submission result.");
+      beeLine.print(batchResultSet);
     }
 
     return kyuubiConnection;

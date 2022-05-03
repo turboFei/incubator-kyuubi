@@ -112,7 +112,10 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
   private boolean fastConnectMode;
 
   private String batchRequest;
-  private boolean isBatchMode = false;
+  private boolean batchMode = false;
+  private boolean batchTerminated = false;
+  private boolean batchSucceed = false;
+  private ResultSet batchResultSet = null;
 
   private List<KyuubiEngineLogListener> engineLogListeners = new LinkedList();
 
@@ -178,7 +181,7 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
       // open client session
       openSession();
       showLaunchEngineLog();
-      if (!fastConnectMode || isBatchMode) {
+      if (!fastConnectMode || batchMode) {
         waitLaunchEngineToComplete();
       }
       executeInitSql();
@@ -204,7 +207,7 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
           openSession();
           if (!isBeeLineMode) {
             showLaunchEngineLog();
-            if (!fastConnectMode || isBatchMode) {
+            if (!fastConnectMode || batchMode) {
               waitLaunchEngineToComplete();
             }
             executeInitSql();
@@ -868,7 +871,7 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
             byte[] secretBytes = Base64.getMimeDecoder().decode(batchOpHandleSecret);
             THandleIdentifier handleIdentifier =
                 new THandleIdentifier(ByteBuffer.wrap(guidBytes), ByteBuffer.wrap(secretBytes));
-            isBatchMode = true;
+            batchMode = true;
             launchEngineOpHandle =
                 new TOperationHandle(handleIdentifier, TOperationType.UNKNOWN, true);
           }
@@ -1032,7 +1035,15 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
       }
     }
     engineLogThread = null;
-    close();
+    if (isBatchMode()) {
+      batchTerminated = true;
+      buildKyuubiBatchResultSet();
+      if (!isBeeLineMode) {
+        close();
+      }
+    } else {
+      close();
+    }
   }
 
   /*
@@ -1792,26 +1803,55 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
       }
     }
 
-    // for batch mode, close the session when batch operation completed
-    // for beeline mode, close the connection by beeline
-    if (isBatchMode && !isBeeLineMode) {
-      close();
+    if (batchMode) {
+      batchTerminated = true;
+      batchSucceed = true;
+      buildKyuubiBatchResultSet();
+      // for batch mode, if not in beeline mode, close the session when batch operation completed
+      if (!isBeeLineMode) {
+        close();
+      }
     }
   }
 
-  public ResultSet getLaunchEngineOpResult() {
-    if (!isClosed && isBatchMode) {
+  public boolean isBatchMode() {
+    return batchMode;
+  }
+
+  public boolean isBatchTerminated() {
+    return batchTerminated;
+  }
+
+  public boolean isBatchSucceed() {
+    return batchSucceed;
+  }
+
+  public ResultSet getBatchResultSet() {
+    return batchResultSet;
+  }
+
+  private void buildKyuubiBatchResultSet() {
+    if (!isClosed && batchMode && client != null && launchEngineOpHandle != null) {
       try {
-        return new KyuubiQueryResultSet.Builder(this)
-            .setClient(client)
-            .setStmtHandle(launchEngineOpHandle)
-            .build();
+        TFetchResultsReq fetchReq =
+            new TFetchResultsReq(
+                launchEngineOpHandle, TFetchOrientation.FETCH_FIRST, Integer.MAX_VALUE);
+        TFetchResultsResp fetchResp;
+        fetchResp = client.FetchResults(fetchReq);
+        Utils.verifySuccessWithInfo(fetchResp.getStatus());
+
+        TRowSet results = fetchResp.getResults();
+        RowSet rowSet = RowSetFactory.create(results, protocol);
+
+        TGetResultSetMetadataReq metadataReq = new TGetResultSetMetadataReq(launchEngineOpHandle);
+        TGetResultSetMetadataResp metadataResp;
+        metadataResp = client.GetResultSetMetadata(metadataReq);
+        Utils.verifySuccess(metadataResp.getStatus());
+
+        batchResultSet = new KyuubiBatchResultSet(rowSet, metadataResp.getSchema());
       } catch (Exception e) {
         LOG.error("Error fetching batch submission result", e);
-        return null;
       }
-    } else {
-      return null;
     }
   }
 }

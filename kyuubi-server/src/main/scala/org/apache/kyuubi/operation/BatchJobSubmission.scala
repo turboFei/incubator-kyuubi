@@ -50,8 +50,6 @@ class BatchJobSubmission(session: KyuubiBatchSessionImpl, batchRequest: BatchReq
 
   private[kyuubi] val batchType: String = batchRequest.batchType
 
-  private var resultFetched: Boolean = false
-
   private val builder: ProcBuilder = {
     Option(batchType).map(_.toUpperCase(Locale.ROOT)) match {
       case Some("SPARK") =>
@@ -109,12 +107,12 @@ class BatchJobSubmission(session: KyuubiBatchSessionImpl, batchRequest: BatchReq
       info(s"Submitting ${batchRequest.batchType} batch job: $builder")
       val process = builder.start
       var applicationStatus = currentApplicationState
-      while (applicationStatus.isEmpty) {
+      while (applicationStatus.isEmpty && process.isAlive) {
         applicationStatus = currentApplicationState
         Thread.sleep(applicationCheckInterval)
       }
-      val state = applicationStatus.get(ApplicationOperation.APP_STATE_KEY)
-      if (state == "KILLED" || state == "FAILED") {
+      if (applicationStatus.map(_.get(ApplicationOperation.APP_STATE_KEY)).filter(s =>
+          s == Some("KILLED") || s == Some("FAILED")).isDefined) {
         process.destroyForcibly()
         throw new RuntimeException("Batch job failed:" + applicationStatus.get.mkString(","))
       } else {
@@ -143,22 +141,6 @@ class BatchJobSubmission(session: KyuubiBatchSessionImpl, batchRequest: BatchReq
   }
 
   override def getNextRowSet(order: FetchOrientation, rowSetSize: Int): TRowSet = {
-    validateDefaultFetchOrientation(order)
-    assertState(OperationState.FINISHED)
-    setHasResultSet(true)
-    order match {
-      case FETCH_NEXT =>
-        if (!resultFetched) {
-          resultFetched = true
-          rowSet()
-        } else {
-          ThriftUtils.EMPTY_ROW_SET
-        }
-      case _ => rowSet
-    }
-  }
-
-  private def rowSet(): TRowSet = {
     currentApplicationState.map { state =>
       val tRow = new TRowSet(0, new JArrayList[TRow](state.size))
       Seq(state.keys, state.values).map(_.toSeq.asJava).foreach { col =>
