@@ -1445,20 +1445,6 @@ object KyuubiConf {
       .stringConf
       .createWithDefault("yyyy-MM-dd HH:mm:ss.SSS")
 
-  val OPERATION_PROGRESS_PERCENTAGE_ENABLED: ConfigEntry[Boolean] =
-    buildConf("kyuubi.operation.progress.update.enabled")
-      .doc("Whether to enable get operation progress percentage.")
-      .version("1.4.0")
-      .booleanConf
-      .createWithDefault(false)
-
-  val OPERATION_PROGRESS_PERCENTAGE_INTERVAL: ConfigEntry[Long] =
-    buildConf("kyuubi.operation.progress.update.interval")
-      .doc("The interval to get operation progress percentage.")
-      .version("1.4.0")
-      .timeConf
-      .createWithDefaultString("PT10S")
-
   val ENGINE_TRINO_MEMORY: ConfigEntry[String] =
     buildConf("kyuubi.engine.trino.memory")
       .doc("The heap memory for the trino query engine")

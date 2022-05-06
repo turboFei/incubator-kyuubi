@@ -17,7 +17,6 @@
 
 package org.apache.kyuubi.operation
 
-import org.apache.hive.service.rpc.thrift.{TExecuteStatementReq, TGetOperationStatusReq}
 import org.scalatest.time.SpanSugar._
 
 import org.apache.kyuubi.{Utils, WithKyuubiServer}
@@ -154,28 +153,6 @@ class KyuubiOperationPerUserSuite extends WithKyuubiServer with SparkQueryTests 
       withJdbcStatement() { statement2 =>
         statement2.executeQuery("insert into test_update_count values(1), (2)")
         assert(statement2.getUpdateCount == 2)
-      }
-    }
-  }
-
-  test("HADP-44783: Support to get progress percentage") {
-    val sql = "select /*+ REPARTITION(3, a) */ a from values(1) t(a)"
-    Seq("true", "false").foreach { progressUpdate =>
-      withSessionConf()(Map.empty)(
-        Map(KyuubiConf.OPERATION_PROGRESS_PERCENTAGE_ENABLED.key -> progressUpdate)) {
-        withSessionHandle { (client, handle) =>
-          val req = new TExecuteStatementReq()
-          req.setSessionHandle(handle)
-          req.setStatement(sql)
-          val tExecuteStatementResp = client.ExecuteStatement(req)
-          val opHandle = tExecuteStatementResp.getOperationHandle
-          val opStatusReq = new TGetOperationStatusReq(opHandle)
-          opStatusReq.setGetProgressUpdate(true)
-          eventually(timeout(90.seconds), interval(500.milliseconds)) {
-            val opStatusResp = client.GetOperationStatus(opStatusReq)
-            assert(opStatusResp.getProgressedPercentage > 0)
-          }
-        }
       }
     }
   }

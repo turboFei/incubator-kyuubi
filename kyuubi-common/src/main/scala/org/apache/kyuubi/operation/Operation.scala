@@ -44,8 +44,6 @@ trait Operation {
   def shouldRunAsync: Boolean
   def isTimedOut: Boolean
 
-  def getProgressPercentage: Double
-
 }
 
 object Operation {

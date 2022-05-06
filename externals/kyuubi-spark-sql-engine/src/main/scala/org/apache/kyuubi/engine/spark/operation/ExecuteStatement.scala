@@ -32,7 +32,7 @@ import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.types._
 
 import org.apache.kyuubi.{KyuubiSQLException, Logging}
-import org.apache.kyuubi.config.KyuubiConf.{OPERATION_PROGRESS_PERCENTAGE_INTERVAL, OPERATION_RESULT_MAX_ROWS}
+import org.apache.kyuubi.config.KyuubiConf.OPERATION_RESULT_MAX_ROWS
 import org.apache.kyuubi.engine.spark.KyuubiSparkUtil._
 import org.apache.kyuubi.engine.spark.events.SparkOperationEvent
 import org.apache.kyuubi.events.EventBus
@@ -49,11 +49,6 @@ class ExecuteStatement(
     queryTimeout: Long,
     incrementalCollect: Boolean)
   extends SparkOperation(OperationType.EXECUTE_STATEMENT, session) with Logging {
-  private var lastGetProgressTime: Long = 0
-  private val progressPercentageInterval: Long =
-    spark.conf.get(
-      OPERATION_PROGRESS_PERCENTAGE_INTERVAL.key,
-      session.sessionManager.getConf.get(OPERATION_PROGRESS_PERCENTAGE_INTERVAL).toString).toLong
 
   private var statementTimeoutCleaner: Option[ScheduledExecutorService] = None
 
@@ -79,34 +74,7 @@ class ExecuteStatement(
   }
 
   override protected def afterRun(): Unit = {
-    progressPercentage = 1.0
     OperationLog.removeCurrentOperationLog()
-  }
-
-  private def updateProgressIfNeeded(): Unit = {
-    val now = System.currentTimeMillis()
-    if (progressPercentage != 1.0 && now - lastGetProgressTime > progressPercentageInterval) {
-      val statusTracker = spark.sparkContext.statusTracker
-      val jobIds = statusTracker.getJobIdsForGroup(statementId)
-      val jobs = jobIds.flatMap { id => statusTracker.getJobInfo(id) }
-      val stages = jobs.flatMap { job =>
-        job.stageIds().flatMap(statusTracker.getStageInfo)
-      }
-      val taskCount = stages.map(_.numTasks()).sum
-      val completedTaskCount = stages.map(_.numCompletedTasks).sum
-      progressPercentage =
-        if (taskCount == 0) {
-          0.0
-        } else {
-          completedTaskCount.toDouble / taskCount
-        }
-      lastGetProgressTime = now
-    }
-  }
-
-  override def getProgressPercentage: Double = {
-    updateProgressIfNeeded()
-    super.getProgressPercentage
   }
 
   def setNumOutputRows(metrics: Map[String, SQLMetric], key: String): Unit = {

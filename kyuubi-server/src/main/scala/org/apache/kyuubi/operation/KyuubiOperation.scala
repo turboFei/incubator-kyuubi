@@ -26,7 +26,6 @@ import org.apache.thrift.TException
 import org.apache.thrift.transport.TTransportException
 
 import org.apache.kyuubi.{KyuubiSQLException, Utils}
-import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.metrics.MetricsConstants.{OPERATION_FAIL, OPERATION_OPEN, OPERATION_STATE, OPERATION_TOTAL}
 import org.apache.kyuubi.metrics.MetricsSystem
 import org.apache.kyuubi.operation.FetchOrientation.FetchOrientation
@@ -55,15 +54,6 @@ abstract class KyuubiOperation(opType: OperationType, session: Session)
   @volatile protected var _remoteOpHandle: TOperationHandle = _
 
   def remoteOpHandle(): TOperationHandle = _remoteOpHandle
-
-  // TODO: Backport from community version
-  protected var progressUpdateEnabled: Boolean = session match {
-    case ks: KyuubiSessionImpl =>
-      ks.sessionConf.get(KyuubiConf.OPERATION_PROGRESS_PERCENTAGE_ENABLED)
-    case _ => false
-  }
-
-  protected def getProgressUpdate: Boolean = progressUpdateEnabled
 
   protected def verifyTStatus(tStatus: TStatus): Unit = {
     ThriftUtils.verifyTStatus(tStatus)
