@@ -26,7 +26,7 @@ import org.apache.hive.service.rpc.thrift._
 
 import org.apache.kyuubi.KyuubiException
 import org.apache.kyuubi.config.KyuubiConf
-import org.apache.kyuubi.engine.{ApplicationOperation, ProcBuilder}
+import org.apache.kyuubi.engine.{ApplicationOperation, KillResponse, ProcBuilder}
 import org.apache.kyuubi.engine.spark.SparkBatchProcessBuilder
 import org.apache.kyuubi.operation.FetchOrientation._
 import org.apache.kyuubi.operation.log.OperationLog
@@ -71,6 +71,10 @@ class BatchJobSubmission(session: KyuubiBatchSessionImpl, batchRequest: BatchReq
       builder.clusterManager(),
       batchId,
       session.sessionCluster)
+  }
+
+  private[kyuubi] def killBatchApplication(): KillResponse = {
+    applicationManager.killApplication(builder.clusterManager(), batchId, session.sessionCluster)
   }
 
   private val applicationCheckInterval =
