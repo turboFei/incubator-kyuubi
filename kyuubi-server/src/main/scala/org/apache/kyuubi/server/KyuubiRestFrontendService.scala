@@ -142,6 +142,15 @@ class KyuubiRestFrontendService(override val serverable: Serverable)
           ipAddress,
           getHadoopConf(sessionConf))
         proxyUser
+      }.orElse {
+        sessionConf.get(KyuubiAuthenticationFactory.KYUUBI_PROXY_BATCH_ACCOUNT).map {
+          batchAccount =>
+            KyuubiAuthenticationFactory.verifyBatchAccountAccess(
+              realUser,
+              batchAccount,
+              conf)
+            batchAccount
+        }
       }.getOrElse(realUser)
     }
   }

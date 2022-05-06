@@ -101,6 +101,13 @@ class BatchesResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper {
       .delete()
     assert(405 == deleteBatchResponse.getStatus)
 
+    // invalid batch account
+    deleteBatchResponse = webTarget.path(s"api/v1/batches/${batch.id}")
+      .queryParam("kyuubi.proxy.batchAccount", "invalidBatchAccount")
+      .request(MediaType.APPLICATION_JSON_TYPE)
+      .delete()
+    assert(405 == deleteBatchResponse.getStatus)
+
     // killApp is true
     deleteBatchResponse = webTarget.path(s"api/v1/batches/${batch.id}")
       .queryParam("killApp", "true")
