@@ -455,6 +455,9 @@ abstract class TFrontendService(name: String)
         resp.setErrorMessage(stringifyException(e))
       }
       resp.setNumModifiedRows(operationStatus.numModifiedRows)
+      operationStatus.operationProgressUpdate.foreach { p =>
+        resp.setProgressUpdateResponse(p)
+      }
       resp.setStatus(OK_STATUS)
     } catch {
       case e: Exception =>
