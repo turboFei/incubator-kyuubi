@@ -55,7 +55,7 @@ class CatalogShim_v2_4 extends SparkCatalogShim {
     val databases = catalog.listDatabases(schemaPattern)
 
     databases.flatMap { db =>
-      val identifiers = catalog.listTables(db, tablePattern, includeLocalTempViews = false)
+      val identifiers = catalog.listTables(db, tablePattern, includeTempViewsAndTables = false)
       catalog.getTablesByName(identifiers)
         .filter(t => matched(tableTypes, t.tableType.name)).map { t =>
           val typ = if (t.tableType.name == "VIEW") "VIEW" else "TABLE"
@@ -123,7 +123,7 @@ class CatalogShim_v2_4 extends SparkCatalogShim {
     val databases = catalog.listDatabases(schemaPattern)
 
     databases.flatMap { db =>
-      val identifiers = catalog.listTables(db, tablePattern, includeLocalTempViews = true)
+      val identifiers = catalog.listTables(db, tablePattern, includeTempViewsAndTables = true)
       catalog.getTablesByName(identifiers).flatMap { t =>
         val tableSchema =
           if (t.provider.getOrElse("").equalsIgnoreCase("delta")) {
