@@ -31,6 +31,7 @@ import org.apache.kyuubi.operation.OperationState.ERROR
 import org.apache.kyuubi.server.MiniYarnService
 import org.apache.kyuubi.server.api.v1.BatchRequest
 import org.apache.kyuubi.session.{KyuubiBatchSessionImpl, KyuubiSessionManager}
+import org.apache.kyuubi.tags.YarnTest
 
 /**
  * To developers:
@@ -70,6 +71,7 @@ sealed trait WithKyuubiServerOnYarn extends WithKyuubiServer {
   }
 }
 
+@YarnTest
 class KyuubiOperationYarnClusterSuite extends WithKyuubiServerOnYarn with HiveJDBCTestHelper {
 
   private val preDefinedAppName = "kyuubi-batch-job"

@@ -488,7 +488,7 @@ trait SparkQueryTests extends HiveJDBCTestHelper {
     }
   }
 
-  test("execute simple scala code") {
+  ignore("execute simple scala code") {
     withJdbcStatement() { statement =>
       statement.execute("SET kyuubi.operation.language=scala")
       val rs = statement.executeQuery("spark.version")
