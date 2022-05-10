@@ -300,7 +300,7 @@ trait ProcBuilder {
     if (commands == null) {
       super.toString()
     } else {
-      commands.map {
+      Utils.redactCommandLineArgs(conf, commands).map {
         case arg if arg.startsWith("--") => s"\\\n\t$arg"
         case arg => arg
       }.mkString(" ")
