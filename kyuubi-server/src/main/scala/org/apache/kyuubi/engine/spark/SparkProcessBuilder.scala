@@ -48,7 +48,7 @@ class SparkProcessBuilder(
 
   override def mainClass: String = "org.apache.kyuubi.engine.spark.SparkSQLEngine"
 
-  override protected def commands: Array[String] = {
+  override protected val commands: Array[String] = {
     val buffer = new ArrayBuffer[String]()
     buffer += executable
     buffer += CLASS
