@@ -25,11 +25,12 @@ import scala.collection.JavaConverters._
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.apache.hadoop.conf.Configuration
-import org.apache.hive.service.rpc.thrift.{TOpenSessionReq, TOpenSessionResp, TRenewDelegationTokenReq, TRenewDelegationTokenResp}
+import org.apache.hive.service.rpc.thrift._
 
 import org.apache.kyuubi.{KyuubiSQLException, Utils}
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf.{SESSION_CLUSTER, SESSION_CLUSTER_MODE_ENABLED}
+import org.apache.kyuubi.config.KyuubiReservedKeys._
 import org.apache.kyuubi.ha.client.{KyuubiServiceDiscovery, ServiceDiscovery}
 import org.apache.kyuubi.server.api.v1.BatchRequest
 import org.apache.kyuubi.service.{Serverable, Service, TBinaryFrontendService}
@@ -133,10 +134,10 @@ final class KyuubiTBinaryFrontendService(
           val launchEngineOp = ks.launchEngineOp
           val opHandleIdentifier = launchEngineOp.getHandle.identifier.toTHandleIdentifier
           respConfiguration.put(
-            "kyuubi.session.engine.launch.handle.guid",
+            KYUUBI_SESSION_ENGINE_LAUNCH_HANDLE_GUID,
             Base64.getMimeEncoder.encodeToString(opHandleIdentifier.getGuid))
           respConfiguration.put(
-            "kyuubi.session.engine.launch.handle.secret",
+            KYUUBI_SESSION_ENGINE_LAUNCH_HANDLE_SECRET,
             Base64.getMimeEncoder.encodeToString(opHandleIdentifier.getSecret))
 
         case kbs: KyuubiBatchSessionImpl =>
