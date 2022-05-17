@@ -30,6 +30,7 @@ import org.apache.hive.service.rpc.thrift._
 import org.scalatest.time.SpanSugar.convertIntToGrainOfTime
 
 import org.apache.kyuubi.{Utils, WithKyuubiServer}
+import org.apache.kyuubi.client.api.v1.dto.BatchRequest
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf.{ENGINE_CHECK_INTERVAL, ENGINE_SPARK_MAX_LIFETIME, SESSION_CONF_ADVISOR}
 import org.apache.kyuubi.engine.spark.SparkProcessBuilder
@@ -37,7 +38,6 @@ import org.apache.kyuubi.jdbc.KyuubiHiveDriver
 import org.apache.kyuubi.jdbc.hive.KyuubiConnection
 import org.apache.kyuubi.jdbc.hive.logs.KyuubiEngineLogListener
 import org.apache.kyuubi.plugin.SessionConfAdvisor
-import org.apache.kyuubi.server.api.v1.BatchRequest
 import org.apache.kyuubi.service.authentication.KyuubiAuthenticationFactory
 
 /**
@@ -318,7 +318,7 @@ class KyuubiOperationPerConnectionSuite extends WithKyuubiServer with HiveJDBCTe
 
   test("submit batch job with kyuubi connection") {
     val sparkProcessBuilder = new SparkProcessBuilder("kyuubi", conf)
-    val batchRequest = BatchRequest(
+    val batchRequest = new BatchRequest(
       "spark",
       sparkProcessBuilder.mainResource.get,
       sparkProcessBuilder.mainClass,
@@ -326,8 +326,8 @@ class KyuubiOperationPerConnectionSuite extends WithKyuubiServer with HiveJDBCTe
       Map(
         "spark.master" -> "local",
         s"spark.${ENGINE_SPARK_MAX_LIFETIME.key}" -> "5000",
-        s"spark.${ENGINE_CHECK_INTERVAL.key}" -> "1000"),
-      Seq.empty[String])
+        s"spark.${ENGINE_CHECK_INTERVAL.key}" -> "1000").asJava,
+      Seq.empty[String].asJava)
 
     val batchRequestBody = new ObjectMapper().registerModule(DefaultScalaModule)
       .writeValueAsString(batchRequest)

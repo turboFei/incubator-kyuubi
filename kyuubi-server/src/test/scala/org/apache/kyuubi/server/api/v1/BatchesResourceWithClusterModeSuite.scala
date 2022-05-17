@@ -20,7 +20,10 @@ package org.apache.kyuubi.server.api.v1
 import javax.ws.rs.client.Entity
 import javax.ws.rs.core.MediaType
 
+import scala.collection.JavaConverters._
+
 import org.apache.kyuubi.{KyuubiFunSuite, RestFrontendTestHelper}
+import org.apache.kyuubi.client.api.v1.dto.{Batch, BatchRequest}
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf.{ENGINE_CHECK_INTERVAL, ENGINE_SPARK_MAX_LIFETIME}
 import org.apache.kyuubi.engine.spark.SparkProcessBuilder
@@ -32,7 +35,7 @@ class BatchesResourceWithClusterModeSuite extends KyuubiFunSuite with RestFronte
 
   test("open batch session") {
     val sparkProcessBuilder = new SparkProcessBuilder("kyuubi", conf)
-    var requestObj = BatchRequest(
+    var requestObj = new BatchRequest(
       "spark",
       sparkProcessBuilder.mainResource.get,
       sparkProcessBuilder.mainClass,
@@ -40,27 +43,27 @@ class BatchesResourceWithClusterModeSuite extends KyuubiFunSuite with RestFronte
       Map(
         "spark.master" -> "local",
         s"spark.${ENGINE_SPARK_MAX_LIFETIME.key}" -> "5000",
-        s"spark.${ENGINE_CHECK_INTERVAL.key}" -> "1000"),
-      Seq.empty[String])
+        s"spark.${ENGINE_CHECK_INTERVAL.key}" -> "1000").asJava,
+      Seq.empty[String].asJava)
 
     var response = webTarget.path("api/v1/batches")
       .request(MediaType.APPLICATION_JSON_TYPE)
       .post(Entity.entity(requestObj, MediaType.APPLICATION_JSON_TYPE))
     assert(500 == response.getStatus)
 
-    requestObj = requestObj.copy(conf = requestObj.conf ++
-      Map(KyuubiConf.SESSION_CLUSTER.key -> "test"))
+    requestObj.setConf(
+      (requestObj.getConf.asScala ++ Map(KyuubiConf.SESSION_CLUSTER.key -> "test")).asJava)
 
     response = webTarget.path("api/v1/batches")
       .request(MediaType.APPLICATION_JSON_TYPE)
       .post(Entity.entity(requestObj, MediaType.APPLICATION_JSON_TYPE))
     assert(200 == response.getStatus)
     val batch = response.readEntity(classOf[Batch])
-    assert(batch.kyuubiInstance === fe.connectionUrl)
+    assert(batch.getKyuubiInstance === fe.connectionUrl)
 
     // invalid cluster
-    requestObj = requestObj.copy(conf = requestObj.conf ++
-      Map(KyuubiConf.SESSION_CLUSTER.key -> "invalidCluster"))
+    requestObj.setConf((requestObj.getConf.asScala ++ Map(
+      KyuubiConf.SESSION_CLUSTER.key -> "invalidCluster")).asJava)
 
     response = webTarget.path("api/v1/batches")
       .request(MediaType.APPLICATION_JSON_TYPE)
