@@ -45,5 +45,12 @@
                 <module>kyuubi-kubernetes-it</module>
             </modules>
         </profile>
+
+        <profile>
+            <id>trino-it</id>
+            <modules>
+                <module>kyuubi-trino-it</module>
+            </modules>
+        </profile>
     </profiles>
 </project>
