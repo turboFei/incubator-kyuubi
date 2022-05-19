@@ -22,12 +22,13 @@ import java.nio.file.Paths
 
 import scala.collection.mutable.ArrayBuffer
 
+import com.google.common.annotations.VisibleForTesting
 import org.apache.hadoop.security.UserGroupInformation
 
 import org.apache.kyuubi._
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf._
-import org.apache.kyuubi.engine.ProcBuilder
+import org.apache.kyuubi.engine.{KyuubiApplicationManager, ProcBuilder}
 import org.apache.kyuubi.ha.HighAvailabilityConf
 import org.apache.kyuubi.ha.client.AuthTypes
 import org.apache.kyuubi.operation.log.OperationLog
@@ -35,8 +36,14 @@ import org.apache.kyuubi.operation.log.OperationLog
 class SparkProcessBuilder(
     override val proxyUser: String,
     override val conf: KyuubiConf,
+    val engineRefId: String,
     val extraEngineLog: Option[OperationLog] = None)
   extends ProcBuilder with Logging {
+
+  @VisibleForTesting
+  def this(proxyUser: String, conf: KyuubiConf) {
+    this(proxyUser, conf, "")
+  }
 
   import SparkProcessBuilder._
 
@@ -49,6 +56,7 @@ class SparkProcessBuilder(
   override def mainClass: String = "org.apache.kyuubi.engine.spark.SparkSQLEngine"
 
   override protected val commands: Array[String] = {
+    KyuubiApplicationManager.tagApplication(engineRefId, shortName, clusterManager(), conf)
     val buffer = new ArrayBuffer[String]()
     buffer += executable
     buffer += CLASS
