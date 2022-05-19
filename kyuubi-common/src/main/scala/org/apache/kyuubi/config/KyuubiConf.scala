@@ -1389,7 +1389,12 @@ object KyuubiConf {
       .version("1.5.0")
       .stringConf
       .toSequence()
-      .createWithDefault(Seq("ResetCommand", "SetCommand", "SetNamespaceCommand", "UseStatement"))
+      .createWithDefault(Seq(
+        "ResetCommand",
+        "SetCommand",
+        "SetNamespaceCommand",
+        "UseStatement",
+        "SetCatalogAndNamespace"))
 
   object OperationLanguages extends Enumeration {
     type OperationLanguage = Value
