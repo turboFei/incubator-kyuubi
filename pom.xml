@@ -2155,6 +2155,13 @@
         </profile>
 
         <profile>
+            <id>jdbc-engine</id>
+            <modules>
+                <module>externals/kyuubi-jdbc-engine</module>
+            </modules>
+        </profile>
+
+        <profile>
             <id>spark-authz</id>
             <modules>
                 <module>extensions/spark/kyuubi-spark-authz</module>
