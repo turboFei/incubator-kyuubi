@@ -17,6 +17,8 @@
 
 package org.apache.kyuubi.ha.client
 
+import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.ha.HighAvailabilityConf.SERVER_HA_ZK_ENABLED
 import org.apache.kyuubi.service.FrontendService
 
 /**
@@ -36,5 +38,15 @@ class KyuubiServiceDiscovery(
       warn(s"The Zookeeper ensemble is LOST")
     }
     super.stop()
+  }
+}
+
+object KyuubiServiceDiscovery {
+  def enableServiceDiscovery(conf: KyuubiConf): Boolean = {
+    conf.get(SERVER_HA_ZK_ENABLED)
+  }
+
+  def supportServiceDiscovery(conf: KyuubiConf): Boolean = {
+    enableServiceDiscovery(conf) && ServiceDiscovery.supportServiceDiscovery(conf)
   }
 }

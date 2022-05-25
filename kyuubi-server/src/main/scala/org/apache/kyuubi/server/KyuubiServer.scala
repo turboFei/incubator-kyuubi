@@ -18,14 +18,10 @@
 package org.apache.kyuubi.server
 
 import java.net.InetAddress
-import java.util
 
 import scala.util.Properties
 
-import org.apache.curator.utils.ZKPaths
 import org.apache.hadoop.security.UserGroupInformation
-import org.apache.zookeeper.KeeperException
-import org.apache.zookeeper.KeeperException.NodeExistsException
 
 import org.apache.kyuubi._
 import org.apache.kyuubi.config.KyuubiConf
@@ -34,9 +30,7 @@ import org.apache.kyuubi.config.KyuubiConf.FrontendProtocols._
 import org.apache.kyuubi.events.{EventBus, EventLoggerType, KyuubiEvent, KyuubiServerInfoEvent}
 import org.apache.kyuubi.events.handler.ServerJsonLoggingEventHandler
 import org.apache.kyuubi.ha.HighAvailabilityConf._
-import org.apache.kyuubi.ha.client.AuthTypes
-import org.apache.kyuubi.ha.client.DiscoveryClientProvider._
-import org.apache.kyuubi.ha.client.ServiceDiscovery
+import org.apache.kyuubi.ha.client.{AuthTypes, KyuubiServiceDiscovery}
 import org.apache.kyuubi.metrics.{MetricsConf, MetricsSystem}
 import org.apache.kyuubi.service.{AbstractBackendService, AbstractFrontendService, Serverable, ServiceState}
 import org.apache.kyuubi.util.{KyuubiHadoopUtils, SignalRegister}
@@ -47,46 +41,12 @@ object KyuubiServer extends Logging {
   private[kyuubi] var kyuubiServer: KyuubiServer = _
 
   def startServer(conf: KyuubiConf): KyuubiServer = {
-    if (conf.get(SERVER_HA_ZK_ENABLED)) {
-      if (!ServiceDiscovery.supportServiceDiscovery(conf)) {
-        zkServer.initialize(conf)
-        zkServer.start()
-        conf.set(HA_ZK_QUORUM, zkServer.getConnectString)
-        conf.set(HA_ZK_AUTH_TYPE, AuthTypes.NONE.toString)
-      } else {
-        // create chroot path if necessary
-        val connectionStr = conf.get(HA_ZK_QUORUM)
-        val addresses = connectionStr.split(",")
-        val slashOption = util.Arrays.copyOfRange(addresses, 0, addresses.length - 1)
-          .toList
-          .find(_.contains("/"))
-        if (slashOption.isDefined) {
-          throw new IllegalArgumentException(s"Illegal zookeeper quorum '$connectionStr', " +
-            s"the chroot path started with / is only allowed at the end!")
-        }
-        val chrootIndex = connectionStr.indexOf("/")
-        val chrootOption = {
-          if (chrootIndex > 0) Some(connectionStr.substring(chrootIndex))
-          else None
-        }
-        chrootOption.foreach { chroot =>
-          val zkConnectionForChrootCreation = connectionStr.substring(0, chrootIndex)
-          val overrideQuorumConf = conf.clone.set(HA_ZK_QUORUM, zkConnectionForChrootCreation)
-          withDiscoveryClient(overrideQuorumConf) { discoveryClient =>
-            if (discoveryClient.pathNonExists(chroot)) {
-              val chrootPath = ZKPaths.makePath(null, chroot)
-              try {
-                discoveryClient.create(chrootPath, "PERSISTENT")
-              } catch {
-                case _: NodeExistsException => // do nothing
-                case e: KeeperException =>
-                  throw new KyuubiException(s"Failed to create chroot path '$chrootPath'", e)
-              }
-            }
-          }
-          info(s"Created zookeeper chroot path $chroot")
-        }
-      }
+    if (KyuubiServiceDiscovery.enableServiceDiscovery(conf) &&
+      !KyuubiServiceDiscovery.supportServiceDiscovery(conf)) {
+      zkServer.initialize(conf)
+      zkServer.start()
+      conf.set(HA_ADDRESSES, zkServer.getConnectString)
+      conf.set(HA_ZK_AUTH_TYPE, AuthTypes.NONE.toString)
     }
 
     val server = conf.get(KyuubiConf.SERVER_NAME) match {

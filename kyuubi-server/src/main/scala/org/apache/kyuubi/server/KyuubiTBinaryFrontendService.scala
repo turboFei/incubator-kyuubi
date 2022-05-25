@@ -32,7 +32,7 @@ import org.apache.kyuubi.client.api.v1.dto.BatchRequest
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf.{SESSION_CLUSTER, SESSION_CLUSTER_MODE_ENABLED}
 import org.apache.kyuubi.config.KyuubiReservedKeys._
-import org.apache.kyuubi.ha.client.{KyuubiServiceDiscovery, ServiceDiscovery}
+import org.apache.kyuubi.ha.client.KyuubiServiceDiscovery
 import org.apache.kyuubi.service.{Serverable, Service, TBinaryFrontendService}
 import org.apache.kyuubi.service.TFrontendService.{CURRENT_SERVER_CONTEXT, OK_STATUS, SERVER_VERSION}
 import org.apache.kyuubi.session.{KyuubiBatchSessionImpl, KyuubiSessionImpl, KyuubiSessionManager, SessionHandle}
@@ -45,7 +45,7 @@ final class KyuubiTBinaryFrontendService(
   private val mapper = new ObjectMapper().registerModule(DefaultScalaModule)
 
   override lazy val discoveryService: Option[Service] = {
-    if (ServiceDiscovery.supportServiceDiscovery(conf)) {
+    if (KyuubiServiceDiscovery.supportServiceDiscovery(conf)) {
       Some(new KyuubiServiceDiscovery(this))
     } else {
       None
