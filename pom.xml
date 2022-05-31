@@ -2173,6 +2173,7 @@
         <profile>
             <id>spark-connector</id>
             <modules>
+                <module>extensions/spark/kyuubi-spark-connector-common</module>
                 <module>extensions/spark/kyuubi-spark-connector-kudu</module>
                 <module>extensions/spark/kyuubi-spark-connector-tpcds</module>
                 <module>extensions/spark/kyuubi-spark-connector-tpch</module>
