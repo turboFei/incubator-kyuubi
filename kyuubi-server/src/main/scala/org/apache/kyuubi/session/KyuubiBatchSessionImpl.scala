@@ -29,6 +29,10 @@ import org.apache.kyuubi.config.KyuubiConf._
 import org.apache.kyuubi.events.{EventBus, KyuubiSessionEvent}
 import org.apache.kyuubi.metrics.MetricsConstants.{CONN_OPEN, CONN_TOTAL}
 import org.apache.kyuubi.metrics.MetricsSystem
+import org.apache.kyuubi.operation.OperationState
+import org.apache.kyuubi.server.KyuubiRestFrontendService
+import org.apache.kyuubi.server.statestore.api.Metadata
+import org.apache.kyuubi.session.SessionType.SessionType
 
 class KyuubiBatchSessionImpl(
     protocol: TProtocolVersion,
@@ -36,17 +40,19 @@ class KyuubiBatchSessionImpl(
     password: String,
     ipAddress: String,
     conf: Map[String, String],
-    sessionManager: KyuubiSessionManager,
+    override val sessionManager: KyuubiSessionManager,
     val sessionConf: KyuubiConf,
     batchRequest: BatchRequest)
   extends KyuubiSession(protocol, user, password, ipAddress, conf, sessionManager) {
+  override val sessionType: SessionType = SessionType.BATCH
+
   override val handle: SessionHandle = sessionManager.newBatchSessionHandle(protocol)
 
   // TODO: Support batch conf advisor
-  override val normalizedConf: Map[String, String] =
-    sessionManager.validateBatchConf(batchRequest.getConf.asScala.toMap)
-
-  batchRequest.setConf(normalizedConf.asJava)
+  override val normalizedConf: Map[String, String] = {
+    sessionConf.getBatchConf(batchRequest.getBatchType) ++
+      sessionManager.validateBatchConf(batchRequest.getConf.asScala.toMap)
+  }
 
   val sessionCluster =
     if (sessionManager.sessionClusterModeEnabled) {
@@ -79,7 +85,14 @@ class KyuubiBatchSessionImpl(
   }
 
   private[kyuubi] lazy val batchJobSubmissionOp = sessionManager.operationManager
-    .newBatchJobSubmissionOperation(this, batchRequest)
+    .newBatchJobSubmissionOperation(
+      this,
+      batchRequest.getBatchType,
+      batchRequest.getName,
+      batchRequest.getResource,
+      batchRequest.getClassName,
+      normalizedConf,
+      batchRequest.getArgs.asScala)
 
   private val sessionEvent = KyuubiSessionEvent(this)
   sessionCluster.foreach(sessionEvent.sessionCluster = _)
@@ -94,6 +107,26 @@ class KyuubiBatchSessionImpl(
       ms.incCount(CONN_TOTAL)
       ms.incCount(MetricRegistry.name(CONN_OPEN, user))
     }
+
+    val metaData = Metadata(
+      identifier = handle.identifier.toString,
+      sessionType = sessionType,
+      // TODO: support real user
+      realUser = user,
+      username = user,
+      ipAddress = ipAddress,
+      // TODO: support to transfer fe connection url when opening session
+      kyuubiInstance = KyuubiRestFrontendService.getConnectionUrl,
+      state = OperationState.PENDING.toString,
+      resource = batchRequest.getResource,
+      className = batchRequest.getClassName,
+      requestName = batchRequest.getName,
+      requestConf = normalizedConf,
+      requestArgs = batchRequest.getArgs.asScala,
+      createTime = createTime,
+      engineType = batchRequest.getBatchType)
+
+    sessionManager.insertMetadata(metaData)
 
     // we should call super.open before running batch job submission operation
     super.open()

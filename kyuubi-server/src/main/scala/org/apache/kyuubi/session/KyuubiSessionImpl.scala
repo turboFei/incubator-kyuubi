@@ -34,6 +34,7 @@ import org.apache.kyuubi.metrics.MetricsSystem
 import org.apache.kyuubi.operation.{Operation, OperationHandle}
 import org.apache.kyuubi.operation.log.OperationLog
 import org.apache.kyuubi.service.authentication.InternalSecurityAccessor
+import org.apache.kyuubi.session.SessionType.SessionType
 
 class KyuubiSessionImpl(
     protocol: TProtocolVersion,
@@ -44,6 +45,8 @@ class KyuubiSessionImpl(
     override val sessionManager: KyuubiSessionManager,
     val sessionConf: KyuubiConf)
   extends KyuubiSession(protocol, user, password, ipAddress, conf, sessionManager) {
+
+  override val sessionType: SessionType = SessionType.SQL
 
   val sessionCluster =
     if (sessionManager.sessionClusterModeEnabled) {
