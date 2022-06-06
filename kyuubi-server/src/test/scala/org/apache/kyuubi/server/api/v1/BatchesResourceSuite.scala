@@ -44,9 +44,11 @@ class BatchesResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper {
     sessionManager.allSessions().foreach { session =>
       sessionManager.closeSession(session.handle)
     }
-    sessionManager.getBatchesByType(null, 0, Int.MaxValue).foreach { batch =>
-      sessionManager.applicationManager.killApplication(None, batch.getId, None)
-      sessionManager.cleanupMetadata(batch.getId)
+
+    sessionManager.getBatchesFromStateStore(null, null, null, 0, 0, 0, Int.MaxValue).foreach {
+      batch =>
+        sessionManager.applicationManager.killApplication(None, batch.getId, None)
+        sessionManager.cleanupMetadata(batch.getId)
     }
   }
 
@@ -71,6 +73,9 @@ class BatchesResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper {
     var batch = response.readEntity(classOf[Batch])
     assert(batch.getKyuubiInstance === fe.connectionUrl)
     assert(batch.getBatchType === "SPARK")
+    assert(batch.getName === appName)
+    assert(batch.getCreateTime > 0)
+    assert(batch.getEndTime === 0)
 
     requestObj.setConf((requestObj.getConf.asScala ++
       Map(KyuubiAuthenticationFactory.HS2_PROXY_USER -> "root")).asJava)
@@ -87,6 +92,9 @@ class BatchesResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper {
     batch = getBatchResponse.readEntity(classOf[Batch])
     assert(batch.getKyuubiInstance === fe.connectionUrl)
     assert(batch.getBatchType === "SPARK")
+    assert(batch.getName === appName)
+    assert(batch.getCreateTime > 0)
+    assert(batch.getEndTime === 0)
 
     // invalid batchId
     getBatchResponse = webTarget.path(s"api/v1/batches/invalidBatchId")
@@ -192,6 +200,10 @@ class BatchesResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper {
 
     val response = webTarget.path("api/v1/batches")
       .queryParam("batchType", "spark")
+      .queryParam("batchUser", "anonymous")
+      .queryParam("batchState", "RUNNING")
+      .queryParam("createTime", "0")
+      .queryParam("endTime", "0")
       .queryParam("from", "0")
       .queryParam("size", "2")
       .request(MediaType.APPLICATION_JSON_TYPE)
@@ -305,6 +317,16 @@ class BatchesResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper {
     val getBatchListResponse6 = response6.readEntity(classOf[GetBatchesResponse])
     assert(getBatchListResponse6.getTotal == 1)
     sessionManager.allSessions().map(_.close())
+
+    val queryCreateTime = System.currentTimeMillis()
+    val response7 = webTarget.path("api/v1/batches")
+      .queryParam("createTime", queryCreateTime.toString)
+      .queryParam("endTime", (queryCreateTime - 1).toString)
+      .queryParam("from", "2")
+      .queryParam("size", "2")
+      .request(MediaType.APPLICATION_JSON_TYPE)
+      .get()
+    assert(response7.getStatus === 500)
   }
 
   test("negative request") {
