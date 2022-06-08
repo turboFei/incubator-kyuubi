@@ -49,15 +49,11 @@ abstract class TFrontendService(name: String)
   private val started = new AtomicBoolean(false)
   private lazy val serverThread = new NamedThreadFactory(getName, false).newThread(this)
   private lazy val serverHost = conf.get(FRONTEND_THRIFT_BINARY_BIND_HOST)
-  private var hadoopConf: Configuration = _
+  private var _hadoopConf: Configuration = _
 
   override def initialize(conf: KyuubiConf): Unit = {
-    initHadoopConf(conf)
+    _hadoopConf = KyuubiHadoopUtils.newHadoopConf(conf)
     super.initialize(conf)
-  }
-
-  protected def initHadoopConf(conf: KyuubiConf): Unit = {
-    hadoopConf = KyuubiHadoopUtils.newHadoopConf(conf)
   }
 
   /**
@@ -65,7 +61,7 @@ abstract class TFrontendService(name: String)
    * For engine side, there is only one hadoop conf, but for kyuubi server side, there might be
    * multiple hadoop conf when session cluster mode is enabled.
    */
-  protected def getHadoopConf(sessionConf: Map[String, String]): Configuration = hadoopConf
+  protected def hadoopConf(sessionConf: Map[String, String]): Configuration = _hadoopConf
 
   protected def portNum: Int
   protected lazy val serverAddr: InetAddress =
@@ -149,7 +145,7 @@ abstract class TFrontendService(name: String)
         realUser,
         proxyUser,
         ipAddress,
-        getHadoopConf(sessionConf.asScala.toMap))
+        hadoopConf(sessionConf.asScala.toMap))
       proxyUser
     } else {
       KyuubiAuthenticationFactory.verifyBatchAccountAccess(

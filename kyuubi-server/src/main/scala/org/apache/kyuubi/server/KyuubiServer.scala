@@ -18,14 +18,17 @@
 package org.apache.kyuubi.server
 
 import java.net.InetAddress
+import java.util.concurrent.ConcurrentHashMap
 
+import scala.collection.JavaConverters._
 import scala.util.Properties
 
+import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.security.UserGroupInformation
 
 import org.apache.kyuubi._
 import org.apache.kyuubi.config.KyuubiConf
-import org.apache.kyuubi.config.KyuubiConf.{FRONTEND_PROTOCOLS, FrontendProtocols, SERVER_EVENT_JSON_LOG_PATH, SERVER_EVENT_LOGGERS}
+import org.apache.kyuubi.config.KyuubiConf.{FRONTEND_PROTOCOLS, FrontendProtocols, SERVER_EVENT_JSON_LOG_PATH, SERVER_EVENT_LOGGERS, SESSION_CLUSTER}
 import org.apache.kyuubi.config.KyuubiConf.FrontendProtocols._
 import org.apache.kyuubi.events.{EventBus, EventLoggerType, KyuubiEvent, KyuubiServerInfoEvent}
 import org.apache.kyuubi.events.handler.ServerJsonLoggingEventHandler
@@ -40,7 +43,13 @@ object KyuubiServer extends Logging {
   private val zkServer = new EmbeddedZookeeper()
   private[kyuubi] var kyuubiServer: KyuubiServer = _
 
+  private var clusterModeEnabled: Boolean = _
+  private var clusterList: Seq[String] = Seq.empty
+  private val clusterHadoopConf = new ConcurrentHashMap[Option[String], Configuration]().asScala
+
   def startServer(conf: KyuubiConf): KyuubiServer = {
+    clusterModeEnabled = conf.get(KyuubiConf.SESSION_CLUSTER_MODE_ENABLED)
+    loadHadoopConf(Some(conf))
     if (KyuubiServiceDiscovery.enableServiceDiscovery(conf) &&
       !KyuubiServiceDiscovery.supportServiceDiscovery(conf)) {
       zkServer.initialize(conf)
@@ -92,6 +101,37 @@ object KyuubiServer extends Logging {
     val conf = new KyuubiConf().loadFileDefaults()
     UserGroupInformation.setConfiguration(KyuubiHadoopUtils.newHadoopConf(conf))
     startServer(conf)
+  }
+
+  def isClusterModeEnabled: Boolean = clusterModeEnabled
+
+  def loadHadoopConf(conf: Option[KyuubiConf] = None): Unit = synchronized {
+    val kyuubiConf = conf.getOrElse(new KyuubiConf().loadFileDefaults())
+    if (clusterModeEnabled) {
+      clusterList = Utils.getDefinedPropertiesClusterList()
+      clusterList.foreach { cluster =>
+        clusterHadoopConf.put(
+          Option(cluster),
+          KyuubiHadoopUtils.newHadoopConf(
+            kyuubiConf,
+            clusterOpt = Option(cluster)))
+      }
+    } else {
+      clusterHadoopConf.put(None, KyuubiHadoopUtils.newHadoopConf(kyuubiConf))
+    }
+  }
+
+  def getHadoopConf(clusterOpt: Option[String]): Configuration = {
+    if (clusterModeEnabled) {
+      clusterHadoopConf.get(clusterOpt).getOrElse {
+        throw KyuubiSQLException(
+          s"Please specify the cluster to access with session conf[${SESSION_CLUSTER.key}]," +
+            s" which should be one of ${clusterList.mkString("[", ",", "]")}," +
+            s" current value is $clusterOpt")
+      }
+    } else {
+      clusterHadoopConf.get(None).get
+    }
   }
 }
 
