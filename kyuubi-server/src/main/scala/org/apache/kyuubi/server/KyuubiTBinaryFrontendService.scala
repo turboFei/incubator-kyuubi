@@ -27,6 +27,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hive.service.rpc.thrift._
 
 import org.apache.kyuubi.KyuubiSQLException
+import org.apache.kyuubi.cli.Handle
 import org.apache.kyuubi.client.api.v1.dto.BatchRequest
 import org.apache.kyuubi.config.KyuubiConf.SESSION_CLUSTER
 import org.apache.kyuubi.config.KyuubiReservedKeys._
@@ -75,7 +76,6 @@ final class KyuubiTBinaryFrontendService(
       }
       val userName = getUserName(req)
       be.sessionManager.asInstanceOf[KyuubiSessionManager].openBatchSession(
-        protocol,
         userName,
         req.getPassword,
         ipAddress,
@@ -98,7 +98,7 @@ final class KyuubiTBinaryFrontendService(
       be.sessionManager.getSession(sessionHandle) match {
         case ks: KyuubiSessionImpl =>
           val launchEngineOp = ks.launchEngineOp
-          val opHandleIdentifier = launchEngineOp.getHandle.identifier.toTHandleIdentifier
+          val opHandleIdentifier = Handle.toTHandleIdentifier(launchEngineOp.getHandle.identifier)
           respConfiguration.put(
             KYUUBI_SESSION_ENGINE_LAUNCH_HANDLE_GUID,
             Base64.getMimeEncoder.encodeToString(opHandleIdentifier.getGuid))
@@ -108,7 +108,7 @@ final class KyuubiTBinaryFrontendService(
 
         case kbs: KyuubiBatchSessionImpl =>
           val batchOp = kbs.batchJobSubmissionOp
-          val opHandleIdentifier = batchOp.getHandle.identifier.toTHandleIdentifier
+          val opHandleIdentifier = Handle.toTHandleIdentifier(batchOp.getHandle.identifier)
           respConfiguration.put(
             "kyuubi.batch.handle.guid",
             Base64.getMimeEncoder.encodeToString(opHandleIdentifier.getGuid))
