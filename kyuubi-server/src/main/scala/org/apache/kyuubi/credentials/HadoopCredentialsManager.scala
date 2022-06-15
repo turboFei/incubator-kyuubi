@@ -181,6 +181,14 @@ class HadoopCredentialsManager private (name: String) extends AbstractService(na
     super.stop()
   }
 
+  def renewCredentials(appUser: String, appCluster: Option[String]): String = {
+    if (renewalExecutor.isEmpty) {
+      return ""
+    }
+    val userRef = getOrCreateUserCredentialsRef(appUser, appCluster, true)
+    userRef.getEncodedCredentials
+  }
+
   /**
    * Send credentials to SQL engine which the specified session is talking to if
    * [[HadoopCredentialsManager]] has a newer credentials.
@@ -193,13 +201,12 @@ class HadoopCredentialsManager private (name: String) extends AbstractService(na
       sessionId: String,
       appUser: String,
       appCluster: Option[String],
-      send: String => Unit,
-      waitUntilCredentialsReady: Boolean = false): Unit = {
+      send: String => Unit): Unit = {
     if (renewalExecutor.isEmpty) {
       return
     }
 
-    val userRef = getOrCreateUserCredentialsRef(appUser, appCluster, waitUntilCredentialsReady)
+    val userRef = getOrCreateUserCredentialsRef(appUser, appCluster)
     val sessionEpoch = getSessionCredentialsEpoch(sessionId)
 
     if (userRef.getEpoch > sessionEpoch) {
