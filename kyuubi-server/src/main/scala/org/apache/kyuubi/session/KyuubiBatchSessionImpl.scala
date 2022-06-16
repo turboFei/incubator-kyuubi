@@ -33,7 +33,7 @@ import org.apache.kyuubi.metrics.MetricsConstants.{CONN_OPEN, CONN_TOTAL}
 import org.apache.kyuubi.metrics.MetricsSystem
 import org.apache.kyuubi.operation.OperationState
 import org.apache.kyuubi.server.KyuubiRestFrontendService
-import org.apache.kyuubi.server.statestore.api.SessionMetadata
+import org.apache.kyuubi.server.metadata.api.Metadata
 import org.apache.kyuubi.session.SessionType.SessionType
 
 class KyuubiBatchSessionImpl(
@@ -44,7 +44,7 @@ class KyuubiBatchSessionImpl(
     override val sessionManager: KyuubiSessionManager,
     val sessionConf: KyuubiConf,
     batchRequest: BatchRequest,
-    recoveryMetadata: Option[SessionMetadata] = None)
+    recoveryMetadata: Option[Metadata] = None)
   extends KyuubiSession(
     TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V1,
     user,
@@ -107,6 +107,18 @@ class KyuubiBatchSessionImpl(
       batchRequest.getArgs.asScala,
       recoveryMetadata)
 
+  private def waitMetadataRequestsRetryCompletion(): Unit = {
+    val batchId = batchJobSubmissionOp.batchId
+    sessionManager.getMetadataRequestsRetryRef(batchId).foreach {
+      metadataRequestsRetryRef =>
+        while (metadataRequestsRetryRef.hasRemainingRequests()) {
+          info(s"There are still remaining metadata store requests for batch[$batchId]")
+          Thread.sleep(300)
+        }
+        sessionManager.deRegisterMetadataRequestsRetryRef(batchId)
+    }
+  }
+
   private val sessionEvent = KyuubiSessionEvent(this)
   sessionCluster.foreach(sessionEvent.sessionCluster = _)
   EventBus.post(sessionEvent)
@@ -122,7 +134,7 @@ class KyuubiBatchSessionImpl(
     }
 
     if (recoveryMetadata.isEmpty) {
-      val metaData = SessionMetadata(
+      val metaData = Metadata(
         identifier = handle.identifier.toString,
         sessionType = sessionType,
         // TODO: support real user
@@ -152,6 +164,7 @@ class KyuubiBatchSessionImpl(
 
   override def close(): Unit = {
     super.close()
+    waitMetadataRequestsRetryCompletion()
     sessionEvent.endTime = System.currentTimeMillis()
     EventBus.post(sessionEvent)
     MetricsSystem.tracing(_.decCount(MetricRegistry.name(CONN_OPEN, user)))

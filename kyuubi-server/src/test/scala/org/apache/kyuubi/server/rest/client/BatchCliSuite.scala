@@ -69,9 +69,9 @@ class BatchCliSuite extends RestClientTestHelper with TestPrematureExit {
     sessionManager.allSessions().foreach { session =>
       sessionManager.closeSession(session.handle)
     }
-    sessionManager.getBatchesFromStateStore(null, null, null, 0, 0, 0, Int.MaxValue).foreach {
+    sessionManager.getBatchesFromMetadataStore(null, null, null, 0, 0, 0, Int.MaxValue).foreach {
       batch =>
-        sessionManager.applicationManager.killApplication(None, batch.getId)
+        sessionManager.applicationManager.killApplication(None, batch.getId, None)
         sessionManager.cleanupMetadata(batch.getId)
     }
   }
@@ -232,13 +232,13 @@ class BatchCliSuite extends RestClientTestHelper with TestPrematureExit {
         "",
         ""))
     sessionManager.openSession(
-      TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V11,
+      TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V10,
       "",
       "",
       "",
       Map.empty)
     sessionManager.openSession(
-      TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V11,
+      TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V10,
       "",
       "",
       "",

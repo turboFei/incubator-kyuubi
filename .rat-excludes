@@ -48,4 +48,4 @@ build/scala-*/**
 **/org/apache/kyuubi/ui/swagger/**
 **/org.apache.spark.status.AppHistoryServerPlugin
 **/KyuubiBeeLine.properties
-**/statestore-schema*.sql
+**/metadata-store-schema*.sql
