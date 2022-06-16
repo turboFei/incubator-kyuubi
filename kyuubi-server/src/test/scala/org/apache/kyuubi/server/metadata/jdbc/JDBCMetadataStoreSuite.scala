@@ -37,6 +37,24 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
     .set(s"$METADATA_STORE_JDBC_DATASOURCE_PREFIX.idleTimeout", "60000")
   private val jdbcMetadataStore = new JDBCMetadataStore(conf)
 
+  override def beforeAll(): Unit = {
+    jdbcMetadataStore.getMetadataList(
+      null,
+      null,
+      null,
+      null,
+      null,
+      0,
+      0,
+      0,
+      Int.MaxValue,
+      true).foreach {
+      batch =>
+        jdbcMetadataStore.cleanupMetadataByIdentifier(batch.identifier)
+    }
+    super.beforeAll()
+  }
+
   override def afterAll(): Unit = {
     super.afterAll()
     jdbcMetadataStore.getMetadataList(
