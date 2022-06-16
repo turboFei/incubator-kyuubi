@@ -23,6 +23,7 @@ import javax.security.sasl.AuthenticationException
 import javax.servlet.{ServletContextEvent, ServletContextListener}
 
 import org.apache.commons.lang3.SystemUtils
+import org.apache.hadoop.conf.Configuration
 import org.apache.hive.service.rpc.thrift.{TCLIService, TOpenSessionReq}
 import org.apache.thrift.protocol.TBinaryProtocol
 import org.eclipse.jetty.http.HttpMethod
@@ -230,6 +231,16 @@ final class KyuubiTHttpFrontendService(
   override protected def isServer(): Boolean = true
 
   override val discoveryService: Option[Service] = None
+
+  override protected def hadoopConf(sessionConf: Map[String, String]): Configuration = {
+    if (KyuubiServer.isClusterModeEnabled) {
+      val normalizedConf = be.sessionManager.validateAndNormalizeConf(sessionConf)
+      val clusterOpt = normalizedConf.get(SESSION_CLUSTER.key).orElse(conf.get(SESSION_CLUSTER))
+      KyuubiServer.getHadoopConf(clusterOpt)
+    } else {
+      KyuubiServer.getHadoopConf(None)
+    }
+  }
 
   private def getHttpPath(httpPath: String): String = {
     if (httpPath == null || httpPath == "") return "/*"
