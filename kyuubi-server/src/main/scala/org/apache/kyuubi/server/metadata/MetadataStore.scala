@@ -43,11 +43,11 @@ trait MetadataStore extends Closeable {
    * @param engineType the engine type.
    * @param userName the user name.
    * @param state the state.
+   * @param cluster the session cluster
    * @param kyuubiInstance the kyuubi instance.
    * @param createTime the metadata create time.
    * @param endTime the end time.
-   * @param from the batch offset.
-   * @param size the batch size to get.
+   * @param fromSize the batch offset and the batch size to get.
    * @param stateOnly only return the state related column values.
    * @return selected metadata list.
    */
@@ -56,11 +56,11 @@ trait MetadataStore extends Closeable {
       engineType: String,
       userName: String,
       state: String,
+      cluster: String,
       kyuubiInstance: String,
       createTime: Long,
       endTime: Long,
-      from: Int,
-      size: Int,
+      fromSize: (Int, Int),
       stateOnly: Boolean): Seq[Metadata]
 
   /**

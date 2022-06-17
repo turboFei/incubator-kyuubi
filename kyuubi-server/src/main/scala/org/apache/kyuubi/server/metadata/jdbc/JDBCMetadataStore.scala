@@ -126,9 +126,10 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
          |request_args,
          |create_time,
          |engine_type,
+         |cluster,
          |cluster_manager
          |)
-         |VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         |VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          |""".stripMargin
 
     withConnection() { connection =>
@@ -149,6 +150,7 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
         valueAsString(metadata.requestArgs),
         metadata.createTime,
         Option(metadata.engineType).map(_.toUpperCase(Locale.ROOT)).orNull,
+        metadata.cluster.map(_.toLowerCase(Locale.ROOT)).orNull,
         metadata.clusterManager.orNull)
     }
   }
@@ -173,11 +175,11 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
       engineType: String,
       userName: String,
       state: String,
+      cluster: String,
       kyuubiInstance: String,
       createTime: Long,
       endTime: Long,
-      from: Int,
-      size: Int,
+      fromSize: (Int, Int),
       stateOnly: Boolean): Seq[Metadata] = {
     val queryBuilder = new StringBuilder
     val params = ListBuffer[Any]()
@@ -203,6 +205,10 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
       whereConditions += " state = ? "
       params += state.toUpperCase(Locale.ROOT)
     }
+    Option(cluster).filter(_.nonEmpty).foreach { _ =>
+      whereConditions += " cluster = ? "
+      params += cluster.toLowerCase(Locale.ROOT)
+    }
     Option(kyuubiInstance).filter(_.nonEmpty).foreach { _ =>
       whereConditions += " kyuubi_instance = ? "
       params += kyuubiInstance
@@ -220,6 +226,7 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
       queryBuilder.append(whereConditions.mkString(" WHERE ", " AND ", " "))
     }
     queryBuilder.append(" ORDER BY key_id ")
+    val (from, size) = fromSize
     val query = databaseAdaptor.addLimitAndOffsetToQuery(queryBuilder.toString(), size, from)
     withConnection() { connection =>
       withResultSet(connection, query, params: _*) { rs =>
@@ -303,6 +310,7 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
         val requestName = resultSet.getString("request_name")
         val createTime = resultSet.getLong("create_time")
         val engineType = resultSet.getString("engine_type")
+        val cluster = Option(resultSet.getString("cluster"))
         val clusterManager = Option(resultSet.getString("cluster_manager"))
         val engineId = resultSet.getString("engine_id")
         val engineName = resultSet.getString("engine_name")
@@ -337,6 +345,7 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
           requestArgs = requestArgs,
           createTime = createTime,
           engineType = engineType,
+          cluster = cluster,
           clusterManager = clusterManager,
           engineId = engineId,
           engineName = engineName,
@@ -458,6 +467,7 @@ object JDBCMetadataStore {
     "request_name",
     "create_time",
     "engine_type",
+    "cluster",
     "cluster_manager",
     "engine_id",
     "engine_name",

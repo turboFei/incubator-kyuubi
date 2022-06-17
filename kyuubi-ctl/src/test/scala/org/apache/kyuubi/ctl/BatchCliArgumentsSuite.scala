@@ -99,6 +99,8 @@ class BatchCliArgumentsSuite extends KyuubiFunSuite with TestPrematureExit {
       "tom",
       "--batchState",
       "RUNNING",
+      "--cluster",
+      "apollo-rno",
       "--createTime",
       "20220607000000",
       "--from",
@@ -109,6 +111,7 @@ class BatchCliArgumentsSuite extends KyuubiFunSuite with TestPrematureExit {
     assert(opArgs.cliConfig.batchOpts.batchType == "spark")
     assert(opArgs.cliConfig.batchOpts.batchUser == "tom")
     assert(opArgs.cliConfig.batchOpts.batchState == "RUNNING")
+    assert(opArgs.cliConfig.batchOpts.cluster == "apollo-rno")
     assert(opArgs.cliConfig.batchOpts.createTime ==
       dateStringToMillis("20220607000000", "yyyyMMddHHmmss"))
     assert(opArgs.cliConfig.batchOpts.endTime == 0)

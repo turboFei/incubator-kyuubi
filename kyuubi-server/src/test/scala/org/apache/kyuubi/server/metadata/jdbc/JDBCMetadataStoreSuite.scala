@@ -44,10 +44,10 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
       null,
       null,
       null,
+      null,
       0,
       0,
-      0,
-      Int.MaxValue,
+      (0, Int.MaxValue),
       true).foreach {
       batch =>
         jdbcMetadataStore.cleanupMetadataByIdentifier(batch.identifier)
@@ -63,10 +63,10 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
       null,
       null,
       null,
+      null,
       0,
       0,
-      0,
-      Int.MaxValue,
+      (0, Int.MaxValue),
       true).foreach {
       batch =>
         jdbcMetadataStore.cleanupMetadataByIdentifier(batch.identifier)
@@ -98,6 +98,7 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
       requestArgs = Seq("100"),
       createTime = System.currentTimeMillis(),
       engineType = "spark",
+      cluster = Some("cluster"),
       clusterManager = Some("local"))
 
     var batchStateOnlyMetadata = batchMetadata.copy(
@@ -131,10 +132,10 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
         null,
         null,
         null,
+        null,
         0,
         0,
-        0,
-        1,
+        (0, 1),
         true)
     assert(batches == Seq(batchStateOnlyMetadata))
 
@@ -144,12 +145,38 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
       "kyuubi",
       null,
       null,
+      null,
       0,
       0,
-      0,
-      Int.MaxValue,
+      (0, Int.MaxValue),
       true)
     assert(batches == Seq(batchStateOnlyMetadata, batchState2))
+
+    batches = jdbcMetadataStore.getMetadataList(
+      SessionType.BATCH,
+      "spark",
+      "kyuubi",
+      null,
+      "cluster",
+      null,
+      0,
+      0,
+      (0, Int.MaxValue),
+      true)
+    assert(batches == Seq(batchStateOnlyMetadata, batchState2))
+
+    batches = jdbcMetadataStore.getMetadataList(
+      SessionType.BATCH,
+      "spark",
+      "kyuubi",
+      null,
+      "cluster-2",
+      null,
+      0,
+      0,
+      (0, Int.MaxValue),
+      true)
+    assert(batches.isEmpty)
 
     jdbcMetadataStore.cleanupMetadataByIdentifier(batchState2.identifier)
 
@@ -160,10 +187,10 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
         "kyuubi",
         "PENDING",
         null,
+        null,
         0,
         0,
-        0,
-        Int.MaxValue,
+        (0, Int.MaxValue),
         true)
     assert(batches.isEmpty)
 
@@ -174,10 +201,10 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
         "kyuubi",
         "PENDING",
         null,
+        null,
         0,
         0,
-        0,
-        Int.MaxValue,
+        (0, Int.MaxValue),
         true)
     assert(batches == Seq(batchStateOnlyMetadata))
 
@@ -188,10 +215,10 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
         "kyuubi",
         "RUNNING",
         null,
+        null,
         0,
         0,
-        0,
-        Int.MaxValue,
+        (0, Int.MaxValue),
         true)
     assert(batches.isEmpty)
 
@@ -202,10 +229,10 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
         "no_kyuubi",
         "PENDING",
         null,
+        null,
         0,
         0,
-        0,
-        Int.MaxValue,
+        (0, Int.MaxValue),
         true)
     assert(batches.isEmpty)
 
@@ -215,10 +242,10 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
       null,
       "PENDING",
       null,
+      null,
       0,
       0,
-      0,
-      Int.MaxValue,
+      (0, Int.MaxValue),
       true)
     assert(batches == Seq(batchStateOnlyMetadata))
 
@@ -228,10 +255,10 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
       null,
       null,
       null,
+      null,
       0,
       0,
-      0,
-      Int.MaxValue,
+      (0, Int.MaxValue),
       true)
     assert(batches == Seq(batchStateOnlyMetadata))
 
@@ -240,11 +267,11 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
       null,
       null,
       "PENDING",
+      null,
       kyuubiInstance,
       0,
       0,
-      0,
-      Int.MaxValue,
+      (0, Int.MaxValue),
       false)
     assert(batchesToRecover == Seq(batchMetadata))
 
@@ -253,11 +280,11 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
       null,
       null,
       "RUNNING",
+      null,
       kyuubiInstance,
       0,
       0,
-      0,
-      Int.MaxValue,
+      (0, Int.MaxValue),
       false)
     assert(batchesToRecover.isEmpty)
 
@@ -281,11 +308,11 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
       null,
       null,
       "PENDING",
+      null,
       kyuubiInstance,
       0,
       0,
-      0,
-      Int.MaxValue,
+      (0, Int.MaxValue),
       false).isEmpty)
 
     assert(jdbcMetadataStore.getMetadataList(
@@ -293,11 +320,11 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
       null,
       null,
       "RUNNING",
+      null,
       kyuubiInstance,
       0,
       0,
-      0,
-      Int.MaxValue,
+      (0, Int.MaxValue),
       false).isEmpty)
 
     eventually(Timeout(3.seconds)) {

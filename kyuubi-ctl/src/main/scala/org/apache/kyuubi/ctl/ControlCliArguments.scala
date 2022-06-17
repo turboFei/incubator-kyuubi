@@ -109,6 +109,7 @@ class ControlCliArguments(args: Seq[String], env: Map[String, String] = sys.env)
            |  batchType               ${cliConfig.batchOpts.batchType}
            |  batchUser               ${cliConfig.batchOpts.batchUser}
            |  batchState              ${cliConfig.batchOpts.batchState}
+           |  cluster                 ${cliConfig.batchOpts.cluster}
            |  createTime              ${cliConfig.batchOpts.createTime}
            |  endTime                 ${cliConfig.batchOpts.endTime}
            |  from                    ${cliConfig.batchOpts.from}

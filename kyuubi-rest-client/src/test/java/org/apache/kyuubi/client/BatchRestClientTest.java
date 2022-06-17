@@ -206,7 +206,7 @@ public class BatchRestClientTest {
 
     GetBatchesResponse expectedBatchesInfo = generateTestBatchesResponse();
     GetBatchesResponse result =
-        spnegoBatchRestApi.listBatches("spark", TEST_USERNAME, "RUNNING", 0L, 0L, 0, 10);
+        spnegoBatchRestApi.listBatches("spark", TEST_USERNAME, "RUNNING", "cluster", 0L, 0L, 0, 10);
 
     assertEquals(expectedBatchesInfo.getBatches().size(), result.getBatches().size());
     assertEquals(expectedBatchesInfo.getFrom(), result.getFrom());
@@ -216,7 +216,9 @@ public class BatchRestClientTest {
     BatchTestServlet.setAuthSchema(BASIC_AUTH);
     BatchTestServlet.allowAnonymous(false);
 
-    result = basicBatchRestApi.listBatches("spark", TEST_USERNAME, "RUNNING", null, null, 0, 10);
+    result =
+        basicBatchRestApi.listBatches(
+            "spark", TEST_USERNAME, "RUNNING", "cluster", null, null, 0, 10);
 
     assertEquals(expectedBatchesInfo.getBatches().size(), result.getBatches().size());
     assertEquals(expectedBatchesInfo.getFrom(), result.getFrom());

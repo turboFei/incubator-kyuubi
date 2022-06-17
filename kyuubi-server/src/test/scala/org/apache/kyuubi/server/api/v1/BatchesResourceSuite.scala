@@ -56,7 +56,15 @@ class BatchesResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper {
       sessionManager.closeSession(session.handle)
     }
 
-    sessionManager.getBatchesFromMetadataStore(null, null, null, 0, 0, 0, Int.MaxValue).foreach {
+    sessionManager.getBatchesFromMetadataStore(
+      null,
+      null,
+      null,
+      null,
+      0,
+      0,
+      0,
+      Int.MaxValue).foreach {
       batch =>
         sessionManager.applicationManager.killApplication(None, batch.getId, None)
         sessionManager.cleanupMetadata(batch.getId)
@@ -467,6 +475,7 @@ class BatchesResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper {
 
     assert(sessionManager.getBatchesFromMetadataStore(
       "SPARK",
+      null,
       null,
       null,
       0,

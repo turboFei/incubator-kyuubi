@@ -243,6 +243,9 @@ object CommandLine {
         opt[String]("batchState")
           .action((v, c) => c.copy(batchOpts = c.batchOpts.copy(batchState = v)))
           .text("Batch state."),
+        opt[String]("cluster")
+          .action((v, c) => c.copy(batchOpts = c.batchOpts.copy(cluster = v)))
+          .text("Hadoop cluster."),
         opt[String]("createTime")
           .action((v, c) =>
             c.copy(batchOpts = c.batchOpts.copy(createTime =

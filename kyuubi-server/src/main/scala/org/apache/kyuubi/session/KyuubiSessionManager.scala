@@ -192,11 +192,20 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
       batchType: String,
       batchUser: String,
       batchState: String,
+      cluster: String,
       createTime: Long,
       endTime: Long,
       from: Int,
       size: Int): Seq[Batch] = {
-    metadataManager.getBatches(batchType, batchUser, batchState, createTime, endTime, from, size)
+    metadataManager.getBatches(
+      batchType,
+      batchUser,
+      batchState,
+      cluster,
+      createTime,
+      endTime,
+      from,
+      size)
   }
 
   def getBatchMetadata(batchId: String): Metadata = {

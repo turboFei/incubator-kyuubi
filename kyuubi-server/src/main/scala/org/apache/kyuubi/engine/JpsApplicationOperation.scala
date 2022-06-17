@@ -84,6 +84,7 @@ class JpsApplicationOperation extends ApplicationOperation {
       val (id, cmd) = idAndCmd.splitAt(idAndCmd.indexOf(" "))
       Map(
         APP_ID_KEY -> id,
+        APP_CLUSTER_KEY -> clusterOpt.getOrElse(""),
         APP_NAME_KEY -> cmd,
         APP_STATE_KEY -> "RUNNING")
     } else {

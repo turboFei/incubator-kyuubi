@@ -132,12 +132,14 @@ class BatchRestApiSuite extends RestClientTestHelper {
     assert(closeResp.isSuccess)
 
     // list batches
-    var listBatchesResp = batchRestApi.listBatches("SPARK", null, null, null, null, 0, Int.MaxValue)
+    var listBatchesResp =
+      batchRestApi.listBatches("SPARK", null, null, null, null, null, 0, Int.MaxValue)
     assert(listBatchesResp.getTotal > 0)
 
     listBatchesResp =
       batchRestApi.listBatches(
         "SPARK",
+        null,
         null,
         null,
         Long.MaxValue - 1,
@@ -147,20 +149,21 @@ class BatchRestApiSuite extends RestClientTestHelper {
     assert(listBatchesResp.getTotal === 0)
 
     listBatchesResp =
-      batchRestApi.listBatches("SPARK", null, null, Long.MaxValue, null, 0, Int.MaxValue)
+      batchRestApi.listBatches("SPARK", null, null, null, Long.MaxValue, null, 0, Int.MaxValue)
     assert(listBatchesResp.getTotal === 0)
 
-    listBatchesResp = batchRestApi.listBatches("SPARK", null, null, null, 1000, 0, Int.MaxValue)
+    listBatchesResp =
+      batchRestApi.listBatches("SPARK", null, null, null, null, 1000, 0, Int.MaxValue)
     assert(listBatchesResp.getTotal === 0)
 
     // list batches with non-existing user
     listBatchesResp =
-      batchRestApi.listBatches("SPARK", "non_existing_user", null, 0, 0, 0, Int.MaxValue)
+      batchRestApi.listBatches("SPARK", "non_existing_user", null, null, 0, 0, 0, Int.MaxValue)
     assert(listBatchesResp.getTotal == 0)
 
     // list batches with invalid batch state
     intercept[KyuubiRestException] {
-      batchRestApi.listBatches("SPARK", null, "BAD_STATE", 0, 0, 0, Int.MaxValue)
+      batchRestApi.listBatches("SPARK", null, "BAD_STATE", null, 0, 0, 0, Int.MaxValue)
     }
 
     spnegoKyuubiRestClient.close()
@@ -175,7 +178,7 @@ class BatchRestApiSuite extends RestClientTestHelper {
       .build()
     val batchRestApi = new BatchRestApi(kyuubiRestClient)
 
-    batchRestApi.listBatches(null, null, null, 0, 0, 0, 1)
-    batchRestApi.listBatches(null, null, null, 0, 0, 0, 1)
+    batchRestApi.listBatches(null, null, null, null, 0, 0, 0, 1)
+    batchRestApi.listBatches(null, null, null, null, 0, 0, 0, 1)
   }
 }

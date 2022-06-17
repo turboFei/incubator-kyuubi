@@ -48,6 +48,7 @@ public class RestClientTestUtil {
   public static Batch generateTestBatch(String id) {
     Map<String, String> batchInfo = new HashMap<>();
     batchInfo.put("id", id);
+    batchInfo.put("cluster", "cluster");
     batchInfo.put(
         "name",
         "org.apache.spark.deploy.SparkSubmit --conf spark.master=local "

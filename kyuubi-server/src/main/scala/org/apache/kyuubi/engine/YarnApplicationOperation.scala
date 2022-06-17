@@ -100,6 +100,7 @@ class YarnApplicationOperation extends ApplicationOperation with Logging {
         val report = reports.get(0)
         val res = Map(
           APP_ID_KEY -> report.getApplicationId.toString,
+          APP_CLUSTER_KEY -> clusterOpt.getOrElse(""),
           APP_NAME_KEY -> report.getName,
           APP_STATE_KEY -> report.getYarnApplicationState.toString,
           APP_URL_KEY -> report.getTrackingUrl,

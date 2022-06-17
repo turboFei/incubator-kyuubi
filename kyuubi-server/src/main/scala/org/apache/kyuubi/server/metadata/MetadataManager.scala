@@ -99,6 +99,7 @@ class MetadataManager extends CompositeService("MetadataManager") {
       batchType: String,
       batchUser: String,
       batchState: String,
+      cluster: String,
       createTime: Long,
       endTime: Long,
       from: Int,
@@ -108,11 +109,11 @@ class MetadataManager extends CompositeService("MetadataManager") {
       batchType,
       batchUser,
       batchState,
+      cluster,
       null,
       createTime,
       endTime,
-      from,
-      size,
+      (from, size),
       true).map(buildBatch)
   }
 
@@ -126,11 +127,11 @@ class MetadataManager extends CompositeService("MetadataManager") {
       null,
       null,
       state,
+      null,
       kyuubiInstance,
       0,
       0,
-      from,
-      size,
+      (from, size),
       false)
   }
 
@@ -151,6 +152,7 @@ class MetadataManager extends CompositeService("MetadataManager") {
   private def buildBatch(batchMetadata: Metadata): Batch = {
     val batchAppInfo = Map(
       APP_ID_KEY -> Option(batchMetadata.engineId),
+      APP_CLUSTER_KEY -> batchMetadata.cluster,
       APP_NAME_KEY -> Option(batchMetadata.engineName),
       APP_STATE_KEY -> Option(batchMetadata.engineState),
       APP_URL_KEY -> Option(batchMetadata.engineUrl),

@@ -52,6 +52,7 @@ public class BatchRestApi {
       String batchType,
       String batchUser,
       String batchState,
+      String cluster,
       Long createTime,
       Long endTime,
       int from,
@@ -60,6 +61,7 @@ public class BatchRestApi {
     params.put("batchType", batchType);
     params.put("batchUser", batchUser);
     params.put("batchState", batchState);
+    params.put("cluster", cluster);
     if (null != createTime && createTime > 0) {
       params.put("createTime", createTime);
     }

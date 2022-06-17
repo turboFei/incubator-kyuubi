@@ -37,7 +37,7 @@ class MetadataManagerSuite extends KyuubiFunSuite {
   }
 
   override def afterAll(): Unit = {
-    metadataManager.getBatches(null, null, null, 0, 0, 0, Int.MaxValue).foreach { batch =>
+    metadataManager.getBatches(null, null, null, null, 0, 0, 0, Int.MaxValue).foreach { batch =>
       metadataManager.cleanupMetadataById(batch.getId)
     }
     metadataManager.stop()

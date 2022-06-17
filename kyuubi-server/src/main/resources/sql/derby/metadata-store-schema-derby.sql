@@ -16,6 +16,7 @@ CREATE TABLE metadata(
     request_args clob, -- the request arguments
     create_time BIGINT NOT NULL, -- the metadata create time
     engine_type varchar(1024) NOT NULL, -- the engine type
+    cluster varchar(128), -- the engine cluster
     cluster_manager varchar(128), -- the engine cluster manager
     engine_id varchar(128), -- the engine application id
     engine_name varchar(1024), -- the engine application name
