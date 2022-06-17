@@ -40,6 +40,13 @@
         </profile>
 
         <profile>
+            <id>hive-it</id>
+            <modules>
+                <module>kyuubi-hive-it</module>
+            </modules>
+        </profile>
+
+        <profile>
             <id>kubernetes-it</id>
             <modules>
                 <module>kyuubi-kubernetes-it</module>
