@@ -230,7 +230,7 @@ if [[ "$CLIENT_ONLY" == "true" ]]; then
 
   # Make directories
   rm -rf "$DISTDIR"
-  mkdir -p "$DISTDIR/client-jars"
+  mkdir -p "$DISTDIR/jars"
   mkdir -p "${DISTDIR}/bin"
   mkdir -p "${DISTDIR}/conf"
   mkdir -p "${DISTDIR}/externals"
@@ -238,10 +238,11 @@ if [[ "$CLIENT_ONLY" == "true" ]]; then
   echo "Build flags: $@" >> "$DISTDIR/RELEASE"
 
   # Copy kyuubi beeline jars
-  cp "$KYUUBI_HOME"/kyuubi-hive-beeline/target/*.jar "$DISTDIR/client-jars/"
+  cp "$KYUUBI_HOME"/kyuubi-hive-beeline/target/*.jar "$DISTDIR/jars/"
 
   # Copy kyuubi ctl jars
-  cp "$KYUUBI_HOME"/kyuubi-ctl/target/scala-${SCALA_VERSION}/jars/*.jar "$DISTDIR/client-jars/"
+  cp "$KYUUBI_HOME"/kyuubi-ctl/target/scala-${SCALA_VERSION}/jars/*.jar "$DISTDIR/jars/"
+  cp "$KYUUBI_HOME"/kyuubi-ctl/target/kyuubi-ctl_${SCALA_VERSION}-${VERSION}.jar "$DISTDIR/jars/"
 
   cp "${KYUUBI_HOME}/bin/beeline" "${DISTDIR}/bin/beeline"
   cp "${KYUUBI_HOME}/bin/kyuubi-ctl" "${DISTDIR}/bin/kyuubi-ctl"
