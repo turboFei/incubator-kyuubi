@@ -30,7 +30,7 @@ set -e
 KYUUBI_HOME="$(cd "`dirname "$0"`/.."; pwd)"
 DISTDIR="$KYUUBI_HOME/dist"
 MAKE_TGZ=false
-BEELINE_ONLY=false
+CLIENT_ONLY=false
 FLINK_PROVIDED=false
 SPARK_PROVIDED=false
 HIVE_PROVIDED=false
@@ -43,12 +43,12 @@ function usage {
   echo ""
   echo "Usage:"
   echo "+--------------------------------------------------------------------------------------+"
-  echo "| ./build/dist [--name <custom_name>] [--tgz] [--beeline] [--flink-provided] [--spark-provided]    |"
+  echo "| ./build/dist [--name <custom_name>] [--tgz] [--client] [--flink-provided] [--spark-provided]    |"
   echo "|              [--mvn <maven_executable>] <maven build options>                        |"
   echo "+--------------------------------------------------------------------------------------+"
   echo "name:           -  custom binary name, using project version if undefined"
   echo "tgz:            -  whether to make a whole bundled package"
-  echo "beeline:        -  whether to only build beeline"
+  echo "client:         -  whether to only build client"
   echo "flink-provided: -  whether to make a package without Flink binary"
   echo "spark-provided: -  whether to make a package without Spark binary"
   echo "hive-provided:  -  whether to make a package without Hive binary"
@@ -68,8 +68,8 @@ while (( "$#" )); do
     --tgz)
       MAKE_TGZ=true
       ;;
-    --beeline)
-      BEELINE_ONLY=true
+    --client)
+      CLIENT_ONLY=true
       ;;
     --flink-provided)
       FLINK_PROVIDED=true
@@ -173,7 +173,7 @@ HIVE_VERSION=$("$MVN" help:evaluate -Dexpression=hive.version $@ 2>/dev/null\
     | grep -v "WARNING"\
     | tail -n 1)
 
-BEELINE_HADOOP_VERSION=$("$MVN" help:evaluate -Dexpression=hadoop.client.binary.version $@ 2>/dev/null\
+CLIENT_HADOOP_VERSION=$("$MVN" help:evaluate -Dexpression=hadoop.client.binary.version $@ 2>/dev/null\
     | grep -v "INFO"\
     | grep -v "WARNING"\
     | tail -n 1)
@@ -209,8 +209,8 @@ if [[ "$HIVE_PROVIDED" == "true" ]]; then
   MVN_DIST_OPT="$MVN_DIST_OPT -Phive-provided"
 fi
 
-if [[ "$BEELINE_ONLY" == "true" ]]; then
-  MVN_DIST_OPT="$MVN_DIST_OPT -pl kyuubi-hive-jdbc,kyuubi-hive-beeline"
+if [[ "$CLIENT_ONLY" == "true" ]]; then
+  MVN_DIST_OPT="$MVN_DIST_OPT -pl kyuubi-common,kyuubi-ha,kyuubi-rest-client,kyuubi-ctl,kyuubi-hive-jdbc,kyuubi-hive-beeline"
 fi
 
 export MAVEN_OPTS="${MAVEN_OPTS:--Xmx2g}"
@@ -222,15 +222,15 @@ echo -e "\$ ${BUILD_COMMAND[@]}\n"
 
 "${BUILD_COMMAND[@]}"
 
-if [[ "$BEELINE_ONLY" == "true" ]]; then
+if [[ "$CLIENT_ONLY" == "true" ]]; then
   SUFFIX="-$NAME"
   if [[ "$NAME" == "none" ]]; then
-    SUFFIX="-$BEELINE_HADOOP_VERSION"
+    SUFFIX="-$CLIENT_HADOOP_VERSION"
   fi
 
   # Make directories
   rm -rf "$DISTDIR"
-  mkdir -p "$DISTDIR/beeline-jars"
+  mkdir -p "$DISTDIR/client-jars"
   mkdir -p "${DISTDIR}/bin"
   mkdir -p "${DISTDIR}/conf"
   mkdir -p "${DISTDIR}/externals"
@@ -238,9 +238,13 @@ if [[ "$BEELINE_ONLY" == "true" ]]; then
   echo "Build flags: $@" >> "$DISTDIR/RELEASE"
 
   # Copy kyuubi beeline jars
-  cp "$KYUUBI_HOME"/kyuubi-hive-beeline/target/*.jar "$DISTDIR/beeline-jars/"
+  cp "$KYUUBI_HOME"/kyuubi-hive-beeline/target/*.jar "$DISTDIR/client-jars/"
+
+  # Copy kyuubi ctl jars
+  cp "$KYUUBI_HOME"/kyuubi-ctl/target/scala-${SCALA_VERSION}/jars/*.jar "$DISTDIR/client-jars/"
 
   cp "${KYUUBI_HOME}/bin/beeline" "${DISTDIR}/bin/beeline"
+  cp "${KYUUBI_HOME}/bin/kyuubi-ctl" "${DISTDIR}/bin/kyuubi-ctl"
   cp "${KYUUBI_HOME}/bin/load-kyuubi-env.sh" "${DISTDIR}/bin/load-kyuubi-env.sh"
 
   cp "${KYUUBI_HOME}/conf/kyuubi-defaults.conf.template" "${DISTDIR}/conf/kyuubi-defaults.conf"
@@ -257,13 +261,13 @@ EOF
 
 
   if [[ "$MAKE_TGZ" == "true" ]]; then
-    TARDIR_NAME="apache-kyuubi-$VERSION-beeline$SUFFIX"
+    TARDIR_NAME="apache-kyuubi-$VERSION-client$SUFFIX"
     TARDIR="$KYUUBI_HOME/$TARDIR_NAME"
     rm -rf "$TARDIR"
     cp -R "$DISTDIR" "$TARDIR"
     tar czf "$TARDIR_NAME.tgz" -C "$KYUUBI_HOME" "$TARDIR_NAME"
     rm -rf "$TARDIR"
-    echo "The Kyuubi beeline tarball $TARDIR_NAME.tgz is successfully generated in $KYUUBI_HOME."
+    echo "The Kyuubi client tarball $TARDIR_NAME.tgz is successfully generated in $KYUUBI_HOME."
   fi
   exit 0
 fi

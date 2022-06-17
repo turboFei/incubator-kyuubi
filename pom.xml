@@ -169,8 +169,14 @@
         <trino.tpch.version>1.1</trino.tpch.version>
         <zookeeper.version>3.4.14</zookeeper.version>
 
-        <!-- apply to kyuubi-hive-jdbc/kyuubi-hive-jdbc-shaded module for hadoop-->
+        <!-- apply to kyuubi client related modules for hadoop-->
         <hadoop.client.version>3.3.2</hadoop.client.version>
+        <!-- org.apache.hadoop:hadoop-client-api:3.* -> org.apache.hadoop:hadoop-common:2.* -->
+        <hadoop.client.api.artifactId>hadoop-client-api</hadoop.client.api.artifactId>
+        <!-- org.apache.hadoop:hadoop-client-runtime:3.* -> org.apache.hadoop:hadoop-client:2.* -->
+        <hadoop.client.runtime.artifactId>hadoop-client-runtime</hadoop.client.runtime.artifactId>
+        <hadoop.client.runtime.artifactId.scope>runtime</hadoop.client.runtime.artifactId.scope>
+        <!-- apply to kyuubi-hive-jdbc/kyuubi-hive-jdbc-shaded module for hadoop-->
         <jdbc.hadoop.client.artifactId>hadoop-client-api</jdbc.hadoop.client.artifactId>
         <beeline.hadoop.client.artifactId>hadoop-client-runtime</beeline.hadoop.client.artifactId>
         <hadoop.client.binary.version>hadoop3</hadoop.client.binary.version>
@@ -2073,6 +2079,9 @@
             <id>hadoop-client-2</id>
             <properties>
                 <hadoop.client.version>2.7.3.2.6.4.2.0.27</hadoop.client.version>
+                <hadoop.client.api.artifactId>hadoop-common</hadoop.client.api.artifactId>
+                <hadoop.client.runtime.artifactId>hadoop-client</hadoop.client.runtime.artifactId>
+                <hadoop.client.runtime.artifactId.scope>compile</hadoop.client.runtime.artifactId.scope>
                 <jdbc.hadoop.client.artifactId>hadoop-common</jdbc.hadoop.client.artifactId>
                 <beeline.hadoop.client.artifactId>hadoop-common</beeline.hadoop.client.artifactId>
                 <hadoop.client.binary.version>hadoop2</hadoop.client.binary.version>
