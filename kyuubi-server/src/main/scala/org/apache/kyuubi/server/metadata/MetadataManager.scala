@@ -114,8 +114,8 @@ class MetadataManager extends CompositeService("MetadataManager") {
       null,
       (createTime, endTime),
       (from, size),
-      true,
-      false).map(buildBatch)
+      false,
+      true).map(buildBatch)
   }
 
   def getBatchesRecoveryMetadata(
@@ -135,7 +135,7 @@ class MetadataManager extends CompositeService("MetadataManager") {
       false)
   }
 
-  def getBatchesToClose(
+  def getRemoteClosedBatchesMetadata(
       state: String,
       kyuubiInstance: String,
       from: Int,
@@ -299,7 +299,7 @@ object MetadataManager extends Logging {
 
     val batchState =
       if (!OperationState.isTerminal(OperationState.withName(batchMetadata.state)) &&
-        batchMetadata.killed) {
+        batchMetadata.remoteClosed) {
         OperationState.CANCELED.toString
       } else {
         batchMetadata.state

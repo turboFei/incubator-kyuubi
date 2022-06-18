@@ -47,7 +47,7 @@ import org.apache.kyuubi.session.SessionType.SessionType
  * @param engineState the engine state.
  * @param engineError the engine error diagnose.
  * @param endTime the end time.
- * @param killed whether has been marked as KILLED by other kyuubi instance
+ * @param remoteClosed closed by remote kyuubi instance.
  */
 case class Metadata(
     identifier: String,
@@ -71,4 +71,4 @@ case class Metadata(
     engineState: String = null,
     engineError: Option[String] = None,
     endTime: Long = 0L,
-    killed: Boolean = false)
+    remoteClosed: Boolean = false)

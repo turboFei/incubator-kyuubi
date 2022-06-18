@@ -46,7 +46,7 @@ trait MetadataStore extends Closeable {
    * @param kyuubiInstance the kyuubi instance.
    * @param createAndEndTime the metadata create and end time.
    * @param offsetAndSize the batch offset and size to get.
-   * @param killed whether the session has been killed by other kyuubi instance
+   * @param remoteClosed whether the session was closed by remote kyuubi instance
    * @param stateOnly only return the state related column values.
    * @return selected metadata list.
    */
@@ -58,7 +58,7 @@ trait MetadataStore extends Closeable {
       kyuubiInstance: String,
       createAndEndTime: (Long, Long),
       offsetAndSize: (Int, Int),
-      killed: Boolean,
+      remoteClosed: Boolean,
       stateOnly: Boolean): Seq[Metadata]
 
   /**

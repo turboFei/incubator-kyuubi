@@ -23,7 +23,7 @@ CREATE TABLE metadata(
     engine_state varchar(128), -- the engine application state
     engine_error clob, -- the engine application diagnose
     end_time bigint,  -- the metadata end time
-    killed boolean default '0' -- whether has been marked as killed by other kyuubi instance
+    remote_closed boolean default '0' -- closed by remote kyuubi instance
 );
 
 CREATE INDEX metadata_kyuubi_instance_index ON metadata(kyuubi_instance);

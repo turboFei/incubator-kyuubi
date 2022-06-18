@@ -310,7 +310,7 @@ private[v1] class BatchesResource extends ApiRequestContext with Logging {
               }
               sessionManager.updateMetadata(Metadata(
                 identifier = batchId,
-                killed = true))
+                remoteClosed = true))
           }
         }
       }.getOrElse {

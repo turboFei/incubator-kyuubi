@@ -156,7 +156,7 @@ class BatchJobSubmission(
     val asyncOperation: Runnable = () => {
       setStateIfNotCanceled(OperationState.RUNNING)
       try {
-        if (recoveryMetadata.exists(_.killed)) {
+        if (recoveryMetadata.exists(_.remoteClosed)) {
           setState(OperationState.CANCELED)
         } else {
           // If it is in recovery mode, only re-submit batch job if previous state is PENDING and

@@ -176,7 +176,7 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
       kyuubiInstance: String,
       createAndEndTime: (Long, Long),
       offsetAndSize: (Int, Int),
-      killed: Boolean,
+      remoteClosed: Boolean,
       stateOnly: Boolean): Seq[Metadata] = {
     val queryBuilder = new StringBuilder
     val params = ListBuffer[Any]()
@@ -216,9 +216,9 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
       whereConditions += " end_time <= ? "
       params += endTime
     }
-    if (killed) {
-      whereConditions += " killed = ? "
-      params += killed
+    if (remoteClosed) {
+      whereConditions += " remote_closed = ? "
+      params += remoteClosed
     }
     if (whereConditions.nonEmpty) {
       queryBuilder.append(whereConditions.mkString(" WHERE ", " AND ", " "))
@@ -267,8 +267,8 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
       setClauses += " engine_error = ? "
       params += error
     }
-    if (metadata.killed) {
-      setClauses += " killed = ? "
+    if (metadata.remoteClosed) {
+      setClauses += " remote_closed = ? "
       params += true
     }
     if (setClauses.nonEmpty) {
@@ -319,7 +319,7 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
         val engineState = resultSet.getString("engine_state")
         val engineError = Option(resultSet.getString("engine_error"))
         val endTime = resultSet.getLong("end_time")
-        val kiiled = resultSet.getBoolean("killed")
+        val remoteClosed = resultSet.getBoolean("remote_closed")
 
         var resource: String = null
         var className: String = null
@@ -354,7 +354,7 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
           engineState = engineState,
           engineError = engineError,
           endTime = endTime,
-          killed = kiiled)
+          remoteClosed = remoteClosed)
         metadataList += metadata
       }
       metadataList
@@ -477,7 +477,7 @@ object JDBCMetadataStore {
     "engine_state",
     "engine_error",
     "end_time",
-    "killed").mkString(",")
+    "remote_closed").mkString(",")
   private val METADATA_ALL_COLUMNS = Seq(
     METADATA_STATE_ONLY_COLUMNS,
     "resource",
