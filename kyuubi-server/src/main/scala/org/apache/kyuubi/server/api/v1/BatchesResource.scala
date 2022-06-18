@@ -308,6 +308,9 @@ private[v1] class BatchesResource extends ApiRequestContext with Logging {
               } else {
                 new CloseBatchResponse(false, Utils.stringifyException(e))
               }
+              sessionManager.updateMetadata(Metadata(
+                identifier = batchId,
+                killed = true))
           }
         }
       }.getOrElse {

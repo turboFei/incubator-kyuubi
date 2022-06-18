@@ -27,6 +27,7 @@ import org.apache.kyuubi.client.api.v1.dto.Batch
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf.METADATA_MAX_AGE
 import org.apache.kyuubi.engine.ApplicationOperation._
+import org.apache.kyuubi.operation.OperationState
 import org.apache.kyuubi.server.metadata.api.Metadata
 import org.apache.kyuubi.service.CompositeService
 import org.apache.kyuubi.session.SessionType
@@ -111,11 +112,10 @@ class MetadataManager extends CompositeService("MetadataManager") {
       batchUser,
       batchState,
       null,
-      createTime,
-      endTime,
-      from,
-      size,
-      true).map(buildBatch)
+      (createTime, endTime),
+      (from, size),
+      true,
+      false).map(buildBatch)
   }
 
   def getBatchesRecoveryMetadata(
@@ -129,10 +129,9 @@ class MetadataManager extends CompositeService("MetadataManager") {
       null,
       state,
       kyuubiInstance,
-      0,
-      0,
-      from,
-      size,
+      (0, 0),
+      (from, size),
+      false,
       false)
   }
 
@@ -281,6 +280,14 @@ object MetadataManager extends Logging {
       .filter(_._2.isDefined)
       .map(info => (info._1, info._2.get))
 
+    val batchState =
+      if (!OperationState.isTerminal(OperationState.withName(batchMetadata.state)) &&
+        batchMetadata.killed) {
+        OperationState.CANCELED.toString
+      } else {
+        batchMetadata.state
+      }
+
     new Batch(
       batchMetadata.identifier,
       batchMetadata.username,
@@ -288,7 +295,7 @@ object MetadataManager extends Logging {
       batchMetadata.requestName,
       batchAppInfo.asJava,
       batchMetadata.kyuubiInstance,
-      batchMetadata.state,
+      batchState,
       batchMetadata.createTime,
       batchMetadata.endTime)
   }

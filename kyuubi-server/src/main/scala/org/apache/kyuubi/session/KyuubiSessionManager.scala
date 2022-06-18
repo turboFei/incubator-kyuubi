@@ -242,6 +242,10 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
     }
   }
 
+  def getBatchSessionsToKill(kyuubiInstance: String): Seq[Metadata] = {
+    metadataManager.getBatchesRecoveryMetadata()
+  }
+
   override protected def isServer: Boolean = true
 
   private def initSessionLimiter(conf: KyuubiConf): Unit = {

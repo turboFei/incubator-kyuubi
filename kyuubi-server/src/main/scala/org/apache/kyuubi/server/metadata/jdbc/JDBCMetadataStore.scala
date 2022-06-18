@@ -174,10 +174,9 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
       userName: String,
       state: String,
       kyuubiInstance: String,
-      createTime: Long,
-      endTime: Long,
-      from: Int,
-      size: Int,
+      createAndEndTime: (Long, Long),
+      offsetAndSize: (Int, Int),
+      killed: Boolean,
       stateOnly: Boolean): Seq[Metadata] = {
     val queryBuilder = new StringBuilder
     val params = ListBuffer[Any]()
@@ -207,6 +206,7 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
       whereConditions += " kyuubi_instance = ? "
       params += kyuubiInstance
     }
+    val (createTime, endTime) = createAndEndTime
     if (createTime > 0) {
       whereConditions += " create_time >= ? "
       params += createTime
@@ -216,11 +216,16 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
       whereConditions += " end_time <= ? "
       params += endTime
     }
+    if (killed) {
+      whereConditions += " killed = ? "
+      params += killed
+    }
     if (whereConditions.nonEmpty) {
       queryBuilder.append(whereConditions.mkString(" WHERE ", " AND ", " "))
     }
     queryBuilder.append(" ORDER BY key_id ")
-    val query = databaseAdaptor.addLimitAndOffsetToQuery(queryBuilder.toString(), size, from)
+    val (offset, size) = offsetAndSize
+    val query = databaseAdaptor.addLimitAndOffsetToQuery(queryBuilder.toString(), size, offset)
     withConnection() { connection =>
       withResultSet(connection, query, params: _*) { rs =>
         buildMetadata(rs, stateOnly)
@@ -261,6 +266,10 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
     metadata.engineError.foreach { error =>
       setClauses += " engine_error = ? "
       params += error
+    }
+    if (metadata.killed) {
+      setClauses += " killed = ? "
+      params += true
     }
     if (setClauses.nonEmpty) {
       queryBuilder.append(setClauses.mkString(" SET ", " , ", " "))
@@ -310,6 +319,7 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
         val engineState = resultSet.getString("engine_state")
         val engineError = Option(resultSet.getString("engine_error"))
         val endTime = resultSet.getLong("end_time")
+        val kiiled = resultSet.getBoolean("killed")
 
         var resource: String = null
         var className: String = null
@@ -343,7 +353,8 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
           engineUrl = engineUrl,
           engineState = engineState,
           engineError = engineError,
-          endTime = endTime)
+          endTime = endTime,
+          killed = kiiled)
         metadataList += metadata
       }
       metadataList
@@ -403,6 +414,7 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
         case l: Long => statement.setLong(index + 1, l)
         case d: Double => statement.setDouble(index + 1, d)
         case f: Float => statement.setFloat(index + 1, f)
+        case b: Boolean => statement.setBoolean(index + 1, b)
         case _ => throw new KyuubiException(s"Unsupported param type ${param.getClass.getName}")
       }
     }
@@ -464,7 +476,8 @@ object JDBCMetadataStore {
     "engine_url",
     "engine_state",
     "engine_error",
-    "end_time").mkString(",")
+    "end_time",
+    "killed").mkString(",")
   private val METADATA_ALL_COLUMNS = Seq(
     METADATA_STATE_ONLY_COLUMNS,
     "resource",
