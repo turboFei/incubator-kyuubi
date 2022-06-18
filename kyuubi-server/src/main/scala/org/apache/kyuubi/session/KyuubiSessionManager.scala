@@ -243,7 +243,13 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
   }
 
   def getBatchSessionsToKill(kyuubiInstance: String): Seq[Metadata] = {
-    metadataManager.getBatchesRecoveryMetadata()
+    Seq(OperationState.PENDING, OperationState.RUNNING).flatMap { stateToKill =>
+      metadataManager.getBatchesToClose(
+        stateToKill.toString,
+        kyuubiInstance,
+        0,
+        Int.MaxValue)
+    }
   }
 
   override protected def isServer: Boolean = true

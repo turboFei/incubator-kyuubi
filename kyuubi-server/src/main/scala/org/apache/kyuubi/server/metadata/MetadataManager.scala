@@ -135,6 +135,23 @@ class MetadataManager extends CompositeService("MetadataManager") {
       false)
   }
 
+  def getBatchesToClose(
+      state: String,
+      kyuubiInstance: String,
+      from: Int,
+      size: Int): Seq[Metadata] = {
+    _metadataStore.getMetadataList(
+      SessionType.BATCH,
+      null,
+      null,
+      state,
+      kyuubiInstance,
+      (0, 0),
+      (from, size),
+      true,
+      true)
+  }
+
   def updateMetadata(metadata: Metadata, retryOnError: Boolean = true): Unit = {
     try {
       _metadataStore.updateMetadata(metadata)
