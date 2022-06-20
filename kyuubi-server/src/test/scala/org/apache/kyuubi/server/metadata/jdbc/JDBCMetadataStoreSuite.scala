@@ -24,7 +24,7 @@ import org.scalatest.time.SpanSugar._
 
 import org.apache.kyuubi.KyuubiFunSuite
 import org.apache.kyuubi.config.KyuubiConf
-import org.apache.kyuubi.server.metadata.api.Metadata
+import org.apache.kyuubi.server.metadata.api.{Metadata, MetadataFilter}
 import org.apache.kyuubi.server.metadata.jdbc.JDBCMetadataStoreConf._
 import org.apache.kyuubi.session.SessionType
 
@@ -39,15 +39,9 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
 
   override def beforeAll(): Unit = {
     jdbcMetadataStore.getMetadataList(
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
+      MetadataFilter(),
       0,
-      0,
-      (0, Int.MaxValue),
+      Int.MaxValue,
       true).foreach {
       batch =>
         jdbcMetadataStore.cleanupMetadataByIdentifier(batch.identifier)
@@ -58,15 +52,9 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
   override def afterAll(): Unit = {
     super.afterAll()
     jdbcMetadataStore.getMetadataList(
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
+      MetadataFilter(),
       0,
-      0,
-      (0, Int.MaxValue),
+      Int.MaxValue,
       true).foreach {
       batch =>
         jdbcMetadataStore.cleanupMetadataByIdentifier(batch.identifier)
@@ -127,164 +115,149 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
 
     var batches =
       jdbcMetadataStore.getMetadataList(
-        SessionType.BATCH,
-        "Spark",
-        null,
-        null,
-        null,
-        null,
+        MetadataFilter(
+          sessionType = SessionType.BATCH,
+          engineType = "Spark"),
         0,
-        0,
-        (0, 1),
+        1,
         true)
     assert(batches == Seq(batchStateOnlyMetadata))
 
     batches = jdbcMetadataStore.getMetadataList(
-      SessionType.BATCH,
-      "spark",
-      "kyuubi",
-      null,
-      null,
-      null,
+      MetadataFilter(
+        sessionType = SessionType.BATCH,
+        engineType = "Spark",
+        username = "kyuubi"),
       0,
-      0,
-      (0, Int.MaxValue),
+      Int.MaxValue,
       true)
     assert(batches == Seq(batchStateOnlyMetadata, batchState2))
-
-    batches = jdbcMetadataStore.getMetadataList(
-      SessionType.BATCH,
-      "spark",
-      "kyuubi",
-      null,
-      "cluster",
-      null,
-      0,
-      0,
-      (0, Int.MaxValue),
-      true)
-    assert(batches == Seq(batchStateOnlyMetadata, batchState2))
-
-    batches = jdbcMetadataStore.getMetadataList(
-      SessionType.BATCH,
-      "spark",
-      "kyuubi",
-      null,
-      "cluster-2",
-      null,
-      0,
-      0,
-      (0, Int.MaxValue),
-      true)
-    assert(batches.isEmpty)
 
     jdbcMetadataStore.cleanupMetadataByIdentifier(batchState2.identifier)
 
-    batches =
-      jdbcMetadataStore.getMetadataList(
-        SessionType.SQL,
-        "SPARK",
-        "kyuubi",
-        "PENDING",
-        null,
-        null,
-        0,
-        0,
-        (0, Int.MaxValue),
-        true)
-    assert(batches.isEmpty)
-
-    batches =
-      jdbcMetadataStore.getMetadataList(
-        SessionType.BATCH,
-        "SPARK",
-        "kyuubi",
-        "PENDING",
-        null,
-        null,
-        0,
-        0,
-        (0, Int.MaxValue),
-        true)
-    assert(batches == Seq(batchStateOnlyMetadata))
-
-    batches =
-      jdbcMetadataStore.getMetadataList(
-        SessionType.BATCH,
-        "SPARK",
-        "kyuubi",
-        "RUNNING",
-        null,
-        null,
-        0,
-        0,
-        (0, Int.MaxValue),
-        true)
-    assert(batches.isEmpty)
-
-    batches =
-      jdbcMetadataStore.getMetadataList(
-        SessionType.BATCH,
-        "SPARK",
-        "no_kyuubi",
-        "PENDING",
-        null,
-        null,
-        0,
-        0,
-        (0, Int.MaxValue),
-        true)
+    batches = jdbcMetadataStore.getMetadataList(
+      MetadataFilter(
+        sessionType = SessionType.SQL,
+        engineType = "Spark",
+        username = "kyuubi",
+        state = "PENDING"),
+      0,
+      Int.MaxValue,
+      true)
     assert(batches.isEmpty)
 
     batches = jdbcMetadataStore.getMetadataList(
-      SessionType.BATCH,
-      "SPARK",
-      null,
-      "PENDING",
-      null,
-      null,
+      MetadataFilter(
+        sessionType = SessionType.BATCH,
+        engineType = "Spark",
+        username = "kyuubi",
+        state = "PENDING"),
       0,
-      0,
-      (0, Int.MaxValue),
+      Int.MaxValue,
       true)
     assert(batches == Seq(batchStateOnlyMetadata))
 
     batches = jdbcMetadataStore.getMetadataList(
-      SessionType.BATCH,
-      null,
-      null,
-      null,
-      null,
-      null,
+      MetadataFilter(
+        sessionType = SessionType.BATCH,
+        engineType = "Spark",
+        username = "kyuubi",
+        state = "RUNNING"),
       0,
+      Int.MaxValue,
+      true)
+    assert(batches.isEmpty)
+
+    batches = jdbcMetadataStore.getMetadataList(
+      MetadataFilter(
+        sessionType = SessionType.BATCH,
+        engineType = "Spark",
+        username = "no_kyuubi",
+        state = "PENDING"),
       0,
-      (0, Int.MaxValue),
+      Int.MaxValue,
+      true)
+    assert(batches.isEmpty)
+
+    batches = jdbcMetadataStore.getMetadataList(
+      MetadataFilter(
+        sessionType = SessionType.BATCH,
+        engineType = "SPARK",
+        state = "PENDING"),
+      0,
+      Int.MaxValue,
       true)
     assert(batches == Seq(batchStateOnlyMetadata))
+
+    batches = jdbcMetadataStore.getMetadataList(
+      MetadataFilter(sessionType = SessionType.BATCH),
+      0,
+      Int.MaxValue,
+      true)
+    assert(batches == Seq(batchStateOnlyMetadata))
+
+    batches = jdbcMetadataStore.getMetadataList(
+      MetadataFilter(
+        sessionType = SessionType.BATCH,
+        peerInstanceClosed = true),
+      0,
+      Int.MaxValue,
+      true)
+    assert(batches.isEmpty)
+
+    jdbcMetadataStore.updateMetadata(Metadata(
+      identifier = batchStateOnlyMetadata.identifier,
+      peerInstanceClosed = true))
+
+    batchStateOnlyMetadata = batchStateOnlyMetadata.copy(peerInstanceClosed = true)
+    batchMetadata = batchMetadata.copy(peerInstanceClosed = true)
+
+    batches = jdbcMetadataStore.getMetadataList(
+      MetadataFilter(
+        sessionType = SessionType.BATCH,
+        peerInstanceClosed = true),
+      0,
+      Int.MaxValue,
+      true)
+    assert(batches === Seq(batchStateOnlyMetadata))
+
+    batches = jdbcMetadataStore.getMetadataList(
+      MetadataFilter(
+        sessionType = SessionType.BATCH,
+        cluster = "cluster",
+        peerInstanceClosed = true),
+      0,
+      Int.MaxValue,
+      true)
+    assert(batches === Seq(batchStateOnlyMetadata))
+
+    batches = jdbcMetadataStore.getMetadataList(
+      MetadataFilter(
+        sessionType = SessionType.BATCH,
+        cluster = "invalid-cluster",
+        peerInstanceClosed = true),
+      0,
+      Int.MaxValue,
+      true)
+    assert(batches.isEmpty)
 
     var batchesToRecover = jdbcMetadataStore.getMetadataList(
-      SessionType.BATCH,
-      null,
-      null,
-      "PENDING",
-      null,
-      kyuubiInstance,
+      MetadataFilter(
+        sessionType = SessionType.BATCH,
+        state = "PENDING",
+        kyuubiInstance = kyuubiInstance),
       0,
-      0,
-      (0, Int.MaxValue),
+      Int.MaxValue,
       false)
     assert(batchesToRecover == Seq(batchMetadata))
 
     batchesToRecover = jdbcMetadataStore.getMetadataList(
-      SessionType.BATCH,
-      null,
-      null,
-      "RUNNING",
-      null,
-      kyuubiInstance,
+      MetadataFilter(
+        sessionType = SessionType.BATCH,
+        state = "RUNNING",
+        kyuubiInstance = kyuubiInstance),
       0,
-      0,
-      (0, Int.MaxValue),
+      Int.MaxValue,
       false)
     assert(batchesToRecover.isEmpty)
 
@@ -304,27 +277,21 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
     assert(jdbcMetadataStore.getMetadata(batchId, true) == newBatchState)
 
     assert(jdbcMetadataStore.getMetadataList(
-      SessionType.BATCH,
-      null,
-      null,
-      "PENDING",
-      null,
-      kyuubiInstance,
+      MetadataFilter(
+        sessionType = SessionType.BATCH,
+        state = "PENDING",
+        kyuubiInstance = kyuubiInstance),
       0,
-      0,
-      (0, Int.MaxValue),
+      Int.MaxValue,
       false).isEmpty)
 
     assert(jdbcMetadataStore.getMetadataList(
-      SessionType.BATCH,
-      null,
-      null,
-      "RUNNING",
-      null,
-      kyuubiInstance,
+      MetadataFilter(
+        sessionType = SessionType.BATCH,
+        state = "RUNNING",
+        kyuubiInstance = kyuubiInstance),
       0,
-      0,
-      (0, Int.MaxValue),
+      Int.MaxValue,
       false).isEmpty)
 
     eventually(Timeout(3.seconds)) {
