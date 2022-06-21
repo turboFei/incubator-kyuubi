@@ -199,6 +199,7 @@
         <!-- apply to kyuubi-ebay module -->
         <ebay.keystone.httpcomponents-client.version>4.5.13</ebay.keystone.httpcomponents-client.version>
         <ebay.keystone.httpcomponents-core.version>4.4.15</ebay.keystone.httpcomponents-core.version>
+        <ebay.fount.client.version>0.2.2</ebay.fount.client.version>
 
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <jars.target.dir>${project.build.directory}/scala-${scala.binary.version}/jars</jars.target.dir>
@@ -1470,6 +1471,58 @@
                 <groupId>org.apache.derby</groupId>
                 <artifactId>derby</artifactId>
                 <version>${derby.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.ebay.fount</groupId>
+                <artifactId>managed-fount-client</artifactId>
+                <version>${ebay.fount.client.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>org.slf4j</groupId>
+                        <artifactId>*</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>com.fasterxml.jackson.core</groupId>
+                        <artifactId>*</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>commons-beanutils</groupId>
+                        <artifactId>commons-beanutils-core</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>commons-collections</groupId>
+                        <artifactId>commons-collections</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>com.ebay.aero</groupId>
+                        <artifactId>cal-client-impl</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>javax.servlet</groupId>
+                        <artifactId>javax.servlet-api</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>com.sun.mail</groupId>
+                        <artifactId>javax.mail</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>org.codehaus.jackson</groupId>
+                        <artifactId>*</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <artifactId>joda-time</artifactId>
+                        <groupId>joda-time</groupId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>javax.servlet.jsp</groupId>
+                        <artifactId>javax.servlet.jsp-api</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>org.ebayopensource.ginger</groupId>
+                        <artifactId>ebay-jaxrs</artifactId>
+                    </exclusion>
+                </exclusions>
             </dependency>
 
             <dependency>

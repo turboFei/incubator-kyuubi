@@ -26,7 +26,6 @@ import scala.collection.mutable.ListBuffer
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
-import com.google.common.annotations.VisibleForTesting
 import com.zaxxer.hikari.{HikariConfig, HikariDataSource}
 
 import org.apache.kyuubi.{KyuubiException, Logging, Utils}
@@ -36,6 +35,7 @@ import org.apache.kyuubi.server.metadata.MetadataStore
 import org.apache.kyuubi.server.metadata.api.{Metadata, MetadataFilter}
 import org.apache.kyuubi.server.metadata.jdbc.DatabaseType._
 import org.apache.kyuubi.server.metadata.jdbc.JDBCMetadataStoreConf._
+import org.apache.kyuubi.server.metadata.jdbc.fount.FountService
 import org.apache.kyuubi.session.SessionType
 
 class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
@@ -43,30 +43,44 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
 
   private val dbType = DatabaseType.withName(conf.get(METADATA_STORE_JDBC_DATABASE_TYPE))
   private val driverClassOpt = conf.get(METADATA_STORE_JDBC_DRIVER)
-  private val driverClass = dbType match {
+  private[jdbc] val driverClass = dbType match {
     case DERBY => driverClassOpt.getOrElse("org.apache.derby.jdbc.AutoloadedDriver")
-    case MYSQL => driverClassOpt.getOrElse("com.mysql.jdbc.Driver")
+    case MYSQL | FOUNT => driverClassOpt.getOrElse("com.mysql.jdbc.Driver")
     case CUSTOM => driverClassOpt.getOrElse(
         throw new IllegalArgumentException("No jdbc driver defined"))
   }
 
   private val databaseAdaptor = dbType match {
     case DERBY => new DerbyDatabaseDialect
-    case MYSQL => new MysqlDatabaseDialect
+    case MYSQL | FOUNT => new MysqlDatabaseDialect
     case CUSTOM => new GenericDatabaseDialect
   }
 
-  private val datasourceProperties =
-    JDBCMetadataStoreConf.getMetadataStoreJDBCDataSourceProperties(conf)
-  private val hikariConfig = new HikariConfig(datasourceProperties)
-  hikariConfig.setDriverClassName(driverClass)
-  hikariConfig.setJdbcUrl(conf.get(METADATA_STORE_JDBC_URL))
-  hikariConfig.setUsername(conf.get(METADATA_STORE_JDBC_USER))
-  hikariConfig.setPassword(conf.get(METADATA_STORE_JDBC_PASSWORD))
-  hikariConfig.setPoolName("jdbc-metadata-store-pool")
+  private var hikariDataSource: HikariDataSource = dbType match {
+    case FOUNT =>
+      FountService.initialize(conf, this)
+      FountService.getHikariDataSource()
 
-  @VisibleForTesting
-  private[kyuubi] val hikariDataSource = new HikariDataSource(hikariConfig)
+    case _ =>
+      val datasourceProperties =
+        JDBCMetadataStoreConf.getMetadataStoreJDBCDataSourceProperties(conf)
+      val hikariConfig = new HikariConfig(datasourceProperties)
+      hikariConfig.setDriverClassName(driverClass)
+      hikariConfig.setJdbcUrl(conf.get(METADATA_STORE_JDBC_URL))
+      hikariConfig.setUsername(conf.get(METADATA_STORE_JDBC_USER))
+      hikariConfig.setPassword(conf.get(METADATA_STORE_JDBC_PASSWORD))
+      hikariConfig.setPoolName("jdbc-metadata-store-pool")
+      new HikariDataSource(hikariConfig)
+  }
+
+  private[jdbc] def getHikariDataSource: HikariDataSource = {
+    hikariDataSource
+  }
+
+  private[jdbc] def setHikariDataSource(hikariDataSource: HikariDataSource): Unit = {
+    this.hikariDataSource = hikariDataSource
+  }
+
   private val mapper = new ObjectMapper().registerModule(DefaultScalaModule)
 
   private val terminalStates =
@@ -81,7 +95,7 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
     val initSchemaStream: Option[InputStream] = dbType match {
       case DERBY =>
         Option(classLoader.getResourceAsStream("sql/derby/metadata-store-schema-derby.sql"))
-      case MYSQL =>
+      case MYSQL | FOUNT =>
         Option(classLoader.getResourceAsStream("sql/mysql/metadata-store-schema-mysql.sql"))
       case CUSTOM => None
     }

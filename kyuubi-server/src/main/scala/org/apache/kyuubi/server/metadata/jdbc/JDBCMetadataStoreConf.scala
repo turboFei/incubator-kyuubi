@@ -40,6 +40,7 @@ object JDBCMetadataStoreConf {
       .doc("The database type for server jdbc metadata store.<ul>" +
         " <li>DERBY: Apache Derby, jdbc driver `org.apache.derby.jdbc.AutoloadedDriver`.</li>" +
         " <li>MYSQL: MySQL, jdbc driver `com.mysql.jdbc.Driver`.</li>" +
+        " <li>FOUNT: eBay solution, jdbc driver `com.mysql.jdbc.Driver`.</li>" +
         " <li>CUSTOM: User-defined database type, need specify the jdbc driver in addition.</li>" +
         " Note that: The jdbc datasource is powered by HiKariCP, for datasource properties," +
         " please specify them with prefix: kyuubi.server.metadata.store.jdbc.datasource." +

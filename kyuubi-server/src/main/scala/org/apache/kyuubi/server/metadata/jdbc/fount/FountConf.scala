@@ -15,10 +15,31 @@
  * limitations under the License.
  */
 
-package org.apache.kyuubi.server.metadata.jdbc
+package org.apache.kyuubi.server.metadata.jdbc.fount
 
-object DatabaseType extends Enumeration {
-  type DatabaseType = Value
+import org.apache.kyuubi.config.{ConfigBuilder, ConfigEntry, KyuubiConf}
 
-  val DERBY, MYSQL, CUSTOM, FOUNT = Value
+object FountConf {
+  private def buildConf(key: String): ConfigBuilder = KyuubiConf.buildConf(key)
+
+  val FOUNT_DATASOURCE: ConfigEntry[String] =
+    buildConf("kyuubi.ebay.fount.datasource")
+      .internal
+      .stringConf
+      .createWithDefault("kyuubimyhost")
+
+  val FOUNT_ENV: ConfigEntry[String] =
+    buildConf("kyuubi.ebay.fount.env")
+      .internal
+      .doc("Fount env, prod or staging")
+      .stringConf
+      .createWithDefault("prod")
+
+  val FOUNT_APP: ConfigEntry[String] =
+    buildConf("kyuubi.ebay.fount.app")
+      .internal
+      .doc("Fount app name")
+      .stringConf
+      .createWithDefault("kyuubi")
+
 }

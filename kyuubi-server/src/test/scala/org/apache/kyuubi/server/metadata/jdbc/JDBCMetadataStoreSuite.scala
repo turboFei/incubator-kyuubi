@@ -63,9 +63,9 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
   }
 
   test("test jdbc datasource properties") {
-    assert(jdbcMetadataStore.hikariDataSource.getConnectionTimeout == 3000)
-    assert(jdbcMetadataStore.hikariDataSource.getMaximumPoolSize == 99)
-    assert(jdbcMetadataStore.hikariDataSource.getIdleTimeout == 60000)
+    assert(jdbcMetadataStore.getHikariDataSource.getConnectionTimeout == 3000)
+    assert(jdbcMetadataStore.getHikariDataSource.getMaximumPoolSize == 99)
+    assert(jdbcMetadataStore.getHikariDataSource.getIdleTimeout == 60000)
   }
 
   test("jdbc metadata store") {

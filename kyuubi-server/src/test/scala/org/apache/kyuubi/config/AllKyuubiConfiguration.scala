@@ -28,6 +28,7 @@ import org.apache.kyuubi.ctl.CtlConf
 import org.apache.kyuubi.ha.HighAvailabilityConf
 import org.apache.kyuubi.metrics.MetricsConf
 import org.apache.kyuubi.server.metadata.jdbc.JDBCMetadataStoreConf
+import org.apache.kyuubi.server.metadata.jdbc.fount.FountConf
 import org.apache.kyuubi.zookeeper.ZookeeperConf
 
 // scalastyle:off line.size.limit
@@ -71,6 +72,7 @@ class AllKyuubiConfiguration extends KyuubiFunSuite {
   test("Check all kyuubi configs") {
     KyuubiConf
     CtlConf
+    FountConf
     HighAvailabilityConf
     JDBCMetadataStoreConf
     MetricsConf
