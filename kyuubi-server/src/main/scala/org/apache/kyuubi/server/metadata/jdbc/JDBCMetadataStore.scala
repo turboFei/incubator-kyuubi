@@ -56,6 +56,8 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
     case CUSTOM => new GenericDatabaseDialect
   }
 
+  private val metadataTable = conf.get(METADATA_STORE_JDBC_TABLE).getOrElse(METADATA_TABLE)
+
   private var hikariDataSource: HikariDataSource = dbType match {
     case FOUNT =>
       FountService.initialize(conf, this)
@@ -124,7 +126,7 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
   override def insertMetadata(metadata: Metadata): Unit = {
     val query =
       s"""
-         |INSERT INTO $METADATA_TABLE(
+         |INSERT INTO $metadataTable(
          |identifier,
          |session_type,
          |real_user,
@@ -171,9 +173,9 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
   override def getMetadata(identifier: String, stateOnly: Boolean): Metadata = {
     val query =
       if (stateOnly) {
-        s"SELECT $METADATA_STATE_ONLY_COLUMNS FROM $METADATA_TABLE WHERE identifier = ?"
+        s"SELECT $METADATA_STATE_ONLY_COLUMNS FROM $metadataTable WHERE identifier = ?"
       } else {
-        s"SELECT $METADATA_ALL_COLUMNS FROM $METADATA_TABLE WHERE identifier = ?"
+        s"SELECT $METADATA_ALL_COLUMNS FROM $metadataTable WHERE identifier = ?"
       }
 
     withConnection() { connection =>
@@ -191,9 +193,9 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
     val queryBuilder = new StringBuilder
     val params = ListBuffer[Any]()
     if (stateOnly) {
-      queryBuilder.append(s"SELECT $METADATA_STATE_ONLY_COLUMNS FROM $METADATA_TABLE")
+      queryBuilder.append(s"SELECT $METADATA_STATE_ONLY_COLUMNS FROM $metadataTable")
     } else {
-      queryBuilder.append(s"SELECT $METADATA_ALL_COLUMNS FROM $METADATA_TABLE")
+      queryBuilder.append(s"SELECT $METADATA_ALL_COLUMNS FROM $metadataTable")
     }
     val whereConditions = ListBuffer[String]()
     Option(filter.sessionType).foreach { sessionType =>
@@ -249,7 +251,7 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
     val queryBuilder = new StringBuilder
     val params = ListBuffer[Any]()
 
-    queryBuilder.append(s"UPDATE $METADATA_TABLE")
+    queryBuilder.append(s"UPDATE $metadataTable")
     val setClauses = ListBuffer[String]()
     Option(metadata.state).foreach { _ =>
       setClauses += " state = ? "
@@ -296,7 +298,7 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
   }
 
   override def cleanupMetadataByIdentifier(identifier: String): Unit = {
-    val query = s"DELETE FROM $METADATA_TABLE WHERE identifier = ?"
+    val query = s"DELETE FROM $metadataTable WHERE identifier = ?"
     withConnection() { connection =>
       execute(connection, query, identifier)
     }
@@ -304,7 +306,7 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
 
   override def cleanupMetadataByAge(maxAge: Long): Unit = {
     val minEndTime = System.currentTimeMillis() - maxAge
-    val query = s"DELETE FROM $METADATA_TABLE WHERE state IN ($terminalStates) AND end_time < ?"
+    val query = s"DELETE FROM $metadataTable WHERE state IN ($terminalStates) AND end_time < ?"
     withConnection() { connection =>
       execute(connection, query, minEndTime)
     }

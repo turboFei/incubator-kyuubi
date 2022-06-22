@@ -86,4 +86,12 @@ object JDBCMetadataStoreConf {
       .version("1.6.0")
       .stringConf
       .createWithDefault("")
+
+  val METADATA_STORE_JDBC_TABLE: OptionalConfigEntry[String] =
+    buildConf("kyuubi.metadata.store.jdbc.table")
+      .internal
+      .doc("The table name for jdbc metadata, which is used to isolate the prod and pre-prod env.")
+      .version("1.6.0")
+      .stringConf
+      .createOptional
 }
