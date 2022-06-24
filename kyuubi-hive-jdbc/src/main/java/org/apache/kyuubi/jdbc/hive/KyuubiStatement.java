@@ -100,6 +100,8 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
 
   private InPlaceUpdateStream inPlaceUpdateStream = InPlaceUpdateStream.NO_OP;
 
+  private volatile TGetOperationStatusResp statusResp;
+
   public KyuubiStatement(
       KyuubiConnection connection, TCLIService.Iface client, TSessionHandle sessHandle) {
     this(connection, client, sessHandle, false, DEFAULT_FETCH_SIZE);
@@ -209,6 +211,7 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
     isQueryClosed = true;
     isExecuteStatementFailed = false;
     stmtHandle = null;
+    statusResp = null;
   }
 
   /*
@@ -348,7 +351,6 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
    */
   private TGetOperationStatusResp waitForResultSetStatus() throws SQLException {
     TGetOperationStatusReq statusReq = new TGetOperationStatusReq(stmtHandle);
-    TGetOperationStatusResp statusResp = null;
 
     while (statusResp == null || !statusResp.isSetHasResultSet()) {
       try {
@@ -362,6 +364,10 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
     return statusResp;
   }
 
+  public TGetOperationStatusResp getStatusResp() {
+    return statusResp;
+  }
+
   TGetOperationStatusResp waitForOperationToComplete() throws SQLException {
     TGetOperationStatusReq statusReq = new TGetOperationStatusReq(stmtHandle);
     boolean shouldGetProgressUpdate = inPlaceUpdateStream != InPlaceUpdateStream.NO_OP;
@@ -370,7 +376,6 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
       /** progress bar is completed if there is nothing we want to request in the first place. */
       inPlaceUpdateStream.getEventNotifier().progressBarCompleted();
     }
-    TGetOperationStatusResp statusResp = null;
 
     // Poll on the operation status, till the operation is complete
     while (!isOperationComplete) {
