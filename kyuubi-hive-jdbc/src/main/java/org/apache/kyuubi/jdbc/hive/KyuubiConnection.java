@@ -81,6 +81,8 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
   public static final String KYUUBI_BATCH_REQUEST_PROPERTY = "kyuubi.batch.request";
   public static int DEFAULT_ENGINE_LOG_THREAD_TIMEOUT = 10 * 1000;
   public static final String KYUUBI_PROXY_BATCH_ACCOUNT = "kyuubi.proxy.batchAccount";
+  public static final String KYUUBI_ENGINE_LOG_LISTENER_CLASSES =
+      "kyuubi.engine.log.listener.classes";
 
   public static final String FAST_CONNECT_MODE = "FAST_CONNECT_MODE";
 
@@ -121,7 +123,7 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
   private List<KyuubiEngineLogListener> engineLogListeners = new LinkedList();
 
   public KyuubiConnection(String url, Properties info) throws SQLException {
-    this(url, info, null);
+    this(url, info, tryCreateKyuubiEngineLogListeners(info));
   }
 
   public KyuubiConnection(String uri, Properties info, KyuubiEngineLogListener... listeners)
@@ -169,6 +171,7 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
       for (KyuubiEngineLogListener listener : listeners) {
         if (listener != null) {
           engineLogListeners.add(listener);
+          listener.onListenerRegistered(this);
         }
       }
     }
@@ -256,6 +259,30 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
 
   public TOperationHandle getLaunchEngineOpHandle() {
     return launchEngineOpHandle;
+  }
+
+  /**
+   * Create KyuubiEngineLogListeners via Properties
+   *
+   * @return a not null arrays of KyuubiEngineLogListener
+   */
+  public static KyuubiEngineLogListener[] tryCreateKyuubiEngineLogListeners(Properties info)
+      throws SQLException {
+    List<KyuubiEngineLogListener> listeners = new ArrayList<>();
+    try {
+      String listenerClasses = info.getProperty(KYUUBI_ENGINE_LOG_LISTENER_CLASSES);
+      if (StringUtils.isNotEmpty(listenerClasses)) {
+        for (String listenerClass : listenerClasses.split(",")) {
+          KyuubiEngineLogListener listener =
+              (KyuubiEngineLogListener) Class.forName(listenerClass.trim()).newInstance();
+          listeners.add(listener);
+          LOG.info("KyuubiEngineLogListener added: {}", listener.getClass().getName());
+        }
+      }
+      return listeners.toArray(new KyuubiEngineLogListener[] {});
+    } catch (ReflectiveOperationException ex) {
+      throw new SQLException("Failed to initialized engine log listener: " + ex.toString());
+    }
   }
 
   /**

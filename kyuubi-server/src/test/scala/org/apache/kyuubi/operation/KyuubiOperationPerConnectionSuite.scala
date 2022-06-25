@@ -291,6 +291,9 @@ class KyuubiOperationPerConnectionSuite extends WithKyuubiServer with HiveJDBCTe
     val engineLogs = ListBuffer[String]()
 
     val engineLogListener = new KyuubiEngineLogListener {
+
+      override def onListenerRegistered(kyuubiConnection: KyuubiConnection): Unit = {}
+
       override def onLogFetchSuccess(list: util.List[String]): Unit = {
         engineLogs ++= list.asScala
       }

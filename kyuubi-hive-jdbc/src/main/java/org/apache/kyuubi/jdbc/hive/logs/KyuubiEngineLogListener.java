@@ -18,8 +18,13 @@
 package org.apache.kyuubi.jdbc.hive.logs;
 
 import java.util.List;
+import org.apache.kyuubi.jdbc.hive.KyuubiConnection;
 
 public interface KyuubiEngineLogListener {
+
+  /** Called once on listener been registered into current Kyuubi Connection. */
+  void onListenerRegistered(KyuubiConnection kyuubiConnection);
+
   /** Called once per successfully fetched logs. */
   void onLogFetchSuccess(List<String> logs);
 
