@@ -429,7 +429,6 @@ kyuubi.session.engine.launch.moveQueue.initQueue|&lt;undefined&gt;|When launch e
 kyuubi.session.engine.launch.moveQueue.timeout|PT2M|When launch engine and move queue, the final queue.|duration|1.6.0
 kyuubi.session.engine.log.timeout|PT24H|If we use Spark as the engine then the session submit log is the console output of spark-submit. We will retain the session submit log until over the config value.|duration|1.1.0
 kyuubi.session.engine.login.timeout|PT15S|The timeout of creating the connection to remote sql query engine|duration|1.0.0
-kyuubi.session.engine.request.timeout|PT0S|The timeout of awaiting response after sending request to remote sql query engine|duration|1.4.0
 kyuubi.session.engine.share.level|USER|(deprecated) - Using kyuubi.engine.share.level instead|string|1.0.0
 kyuubi.session.engine.spark.main.resource|&lt;undefined&gt;|The package used to create Spark SQL engine remote application. If it is undefined, Kyuubi will use the default|string|1.0.0
 kyuubi.session.engine.spark.max.lifetime|PT0S|Max lifetime for spark engine, the engine will self-terminate when it reaches the end of life. 0 or negative means not to self-terminate.|duration|1.6.0
