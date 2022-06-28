@@ -259,7 +259,9 @@ abstract class TFrontendService(name: String)
         confOverlay.asScala.toMap,
         runAsync,
         queryTimeout)
-      resp.setOperationHandle(operationHandle.toTOperationHandle)
+      val tOperationHandle = operationHandle.toTOperationHandle
+      tOperationHandle.setOperationType(TOperationType.EXECUTE_STATEMENT)
+      resp.setOperationHandle(tOperationHandle)
       resp.setStatus(OK_STATUS)
     } catch {
       case e: Exception =>
@@ -274,7 +276,9 @@ abstract class TFrontendService(name: String)
     val resp = new TGetTypeInfoResp
     try {
       val operationHandle = be.getTypeInfo(SessionHandle(req.getSessionHandle))
-      resp.setOperationHandle(operationHandle.toTOperationHandle)
+      val tOperationHandle = operationHandle.toTOperationHandle
+      tOperationHandle.setOperationType(TOperationType.GET_TYPE_INFO)
+      resp.setOperationHandle(tOperationHandle)
       resp.setStatus(OK_STATUS)
     } catch {
       case e: Exception =>
@@ -289,7 +293,9 @@ abstract class TFrontendService(name: String)
     val resp = new TGetCatalogsResp
     try {
       val opHandle = be.getCatalogs(SessionHandle(req.getSessionHandle))
-      resp.setOperationHandle(opHandle.toTOperationHandle)
+      val tOperationHandle = opHandle.toTOperationHandle
+      tOperationHandle.setOperationType(TOperationType.GET_CATALOGS)
+      resp.setOperationHandle(tOperationHandle)
       resp.setStatus(OK_STATUS)
     } catch {
       case e: Exception =>
@@ -307,7 +313,9 @@ abstract class TFrontendService(name: String)
         SessionHandle(req.getSessionHandle),
         req.getCatalogName,
         req.getSchemaName)
-      resp.setOperationHandle(opHandle.toTOperationHandle)
+      val tOperationHandle = opHandle.toTOperationHandle
+      tOperationHandle.setOperationType(TOperationType.GET_SCHEMAS)
+      resp.setOperationHandle(tOperationHandle)
       resp.setStatus(OK_STATUS)
     } catch {
       case e: Exception =>
@@ -327,7 +335,9 @@ abstract class TFrontendService(name: String)
       val table = req.getTableName
       val tableTypes = req.getTableTypes
       val opHandle = be.getTables(sessionHandle, catalog, schema, table, tableTypes)
-      resp.setOperationHandle(opHandle.toTOperationHandle)
+      val tOperationHandle = opHandle.toTOperationHandle
+      tOperationHandle.setOperationType(TOperationType.GET_TABLES)
+      resp.setOperationHandle(tOperationHandle)
       resp.setStatus(OK_STATUS)
     } catch {
       case e: Exception =>
@@ -342,7 +352,9 @@ abstract class TFrontendService(name: String)
     val resp = new TGetTableTypesResp
     try {
       val opHandle = be.getTableTypes(SessionHandle(req.getSessionHandle))
-      resp.setOperationHandle(opHandle.toTOperationHandle)
+      val tOperationHandle = opHandle.toTOperationHandle
+      tOperationHandle.setOperationType(TOperationType.GET_TABLE_TYPES)
+      resp.setOperationHandle(tOperationHandle)
       resp.setStatus(OK_STATUS)
     } catch {
       case e: Exception =>
@@ -362,7 +374,9 @@ abstract class TFrontendService(name: String)
       val table = req.getTableName
       val col = req.getColumnName
       val opHandle = be.getColumns(sessionHandle, catalog, schema, table, col)
-      resp.setOperationHandle(opHandle.toTOperationHandle)
+      val tOperationHandle = opHandle.toTOperationHandle
+      tOperationHandle.setOperationType(TOperationType.GET_COLUMNS)
+      resp.setOperationHandle(tOperationHandle)
       resp.setStatus(OK_STATUS)
     } catch {
       case e: Exception =>
@@ -381,7 +395,9 @@ abstract class TFrontendService(name: String)
       val schema = req.getSchemaName
       val func = req.getFunctionName
       val opHandle = be.getFunctions(sessionHandle, catalog, schema, func)
-      resp.setOperationHandle(opHandle.toTOperationHandle)
+      val tOperationHandle = opHandle.toTOperationHandle
+      tOperationHandle.setOperationType(TOperationType.GET_FUNCTIONS)
+      resp.setOperationHandle(tOperationHandle)
       resp.setStatus(OK_STATUS)
     } catch {
       case e: Exception =>
@@ -400,7 +416,9 @@ abstract class TFrontendService(name: String)
       val schema = req.getSchemaName
       val table = req.getTableName
       val opHandle = be.getPrimaryKeys(sessionHandle, catalog, schema, table)
-      resp.setOperationHandle(opHandle.toTOperationHandle)
+      val tOperationHandle = opHandle.toTOperationHandle
+      tOperationHandle.setOperationType(TOperationType.GET_FUNCTIONS)
+      resp.setOperationHandle(tOperationHandle)
       resp.setStatus(OK_STATUS)
     } catch {
       case e: Exception =>
@@ -429,7 +447,9 @@ abstract class TFrontendService(name: String)
         foreignCatalog,
         foreignSchema,
         foreignTable)
-      resp.setOperationHandle(opHandle.toTOperationHandle)
+      val tOperationHandle = opHandle.toTOperationHandle
+      tOperationHandle.setOperationType(TOperationType.GET_FUNCTIONS)
+      resp.setOperationHandle(tOperationHandle)
       resp.setStatus(OK_STATUS)
     } catch {
       case e: Exception =>

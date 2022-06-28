@@ -31,7 +31,7 @@ import org.apache.kyuubi.util.KyuubiHadoopUtils._
 import org.apache.kyuubi.util.ThreadUtils
 
 class LaunchEngine(session: KyuubiSessionImpl, override val shouldRunAsync: Boolean)
-  extends KyuubiOperation(OperationType.UNKNOWN_OPERATION, session) {
+  extends KyuubiOperation(session) {
 
   override def statement: String = "LAUNCH_ENGINE"
 
