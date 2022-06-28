@@ -47,6 +47,22 @@ object CtlConf {
       .stringConf
       .createOptional
 
+  val CTL_REST_CLIENT_CONNECT_TIMEOUT: ConfigEntry[Long] =
+    buildConf("kyuubi.ctl.rest.connect.timeout")
+      .doc("The timeout[ms] for establishing the connection with the kyuubi server.")
+      .version("1.6.0")
+      .timeConf
+      .checkValue(_ > 0, "must be positive number")
+      .createWithDefault(Duration.ofSeconds(30).toMillis)
+
+  val CTL_REST_CLIENT_SOCKET_TIMEOUT: ConfigEntry[Long] =
+    buildConf("kyuubi.ctl.rest.socket.timeout")
+      .doc("The timeout[ms] for waiting for data packets after connection is established.")
+      .version("1.6.0")
+      .timeConf
+      .checkValue(_ > 0, "must be positive number")
+      .createWithDefault(Duration.ofSeconds(30).toMillis)
+
   val CTL_REST_CLIENT_REQUEST_MAX_ATTEMPTS =
     buildConf("kyuubi.ctl.rest.request.max.attempts")
       .doc("The max attempts number for ctl rest request.")

@@ -350,13 +350,6 @@ class BatchesResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper {
     Seq(
       (
         new BatchRequest(
-          null,
-          sparkProcessBuilder.mainResource.get,
-          sparkProcessBuilder.mainClass,
-          "test-name"),
-        "is not in the supported list"),
-      (
-        new BatchRequest(
           "sp",
           sparkProcessBuilder.mainResource.get,
           sparkProcessBuilder.mainClass,

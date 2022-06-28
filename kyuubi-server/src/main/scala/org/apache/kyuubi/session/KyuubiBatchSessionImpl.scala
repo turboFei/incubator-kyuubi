@@ -60,15 +60,9 @@ class KyuubiBatchSessionImpl(
 
   override def createTime: Long = recoveryMetadata.map(_.createTime).getOrElse(super.createTime)
 
-  // TODO: Support batch conf advisor
-  override val normalizedConf: Map[String, String] = {
-    sessionConf.getBatchConf(batchRequest.getBatchType) ++
-      sessionManager.validateBatchConf(batchRequest.getConf.asScala.toMap)
-  }
-
   val sessionCluster =
     if (sessionManager.sessionClusterModeEnabled) {
-      normalizedConf.get(SESSION_CLUSTER.key).orElse(sessionConf.get(SESSION_CLUSTER))
+      batchRequest.getConf.asScala.get(SESSION_CLUSTER.key).orElse(sessionConf.get(SESSION_CLUSTER))
     } else {
       None
     }
@@ -94,6 +88,12 @@ class KyuubiBatchSessionImpl(
     sessionClusterConf.getUserDefaults(user).getAll.foreach { case (key, value) =>
       sessionConf.set(key, value)
     }
+  }
+
+  // TODO: Support batch conf advisor
+  override val normalizedConf: Map[String, String] = {
+    sessionConf.getBatchConf(batchRequest.getBatchType) ++
+      sessionManager.validateBatchConf(batchRequest.getConf.asScala.toMap)
   }
 
   private[kyuubi] lazy val batchJobSubmissionOp = sessionManager.operationManager

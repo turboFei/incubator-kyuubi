@@ -50,6 +50,7 @@ target/
 dist/
 apache-kyuubi-*-bin*
 apache-kyuubi-*-beeline*
+apache-kyuubi-*-client*
 *.gz
 logs/
 pid/
