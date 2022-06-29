@@ -17,6 +17,7 @@
 package org.apache.kyuubi.ctl.util
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable.ListBuffer
 
 import org.apache.kyuubi.client.api.v1.dto.{Batch, GetBatchesResponse}
 import org.apache.kyuubi.ctl.util.DateTimeUtils._
@@ -38,16 +39,33 @@ private[ctl] object Render {
   def renderBatchListInfo(batchListInfo: GetBatchesResponse): String = {
     val title = s"Total number of batches: ${batchListInfo.getTotal}"
     val header =
-      Seq("Id", "Name", "User", "Type", "Instance", "State", "App Info", "Create Time", "End Time")
+      Seq(
+        "Batch Id",
+        "Type",
+        "Name",
+        "User",
+        "State",
+        "Cluster",
+        "App Id",
+        "App Url",
+        "App State",
+        "App Diagnostic",
+        "Kyuubi Instance",
+        "Create Time",
+        "End Time")
     val rows = batchListInfo.getBatches.asScala.sortBy(_.getCreateTime).map { batch =>
       Seq(
         batch.getId,
+        batch.getBatchType,
         batch.getName,
         batch.getUser,
-        batch.getBatchType,
-        batch.getKyuubiInstance,
         batch.getState,
-        batch.getBatchInfo.toString,
+        batch.getCluster,
+        batch.getAppId,
+        batch.getAppUrl,
+        batch.getAppState,
+        batch.getAppDiagnostic,
+        batch.getKyuubiInstance,
         millisToDateString(batch.getCreateTime, "yyyy-MM-dd HH:mm:ss"),
         millisToDateString(batch.getEndTime, "yyyy-MM-dd HH:mm:ss"))
     }
@@ -55,16 +73,33 @@ private[ctl] object Render {
   }
 
   def renderBatchInfo(batch: Batch): String = {
-    s"""Batch Info:
-       |  Batch Id: ${batch.getId}
-       |  Type: ${batch.getBatchType}
-       |  Name: ${batch.getName}
-       |  User: ${batch.getUser}
-       |  State: ${batch.getState}
-       |  Kyuubi Instance: ${batch.getKyuubiInstance}
-       |  Create Time: ${millisToDateString(batch.getCreateTime, "yyyy-MM-dd HH:mm:ss")}
-       |  End Time: ${millisToDateString(batch.getEndTime, "yyyy-MM-dd HH:mm:ss")}
-       |  App Info: ${batch.getBatchInfo.toString}
-        """.stripMargin
+    val batchInfo = ListBuffer[String]()
+
+    batchInfo += "Batch Info"
+    batchInfo += s"Batch Id: ${batch.getId}"
+    batchInfo += s"Type: ${batch.getBatchType}"
+    batchInfo += s"Name: ${batch.getName}"
+    batchInfo += s"User: ${batch.getUser}"
+    batchInfo += s"State: ${batch.getState}"
+    Option(batch.getCluster).foreach { _ =>
+      batchInfo += s"Cluster: ${batch.getCluster}"
+    }
+    Option(batch.getAppId).foreach { _ =>
+      batchInfo += s"App Id: ${batch.getAppId}"
+    }
+    Option(batch.getAppUrl).foreach { _ =>
+      batchInfo += s"App Url: ${batch.getAppUrl}"
+    }
+    Option(batch.getAppState).foreach { _ =>
+      batchInfo += s"App State: ${batch.getAppState}"
+    }
+    Option(batch.getAppDiagnostic).filter(_.nonEmpty).foreach { _ =>
+      batchInfo += s"App Diagnostic: ${batch.getAppDiagnostic}"
+    }
+    batchInfo += s"Kyuubi Instance: ${batch.getKyuubiInstance}"
+    batchInfo += s"Create Time: ${millisToDateString(batch.getCreateTime, "yyyy-MM-dd HH:mm:ss")}"
+    batchInfo += s"End Time: ${millisToDateString(batch.getEndTime, "yyyy-MM-dd HH:mm:ss")}"
+
+    batchInfo.mkString("", "\n", "\t")
   }
 }

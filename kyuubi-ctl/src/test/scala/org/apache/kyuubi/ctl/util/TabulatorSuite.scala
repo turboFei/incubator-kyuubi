@@ -17,25 +17,25 @@
 
 package org.apache.kyuubi.ctl.util
 
-import java.time.{Instant, LocalDateTime, ZoneId}
-import java.time.format.DateTimeFormatter
+import org.apache.kyuubi.KyuubiFunSuite
 
-private[ctl] object DateTimeUtils {
+class TabulatorSuite extends KyuubiFunSuite {
+  test("do not render the empty columns") {
+    val header = Seq("col1", "partEmptyCol2", "emptyCol3")
+    val rows = Seq(Seq("123", "", ""), Seq("456", "123", ""))
+    val result = Tabulator.format("the title", header, rows, true)
 
-  def dateStringToMillis(date: String, format: String): Long = {
-    if (date == null) return 0
-    val localDateTime = LocalDateTime.parse(date, DateTimeFormatter.ofPattern(format))
-    localDateTime.atZone(ZoneId.systemDefault).toInstant.toEpochMilli
-  }
-
-  def millisToDateString(millis: Long, format: String): String = {
-    if (millis <= 0) {
-      "N/A"
-    } else {
-      val formatter = DateTimeFormatter.ofPattern(format)
-      val date: LocalDateTime =
-        Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDateTime()
-      formatter.format(date)
-    }
+    val expectedResult =
+      s"\n        the title       " +
+        """
+          |+----------+-------------+
+          ||   col1   |partEmptyCol2|
+          |+----------+-------------+
+          ||   123    |             |
+          ||   456    |     123     |
+          |+----------+-------------+
+          |2 row(s)
+          |""".stripMargin
+    assert(result === expectedResult)
   }
 }
