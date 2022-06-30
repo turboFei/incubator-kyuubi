@@ -250,7 +250,7 @@ if [[ "$CLIENT_ONLY" == "true" ]]; then
 
   cp "${KYUUBI_HOME}/conf/kyuubi-defaults.conf.template" "${DISTDIR}/conf/kyuubi-defaults.conf"
   cp "${KYUUBI_HOME}/conf/kyuubi-env.sh.template" "${DISTDIR}/conf/kyuubi-env.sh"
-  cp "${KYUUBI_HOME}/conf/log4j2.properties.template" "${DISTDIR}/conf/log4j2.properties"
+  cp "${KYUUBI_HOME}/conf/log4j2.xml.template" "${DISTDIR}/conf/log4j2.xml"
   cat >"${DISTDIR}/conf/core-site.xml" <<EOF
   <configuration>
     <property>
