@@ -75,6 +75,9 @@ private[ctl] object Render {
 
   private def buildBatchAppInfo(batch: Batch): List[String] = {
     val batchAppInfo = ListBuffer[String]()
+    Option(batch.getCluster).foreach { _ =>
+      batchAppInfo += s"App Cluster: ${batch.getCluster}"
+    }
     Option(batch.getAppId).foreach { _ =>
       batchAppInfo += s"App Id: ${batch.getAppId}"
     }

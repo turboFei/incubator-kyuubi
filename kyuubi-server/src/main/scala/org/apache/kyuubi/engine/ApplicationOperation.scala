@@ -70,7 +70,6 @@ object ApplicationOperation {
   val APP_STATE_KEY = "state"
   val APP_URL_KEY = "url"
   val APP_ERROR_KEY = "error"
-  val APP_CLUSTER_KEY = "cluster"
 
   val NOT_FOUND = "APPLICATION_NOT_FOUND"
 }
