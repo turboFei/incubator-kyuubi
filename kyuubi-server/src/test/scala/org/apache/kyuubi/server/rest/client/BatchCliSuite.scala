@@ -97,11 +97,9 @@ class BatchCliSuite extends RestClientTestHelper with TestPrematureExit {
       "--password",
       ldapUserPasswd)
     var result = testPrematureExitForControlCli(createArgs, "")
-    assert(result.contains("Type: SPARK"))
-    assert(result.contains(s"Kyuubi Instance: ${fe.connectionUrl}"))
-    val startIndex = result.indexOf("Id: ") + 4
-    val endIndex = result.indexOf("\n", startIndex)
-    val batchId = result.substring(startIndex, endIndex)
+    assert(result.contains("SPARK"))
+    assert(result.contains(s"${fe.connectionUrl}"))
+    val batchId = getBatchIdFromBatchReport(result)
 
     val getArgs = Array(
       "get",
@@ -111,9 +109,9 @@ class BatchCliSuite extends RestClientTestHelper with TestPrematureExit {
       ldapUser,
       "--password",
       ldapUserPasswd)
-    result = testPrematureExitForControlCli(getArgs, "Type: SPARK")
-    assert(result.contains("Type: SPARK"))
-    assert(result.contains(s"Kyuubi Instance: ${fe.connectionUrl}"))
+    result = testPrematureExitForControlCli(getArgs, "SPARK")
+    assert(result.contains("SPARK"))
+    assert(result.contains(s"${fe.connectionUrl}"))
 
     val logArgs = Array(
       "log",
@@ -151,11 +149,9 @@ class BatchCliSuite extends RestClientTestHelper with TestPrematureExit {
       "--authSchema",
       "SPNEGO")
     var result = testPrematureExitForControlCli(createArgs, "")
-    assert(result.contains("Type: SPARK"))
-    assert(result.contains(s"Kyuubi Instance: ${fe.connectionUrl}"))
-    val startIndex = result.indexOf("Id: ") + 4
-    val endIndex = result.indexOf("\n", startIndex)
-    val batchId = result.substring(startIndex, endIndex)
+    assert(result.contains("SPARK"))
+    assert(result.contains(s"${fe.connectionUrl}"))
+    val batchId = getBatchIdFromBatchReport(result)
 
     val getArgs = Array(
       "get",
@@ -163,9 +159,9 @@ class BatchCliSuite extends RestClientTestHelper with TestPrematureExit {
       batchId,
       "--authSchema",
       "spnego")
-    result = testPrematureExitForControlCli(getArgs, "Type: SPARK")
-    assert(result.contains("Type: SPARK"))
-    assert(result.contains(s"Kyuubi Instance: ${fe.connectionUrl}"))
+    result = testPrematureExitForControlCli(getArgs, "SPARK")
+    assert(result.contains("SPARK"))
+    assert(result.contains(s"${fe.connectionUrl}"))
 
     val logArgs = Array(
       "log",
@@ -197,11 +193,9 @@ class BatchCliSuite extends RestClientTestHelper with TestPrematureExit {
       "--password",
       ldapUserPasswd)
     var result = testPrematureExitForControlCli(createArgs, "")
-    assert(result.contains("Type: SPARK"))
-    assert(result.contains(s"Kyuubi Instance: ${fe.connectionUrl}"))
-    val startIndex = result.indexOf("Id: ") + 4
-    val endIndex = result.indexOf("\n", startIndex)
-    val batchId = result.substring(startIndex, endIndex)
+    assert(result.contains("SPARK"))
+    assert(result.contains(s"${fe.connectionUrl}"))
+    val batchId = getBatchIdFromBatchReport(result)
 
     val logArgs = Array(
       "log",
@@ -310,7 +304,7 @@ class BatchCliSuite extends RestClientTestHelper with TestPrematureExit {
       "kyuubi",
       "--createTime",
       "20220101000000")
-    testPrematureExitForControlCli(listArgs, "Total number of batches: 3")
+    testPrematureExitForControlCli(listArgs, "Batch List (from 0 total 3)")
 
     val listArgs1 = Array(
       "list",
@@ -321,7 +315,14 @@ class BatchCliSuite extends RestClientTestHelper with TestPrematureExit {
       ldapUserPasswd,
       "--endTime",
       "20220101000000")
-    testPrematureExitForControlCli(listArgs1, "Total number of batches: 0")
+    testPrematureExitForControlCli(listArgs1, "Batch List (from 0 total 0)")
   }
 
+  private def getBatchIdFromBatchReport(batchReport: String): String = {
+    val batchIdRegex = s"""Batch Report \\((.*)\\)""".r
+    batchIdRegex.findFirstMatchIn(batchReport) match {
+      case Some(m) => m.group(1)
+      case _ => throw new IllegalArgumentException("Invalid batch report")
+    }
+  }
 }
