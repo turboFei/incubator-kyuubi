@@ -17,6 +17,8 @@
 
 package org.apache.kyuubi.client.api.v1.dto;
 
+import java.util.Collections;
+import java.util.Map;
 import java.util.Objects;
 
 public class Batch {
@@ -24,11 +26,7 @@ public class Batch {
   private String user;
   private String batchType;
   private String name;
-  private String cluster;
-  private String appId;
-  private String appUrl;
-  private String appState;
-  private String appDiagnostic;
+  private Map<String, String> batchInfo;
   private String kyuubiInstance;
   private String state;
   private long createTime;
@@ -41,11 +39,7 @@ public class Batch {
       String user,
       String batchType,
       String name,
-      String cluster,
-      String appId,
-      String appUrl,
-      String appState,
-      String appDiagnostic,
+      Map<String, String> batchInfo,
       String kyuubiInstance,
       String state,
       long createTime,
@@ -54,11 +48,7 @@ public class Batch {
     this.user = user;
     this.batchType = batchType;
     this.name = name;
-    this.cluster = cluster;
-    this.appId = appId;
-    this.appUrl = appUrl;
-    this.appState = appState;
-    this.appDiagnostic = appDiagnostic;
+    this.batchInfo = batchInfo;
     this.kyuubiInstance = kyuubiInstance;
     this.state = state;
     this.createTime = createTime;
@@ -97,44 +87,15 @@ public class Batch {
     this.name = name;
   }
 
-  public String getCluster() {
-    return cluster;
+  public Map<String, String> getBatchInfo() {
+    if (null == batchInfo) {
+      return Collections.emptyMap();
+    }
+    return batchInfo;
   }
 
-  public void setCluster(String cluster) {
-    this.cluster = cluster;
-  }
-
-  public String getAppId() {
-    return appId;
-  }
-
-  public void setAppId(String appId) {
-    this.appId = appId;
-  }
-
-  public String getAppUrl() {
-    return appUrl;
-  }
-
-  public void setAppUrl(String appUrl) {
-    this.appUrl = appUrl;
-  }
-
-  public String getAppState() {
-    return appState;
-  }
-
-  public void setAppState(String appState) {
-    this.appState = appState;
-  }
-
-  public String getAppDiagnostic() {
-    return appDiagnostic;
-  }
-
-  public void setAppDiagnostic(String appDiagnostic) {
-    this.appDiagnostic = appDiagnostic;
+  public void setBatchInfo(Map<String, String> batchInfo) {
+    this.batchInfo = batchInfo;
   }
 
   public String getKyuubiInstance() {

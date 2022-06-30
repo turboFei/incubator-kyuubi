@@ -29,13 +29,9 @@ private[ctl] object DateTimeUtils {
   }
 
   def millisToDateString(millis: Long, format: String): String = {
-    if (millis <= 0) {
-      "N/A"
-    } else {
-      val formatter = DateTimeFormatter.ofPattern(format)
-      val date: LocalDateTime =
-        Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDateTime()
-      formatter.format(date)
-    }
+    val formatter = DateTimeFormatter.ofPattern(format)
+    val date: LocalDateTime =
+      Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDateTime()
+    formatter.format(date)
   }
 }

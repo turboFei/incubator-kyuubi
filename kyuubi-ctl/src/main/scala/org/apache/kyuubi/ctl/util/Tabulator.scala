@@ -57,29 +57,9 @@ private[kyuubi] object Tabulator {
       header: Seq[String],
       rows: Seq[Seq[String]],
       verbose: Boolean): String = {
-    val emptyColumns = (0 until header.size).filter { colIndex =>
-      rows.forall(row => StringUtils.isBlank(row.apply(colIndex)))
-    }
-
-    val (normalizedHeader, normalizedRows) =
-      if (emptyColumns.isEmpty) {
-        header -> rows
-      } else {
-        val newHeader = header.zipWithIndex.filterNot { case (_, colIndex) =>
-          emptyColumns.contains(colIndex)
-        }.map(_._1)
-
-        val newRows = rows.map { row =>
-          row.zipWithIndex.filterNot { case (_, colIndex) =>
-            emptyColumns.contains(colIndex)
-          }.map(_._1)
-        }
-        newHeader -> newRows
-      }
-
-    val data = if (verbose) Seq(normalizedHeader).union(normalizedRows) else normalizedRows
+    val data = if (verbose) Seq(header).union(rows) else rows
     val sb = new StringBuilder
-    val numCols = normalizedHeader.size
+    val numCols = header.size
     // We set a minimum column width at '10'
     val minimumColWidth = 10
 
@@ -113,7 +93,7 @@ private[kyuubi] object Tabulator {
       paddedRows.tail.foreach(_.addString(sb, "|", "|", "|\n"))
       sb.append(sep)
 
-      sb.append(s"${normalizedRows.size} row(s)\n")
+      sb.append(s"${rows.size} row(s)\n")
       titleNewLine + sb.toString()
     } else {
       paddedRows.foreach(_.addString(sb, "", "", "\n"))
