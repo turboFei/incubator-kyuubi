@@ -17,7 +17,7 @@
 
 package org.apache.kyuubi.client;
 
-import static org.apache.kyuubi.client.RestClientTestUtil.*;
+import static org.apache.kyuubi.client.RestClientTestUtils.*;
 import static org.junit.Assert.assertEquals;
 
 import org.apache.kyuubi.client.api.v1.dto.Batch;
