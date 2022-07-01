@@ -24,7 +24,7 @@ import org.apache.kyuubi.{KyuubiSQLException, Logging}
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf._
 
-class InternalSecurityAccessor(conf: KyuubiConf, val isServer: Boolean) extends Logging {
+class InternalSecurityAccessor(conf: KyuubiConf, val isServer: Boolean) {
   val cryptoKeyLengthBytes = conf.get(ENGINE_SECURITY_CRYPTO_KEY_LENGTH) / java.lang.Byte.SIZE
   val cryptoIvLength = conf.get(ENGINE_SECURITY_CRYPTO_IV_LENGTH)
   val cryptoKeyAlgorithm = conf.get(ENGINE_SECURITY_CRYPTO_KEY_ALGORITHM)
@@ -34,10 +34,6 @@ class InternalSecurityAccessor(conf: KyuubiConf, val isServer: Boolean) extends 
   private val provider: EngineSecuritySecretProvider = EngineSecuritySecretProvider.create(conf)
   private val (encryptor, decryptor) =
     initializeForAuth(cryptoCipher, normalizeSecret(provider.getSecret()))
-
-  if (isServer) {
-    info(s"The internal security secret is [${provider.getSecret()}]")
-  }
 
   private def initializeForAuth(cipher: String, secret: String): (Cipher, Cipher) = {
     val secretKeySpec = new SecretKeySpec(secret.getBytes, cryptoKeyAlgorithm)
@@ -54,10 +50,7 @@ class InternalSecurityAccessor(conf: KyuubiConf, val isServer: Boolean) extends 
   }
 
   def issueToken(): String = {
-    val identifier = KyuubiInternalAccessIdentifier.newIdentifier(tokenMaxLifeTime).toJson
-    val token = encrypt(identifier)
-    info(s"Issue token [$identifier] -> [$token]")
-    token
+    encrypt(KyuubiInternalAccessIdentifier.newIdentifier(tokenMaxLifeTime).toJson)
   }
 
   def authToken(tokenStr: String): Unit = {
@@ -65,8 +58,8 @@ class InternalSecurityAccessor(conf: KyuubiConf, val isServer: Boolean) extends 
       try {
         KyuubiInternalAccessIdentifier.fromJson(decrypt(tokenStr))
       } catch {
-        case e: Exception =>
-          throw KyuubiSQLException(s"Invalid engine access token $tokenStr", e)
+        case _: Exception =>
+          throw KyuubiSQLException("Invalid engine access token")
       }
     if (identifier.issueDate + identifier.maxDate < System.currentTimeMillis()) {
       throw KyuubiSQLException("The engine access token is expired")

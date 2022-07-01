@@ -141,9 +141,7 @@ class KyuubiSessionImpl(
       val (host, port) = engine.getOrCreate(discoveryClient, extraEngineLog)
       val passwd =
         if (sessionManager.getConf.get(ENGINE_SECURITY_ENABLED)) {
-          val engineToken = InternalSecurityAccessor.get().issueToken()
-          logSessionInfo(s"Issue engine token: $engineToken")
-          engineToken
+          InternalSecurityAccessor.get().issueToken()
         } else {
           Option(password).filter(_.nonEmpty).getOrElse("anonymous")
         }
