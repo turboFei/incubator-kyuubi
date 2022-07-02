@@ -20,7 +20,7 @@ package org.apache.kyuubi.engine.spark
 import scala.collection.mutable.ArrayBuffer
 
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
-import org.apache.kyuubi.engine.KubernetesApplicationOperation.LABEL_KYUUBI_UNIQUE_KEY
+import org.apache.kyuubi.engine.KyuubiApplicationManager
 import org.apache.kyuubi.operation.log.OperationLog
 
 class SparkBatchProcessBuilder(
@@ -44,16 +44,13 @@ class SparkBatchProcessBuilder(
       buffer += cla
     }
 
-    // tag for YARN
-    val batchJobTag = batchConf.get(TAG_KEY).map(_ + ",").getOrElse("") + batchId
-    var allConf = batchConf ++ Map(TAG_KEY -> batchJobTag) ++ sparkAppNameConf() ++ procConf() ++
-      mergeBatchFiles(batchConf) ++ mergeBatchJars(batchConf)
-    // tag for K8S
-    conf.getOption("spark.kubernetes.driver.label." + LABEL_KYUUBI_UNIQUE_KEY).foreach(option => {
-      allConf = allConf ++ Map("spark.kubernetes.driver.label." + LABEL_KYUUBI_UNIQUE_KEY -> option)
-    })
+    val batchKyuubiConf = new KyuubiConf(false)
+    batchConf.foreach(entry => { batchKyuubiConf.set(entry._1, entry._2) })
+    // tag batch application
+    KyuubiApplicationManager.tagApplication(batchId, "spark", clusterManager(), batchKyuubiConf)
 
-    allConf.foreach { case (k, v) =>
+    (batchKyuubiConf.getAll ++ sparkAppNameConf() ++ procConf() ++ mergeBatchFiles(
+      batchConf) ++ mergeBatchJars(batchConf)).foreach { case (k, v) =>
       buffer += CONF
       buffer += s"$k=$v"
     }
