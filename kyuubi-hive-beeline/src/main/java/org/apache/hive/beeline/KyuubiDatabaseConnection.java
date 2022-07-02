@@ -19,7 +19,6 @@ package org.apache.hive.beeline;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Map;
 import java.util.Properties;
@@ -42,10 +41,6 @@ public class KyuubiDatabaseConnection extends DatabaseConnection {
     this.driver = driver;
     this.url = url;
     this.info = info;
-    if (beeLine.kyuubiBatchRequest != null) {
-      this.info.setProperty(
-          KyuubiConnection.KYUUBI_BATCH_REQUEST_PROPERTY, beeLine.kyuubiBatchRequest);
-    }
   }
 
   @Override
@@ -147,29 +142,9 @@ public class KyuubiDatabaseConnection extends DatabaseConnection {
     logThread.start();
     kyuubiConnection.setEngineLogThread(logThread);
 
-    try {
-      kyuubiConnection.waitLaunchEngineToComplete();
-    } catch (Throwable t) {
-      // for batch mode, do not throw exception in beeline and set the kyuubi connection
-      if (!kyuubiConnection.isBatchMode()) {
-        throw t;
-      }
-    }
+    kyuubiConnection.waitLaunchEngineToComplete();
     logThread.interrupt();
-    if (!kyuubiConnection.isBatchMode()) {
-      kyuubiConnection.executeInitSql();
-    }
-
-    ResultSet batchResultSet = kyuubiConnection.getBatchResultSet();
-    if (batchResultSet != null) {
-      try {
-        // wait the log thread down to prevent impact the batch result format
-        logThread.join(KyuubiConnection.DEFAULT_ENGINE_LOG_THREAD_TIMEOUT);
-      } catch (Exception e) {
-      }
-      beeLine.info("The kyuubi batch job submission result.");
-      beeLine.print(batchResultSet);
-    }
+    kyuubiConnection.executeInitSql();
 
     return kyuubiConnection;
   }

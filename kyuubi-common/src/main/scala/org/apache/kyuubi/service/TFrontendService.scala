@@ -170,7 +170,7 @@ abstract class TFrontendService(name: String)
     authFactory.getIpAddress.orNull
   }
 
-  protected def getMinVersion(versions: TProtocolVersion*): TProtocolVersion = {
+  private def getMinVersion(versions: TProtocolVersion*): TProtocolVersion = {
     versions.minBy(_.getValue)
   }
 

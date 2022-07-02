@@ -78,7 +78,6 @@ import org.slf4j.LoggerFactory;
 public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
   public static final Logger LOG = LoggerFactory.getLogger(KyuubiConnection.class.getName());
   public static final String BEELINE_MODE_PROPERTY = "BEELINE_MODE";
-  public static final String KYUUBI_BATCH_REQUEST_PROPERTY = "kyuubi.batch.request";
   public static int DEFAULT_ENGINE_LOG_THREAD_TIMEOUT = 10 * 1000;
   public static final String KYUUBI_PROXY_BATCH_ACCOUNT = "kyuubi.proxy.batchAccount";
   public static final String KYUUBI_ENGINE_LOG_LISTENER_CLASSES =
@@ -114,12 +113,6 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
   private boolean isBeeLineMode;
   private boolean fastConnectMode;
 
-  private String batchRequest;
-  private boolean batchMode = false;
-  private boolean batchTerminated = false;
-  private boolean batchSucceed = false;
-  private ResultSet batchResultSet = null;
-
   private List<KyuubiEngineLogListener> engineLogListeners = new LinkedList();
 
   public KyuubiConnection(String url, Properties info) throws SQLException {
@@ -135,7 +128,6 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
       throw new SQLException(e);
     }
     isBeeLineMode = Boolean.parseBoolean(info.getProperty(BEELINE_MODE_PROPERTY));
-    batchRequest = info.getProperty(KYUUBI_BATCH_REQUEST_PROPERTY);
     fastConnectMode = Boolean.parseBoolean(info.getProperty(FAST_CONNECT_MODE));
     jdbcUriString = connParams.getJdbcUriString();
     // JDBC URL: jdbc:hive2://<host>:<port>/dbName;sess_var_list?hive_conf_list#hive_var_list
@@ -185,7 +177,7 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
       // open client session
       openSession();
       showLaunchEngineLog();
-      if (!fastConnectMode || batchMode) {
+      if (!fastConnectMode) {
         waitLaunchEngineToComplete();
       }
       executeInitSql();
@@ -211,7 +203,7 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
           openSession();
           if (!isBeeLineMode) {
             showLaunchEngineLog();
-            if (!fastConnectMode || batchMode) {
+            if (!fastConnectMode) {
               waitLaunchEngineToComplete();
             }
             executeInitSql();
@@ -852,10 +844,6 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
     if (sessVars.containsKey(KYUUBI_PROXY_BATCH_ACCOUNT)) {
       openConf.put(KYUUBI_PROXY_BATCH_ACCOUNT, sessVars.get(KYUUBI_PROXY_BATCH_ACCOUNT));
     }
-    // set the batch request
-    if (batchRequest != null) {
-      openConf.put(KYUUBI_BATCH_REQUEST_PROPERTY, batchRequest);
-    }
     openReq.setConfiguration(openConf);
 
     // Store the user name in the open request in case no non-sasl authentication
@@ -887,29 +875,15 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
           openRespConf.get("kyuubi.session.engine.launch.handle.guid");
       String launchEngineOpHandleSecret =
           openRespConf.get("kyuubi.session.engine.launch.handle.secret");
-      // Get batch operation handle
-      String batchOpHandleGuid = openRespConf.get("kyuubi.batch.handle.guid");
-      String batchOpHandleSecret = openRespConf.get("kyuubi.batch.handle.secret");
 
-      if ((launchEngineOpHandleGuid != null && launchEngineOpHandleSecret != null)
-          || (batchOpHandleGuid != null && batchOpHandleSecret != null)) {
+      if (launchEngineOpHandleGuid != null && launchEngineOpHandleSecret != null) {
         try {
-          if (launchEngineOpHandleGuid != null && launchEngineOpHandleSecret != null) {
-            byte[] guidBytes = Base64.getMimeDecoder().decode(launchEngineOpHandleGuid);
-            byte[] secretBytes = Base64.getMimeDecoder().decode(launchEngineOpHandleSecret);
-            THandleIdentifier handleIdentifier =
-                new THandleIdentifier(ByteBuffer.wrap(guidBytes), ByteBuffer.wrap(secretBytes));
-            launchEngineOpHandle =
-                new TOperationHandle(handleIdentifier, TOperationType.UNKNOWN, false);
-          } else {
-            byte[] guidBytes = Base64.getMimeDecoder().decode(batchOpHandleGuid);
-            byte[] secretBytes = Base64.getMimeDecoder().decode(batchOpHandleSecret);
-            THandleIdentifier handleIdentifier =
-                new THandleIdentifier(ByteBuffer.wrap(guidBytes), ByteBuffer.wrap(secretBytes));
-            batchMode = true;
-            launchEngineOpHandle =
-                new TOperationHandle(handleIdentifier, TOperationType.UNKNOWN, true);
-          }
+          byte[] guidBytes = Base64.getMimeDecoder().decode(launchEngineOpHandleGuid);
+          byte[] secretBytes = Base64.getMimeDecoder().decode(launchEngineOpHandleSecret);
+          THandleIdentifier handleIdentifier =
+              new THandleIdentifier(ByteBuffer.wrap(guidBytes), ByteBuffer.wrap(secretBytes));
+          launchEngineOpHandle =
+              new TOperationHandle(handleIdentifier, TOperationType.UNKNOWN, false);
         } catch (Exception e) {
           LOG.error("Failed to decode launch engine operation handle from open session resp", e);
         }
@@ -1081,15 +1055,7 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
       }
     }
     engineLogThread = null;
-    if (isBatchMode()) {
-      batchTerminated = true;
-      buildKyuubiBatchResultSet();
-      if (!isBeeLineMode) {
-        close();
-      }
-    } else {
-      close();
-    }
+    close();
   }
 
   /*
@@ -1871,57 +1837,6 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
         } else {
           throw new SQLException(e.getMessage(), "08S01", e);
         }
-      }
-    }
-
-    if (batchMode) {
-      batchTerminated = true;
-      batchSucceed = true;
-      buildKyuubiBatchResultSet();
-      // for batch mode, if not in beeline mode, close the session when batch operation completed
-      if (!isBeeLineMode) {
-        close();
-      }
-    }
-  }
-
-  public boolean isBatchMode() {
-    return batchMode;
-  }
-
-  public boolean isBatchTerminated() {
-    return batchTerminated;
-  }
-
-  public boolean isBatchSucceed() {
-    return batchSucceed;
-  }
-
-  public ResultSet getBatchResultSet() {
-    return batchResultSet;
-  }
-
-  private void buildKyuubiBatchResultSet() {
-    if (!isClosed && batchMode && client != null && launchEngineOpHandle != null) {
-      try {
-        TFetchResultsReq fetchReq =
-            new TFetchResultsReq(
-                launchEngineOpHandle, TFetchOrientation.FETCH_FIRST, Integer.MAX_VALUE);
-        TFetchResultsResp fetchResp;
-        fetchResp = client.FetchResults(fetchReq);
-        Utils.verifySuccessWithInfo(fetchResp.getStatus());
-
-        TRowSet results = fetchResp.getResults();
-        RowSet rowSet = RowSetFactory.create(results, protocol);
-
-        TGetResultSetMetadataReq metadataReq = new TGetResultSetMetadataReq(launchEngineOpHandle);
-        TGetResultSetMetadataResp metadataResp;
-        metadataResp = client.GetResultSetMetadata(metadataReq);
-        Utils.verifySuccess(metadataResp.getStatus());
-
-        batchResultSet = new KyuubiBatchResultSet(rowSet, metadataResp.getSchema());
-      } catch (Exception e) {
-        LOG.error("Error fetching batch submission result", e);
       }
     }
   }

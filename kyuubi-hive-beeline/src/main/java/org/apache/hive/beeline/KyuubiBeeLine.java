@@ -17,16 +17,12 @@
 
 package org.apache.hive.beeline;
 
-import com.google.common.io.Files;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.nio.charset.Charset;
 import java.sql.Driver;
-import java.text.MessageFormat;
 import java.util.*;
 import java.util.Arrays;
 import java.util.Collections;
@@ -35,14 +31,10 @@ import java.util.List;
 import jline.console.completer.Completer;
 import jline.console.completer.StringsCompleter;
 import org.apache.commons.cli.CommandLine;
-import org.apache.commons.cli.OptionBuilder;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
-import org.apache.kyuubi.jdbc.hive.KyuubiConnection;
 
 public class KyuubiBeeLine extends BeeLine {
-  private static final ResourceBundle resourceBundle =
-      ResourceBundle.getBundle(KyuubiBeeLine.class.getSimpleName());
   public static final String KYUUBI_BEELINE_DEFAULT_JDBC_DRIVER =
       "org.apache.kyuubi.jdbc.KyuubiHiveDriver";
   private static final ResourceBundle beelineResourceBundle =
@@ -51,8 +43,6 @@ public class KyuubiBeeLine extends BeeLine {
   private Driver defaultDriver = null;
   public static final String SCALA_COMMAND_PREFIX = "scala";
   ResourceBundle kyuubiResourceBundle = new KyuubiBeelineResourceBundle();
-
-  protected String kyuubiBatchRequest;
 
   public KyuubiBeeLine() {
     this(true);
@@ -182,69 +172,6 @@ public class KyuubiBeeLine extends BeeLine {
       beelineParser = new BeelineParser();
       cl = beelineParser.parse(options, args);
 
-      if (cl.getOptionValues('e') != null) {
-        commands = Arrays.asList(cl.getOptionValues('e'));
-        // When using -e, command is always a single line, see HIVE-19018
-        getOpts().setAllowMultiLineCommand(false);
-      }
-
-      if (cl.hasOption("kyuubi-batch")) {
-        if (!commands.isEmpty()) {
-          if (commands.size() > 1) {
-            info("The kyuubi batch request only takes the first query specified with '-e'.");
-          }
-          kyuubiBatchRequest = commands.get(0);
-        }
-
-        if (kyuubiBatchRequest == null && cl.getOptionValue("f") != null) {
-          File scriptFile = new File(cl.getOptionValue("f"));
-          try {
-            kyuubiBatchRequest =
-                String.join("\n", Files.readLines(scriptFile, Charset.forName("UTF-8")));
-          } catch (IOException e) {
-            error(e.getMessage());
-            return 1;
-          }
-        }
-
-        if (kyuubiBatchRequest == null) {
-          error("In kyuubi batch mode, please specify the batch request with '-e' or '-f' option.");
-          return 1;
-        }
-        info("Submitting batch with request:" + kyuubiBatchRequest);
-
-        Method connectUsingArgsMethod =
-            BeeLine.class.getDeclaredMethod(
-                "connectUsingArgs", BeelineParser.class, CommandLine.class);
-        connectUsingArgsMethod.setAccessible(true);
-        connectUsingArgsMethod.invoke(this, beelineParser, cl);
-
-        DatabaseConnection databaseConnection = getDatabaseConnection();
-        Field connectionField = DatabaseConnection.class.getDeclaredField("connection");
-        connectionField.setAccessible(true);
-
-        if (databaseConnection != null && connectionField.get(databaseConnection) != null) {
-          KyuubiConnection kyuubiConnection =
-              (KyuubiConnection) connectionField.get(databaseConnection);
-          if (!kyuubiConnection.isBatchTerminated()) {
-            error(
-                "!!! The kyuubi batch job does not terminate normally, please check the log. !!!");
-          } else if (!kyuubiConnection.isBatchSucceed()) {
-            error("!!! The kyuubi batch job fails, please check the log. !!!");
-          }
-          int exitCode =
-              kyuubiConnection.isBatchTerminated()
-                  ? (kyuubiConnection.isBatchSucceed() ? 0 : 1)
-                  : 1;
-          close();
-          System.exit(exitCode);
-        } else {
-          close();
-          error("!!! The connection is not established successfully, please check the log. !!!");
-          System.exit(1);
-        }
-      }
-
       Method connectUsingArgsMethod =
           BeeLine.class.getDeclaredMethod(
               "connectUsingArgs", BeelineParser.class, CommandLine.class);
@@ -281,6 +208,12 @@ public class KyuubiBeeLine extends BeeLine {
     }
 
     int code = 0;
+    if (cl.getOptionValues('e') != null) {
+      commands = Arrays.asList(cl.getOptionValues('e'));
+      // When using -e, command is always a single line, see HIVE-19018
+      getOpts().setAllowMultiLineCommand(false);
+    }
+
     if (!commands.isEmpty() && getOpts().getScriptFile() != null) {
       error("The '-e' and '-f' options cannot be specified simultaneously");
       return 1;
@@ -305,27 +238,5 @@ public class KyuubiBeeLine extends BeeLine {
       }
     }
     return code;
-  }
-
-  static {
-    try {
-      Field optionsFields = BeeLine.class.getDeclaredField("options");
-      optionsFields.setAccessible(true);
-      Options options = (Options) optionsFields.get(null);
-      options.addOption(
-          OptionBuilder.withLongOpt("kyuubi-batch")
-              .withDescription("whether to enable kyuubi batch mode to submit batch job")
-              .create());
-    } catch (Throwable t) {
-      throw new ExceptionInInitializerError("Failed to inject kyuubi options.");
-    }
-  }
-
-  @Override
-  void usage() {
-    super.usage();
-    String kyuubiExtUsage =
-        MessageFormat.format(resourceBundle.getString("cmd-usage"), new Object[0]);
-    output(kyuubiExtUsage);
   }
 }
