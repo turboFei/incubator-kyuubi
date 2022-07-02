@@ -143,7 +143,10 @@ case class KyuubiConf(loadSysDefault: Boolean = true) extends Logging {
     FRONTEND_MYSQL_BIND_PORT,
     AUTHENTICATION_METHOD,
     KINIT_INTERVAL,
-    SESSION_CLUSTER_MODE_ENABLED)
+    KyuubiEbayConf.SESSION_CLUSTER_MODE_ENABLED,
+    KyuubiEbayConf.AUTHENTICATION_BATCH_ACCOUNT_CLASS,
+    KyuubiEbayConf.AUTHENTICATION_BATCH_ACCOUNT_ENDPOINT,
+    KyuubiEbayConf.AUTHENTICATION_KEYSTONE_ENDPOINT)
 
   def getUserDefaults(user: String): KyuubiConf = {
     val cloned = KyuubiConf(false)
@@ -600,14 +603,6 @@ object KyuubiConf {
       .stringConf
       .createOptional
 
-  val AUTHENTICATION_BATCH_ACCOUNT_CLASS: OptionalConfigEntry[String] =
-    buildConf("kyuubi.authentication.batchAccount.class")
-      .doc("The authentication class name for batch account authentication," +
-        " eBay internal requirement")
-      .version("1.5.0")
-      .stringConf
-      .createOptional
-
   val AUTHENTICATION_LDAP_URL: OptionalConfigEntry[String] =
     buildConf("kyuubi.authentication.ldap.url")
       .doc("SPACE character separated LDAP connection URL(s).")
@@ -952,28 +947,6 @@ object KyuubiConf {
       .booleanConf
       .createWithDefault(true)
 
-  val SESSION_ENGINE_LAUNCH_MOVE_QUEUE_ENABLED: ConfigEntry[Boolean] =
-    buildConf("kyuubi.session.engine.launch.moveQueue.enabled")
-      .doc("When opening kyuubi session, whether to launch engine at first and then move queue." +
-        " Note that, it is only for yarn resource manger.")
-      .version("1.4.0")
-      .booleanConf
-      .createWithDefault(false)
-
-  val SESSION_ENGINE_LAUNCH_MOVE_QUEUE_INIT_QUEUE: OptionalConfigEntry[String] =
-    buildConf("kyuubi.session.engine.launch.moveQueue.initQueue")
-      .doc("When launch engine and move queue, the init queue.")
-      .version("1.6.0")
-      .stringConf
-      .createOptional
-
-  val SESSION_ENGINE_LAUNCH_MOVE_QUEUE_TIMEOUT: ConfigEntry[Long] =
-    buildConf("kyuubi.session.engine.launch.moveQueue.timeout")
-      .doc("When launch engine and move queue, the final queue.")
-      .version("1.6.0")
-      .timeConf
-      .createWithDefaultString("PT2M")
-
   val BATCH_APPLICATION_CHECK_INTERVAL: ConfigEntry[Long] =
     buildConf("kyuubi.batch.application.check.interval")
       .doc("The interval to check batch job application information.")
@@ -1194,9 +1167,8 @@ object KyuubiConf {
       .booleanConf
       .createWithDefault(false)
 
-  // TODO: this is for ebay legacy conf, the community conf is `kyuubi.operation.result.max.rows`
   val OPERATION_RESULT_MAX_ROWS: ConfigEntry[Int] =
-    buildConf("kyuubi.operation.max.result.count")
+    buildConf("kyuubi.operation.result.max.rows")
       .doc("Max rows of Spark query results. Rows that exceeds the limit would be ignored. " +
         "By setting this value to 0 to disable the max rows limit.")
       .version("1.6.0")
@@ -1565,23 +1537,6 @@ object KyuubiConf {
       .doc("A human readable name of session and we use empty string by default. " +
         "This name will be recorded in event. Note that, we only apply this value from " +
         "session conf.")
-      .version("1.4.0")
-      .stringConf
-      .createOptional
-
-  val SESSION_CLUSTER_MODE_ENABLED: ConfigEntry[Boolean] =
-    buildConf("kyuubi.session.cluster.mode.enabled")
-      .doc("Whether to enable session with cluster specify mode. If it is enabled," +
-        " the cluster for session connection is must to be specified.")
-      .version("1.4.0")
-      .booleanConf
-      .createWithDefault(false)
-
-  val SESSION_CLUSTER: OptionalConfigEntry[String] =
-    buildConf("kyuubi.session.cluster")
-      .doc("The cluster to access, such as apollo-rno, hercules-lvs.  For each cluster," +
-        " there should be a defined properties file, whose name is formatted like" +
-        " kyuubi-defaults.conf.<cluster>")
       .version("1.4.0")
       .stringConf
       .createOptional

@@ -25,7 +25,7 @@ import org.apache.hadoop.security.Credentials
 import org.scalatest.time.SpanSugar.convertIntToGrainOfTime
 
 import org.apache.kyuubi.{KyuubiException, KyuubiFunSuite}
-import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 
 class HadoopCredentialsManagerSuite extends KyuubiFunSuite {
 
@@ -226,7 +226,7 @@ class HadoopCredentialsManagerSuite extends KyuubiFunSuite {
   }
 
   test("cluster mode credentials managers") {
-    val kyuubiConf = new KyuubiConf(false).set(KyuubiConf.SESSION_CLUSTER_MODE_ENABLED, true)
+    val kyuubiConf = new KyuubiConf(false).set(KyuubiEbayConf.SESSION_CLUSTER_MODE_ENABLED, true)
     withStartedManager(kyuubiConf) { manager =>
       manager.containsProvider("unstable", Option("test"))
     }

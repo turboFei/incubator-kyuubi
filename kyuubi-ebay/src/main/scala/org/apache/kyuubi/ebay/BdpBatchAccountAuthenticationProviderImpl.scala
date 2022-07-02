@@ -27,14 +27,13 @@ import org.apache.http.client.methods.{CloseableHttpResponse, HttpGet}
 import org.apache.http.impl.client.HttpClients
 
 import org.apache.kyuubi.Logging
-import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.service.authentication.BatchAccountAuthenticationProvider
 
 class BdpBatchAccountAuthenticationProviderImpl(conf: KyuubiConf)
   extends BatchAccountAuthenticationProvider with Logging {
   import BdpBatchAccountAuthenticationProviderImpl._
-  private val endpoint: String = conf.getOption("kyuubi.authentication.batch.account.endpoint")
-    .getOrElse("https://bdp.vip.ebay.com/product/batch/$serviceAccount/service/mapping?")
+  private val endpoint: String = conf.get(KyuubiEbayConf.AUTHENTICATION_BATCH_ACCOUNT_ENDPOINT)
 
   override def authenticate(serviceAccount: String, batchAccount: String): Unit = {
     info(s"Using service account:$serviceAccount to auth for batch account:$batchAccount")

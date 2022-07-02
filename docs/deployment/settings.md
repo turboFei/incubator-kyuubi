@@ -137,8 +137,10 @@ You can configure the Kyuubi properties in `$KYUUBI_HOME/conf/kyuubi-defaults.co
 Key | Default | Meaning | Type | Since
 --- | --- | --- | --- | ---
 kyuubi.authentication|NONE|A comma separated list of client authentication types.<ul> <li>NOSASL: raw transport.</li> <li>NONE: no authentication check.</li> <li>KERBEROS: Kerberos/GSSAPI authentication.</li> <li>CUSTOM: User-defined authentication.</li> <li>LDAP: Lightweight Directory Access Protocol authentication.</li></ul> Note that: For KERBEROS, it is SASL/GSSAPI mechanism, and for NONE, CUSTOM and LDAP, they are all SASL/PLAIN mechanism. If only NOSASL is specified, the authentication will be NOSASL. For SASL authentication, KERBEROS and PLAIN auth type are supported at the same time, and only the first specified PLAIN auth type is valid.|seq|1.0.0
+kyuubi.authentication.batch.account.endpoint|https://bdp.vip.ebay.com/product/batch/$serviceAccount/service/mapping?|The endpoint for batch account verification.|string|1.6.0
 kyuubi.authentication.batchAccount.class|&lt;undefined&gt;|The authentication class name for batch account authentication, eBay internal requirement|string|1.5.0
 kyuubi.authentication.custom.class|&lt;undefined&gt;|User-defined authentication implementation of org.apache.kyuubi.service.authentication.PasswdAuthenticationProvider|string|1.3.0
+kyuubi.authentication.keystone.endpoint|https://os-identity.vip.ebayc3.com/v2.0/tokens|The endpoint for keystone authentication.|string|1.6.0
 kyuubi.authentication.ldap.base.dn|&lt;undefined&gt;|LDAP base DN.|string|1.0.0
 kyuubi.authentication.ldap.domain|&lt;undefined&gt;|LDAP domain.|string|1.0.0
 kyuubi.authentication.ldap.guidKey|uid|LDAP attribute name whose values are unique in this LDAP server.For example:uid or cn.|string|1.2.0
@@ -382,11 +384,12 @@ kyuubi.operation.idle.timeout|PT3H|Operation will be closed when it's not access
 kyuubi.operation.interrupt.on.cancel|true|When true, all running tasks will be interrupted if one cancels a query. When false, all running tasks will remain until finished.|boolean|1.2.0
 kyuubi.operation.language|SQL|Choose a programing language for the following inputs <ul><li>SQL: (Default) Run all following statements as SQL queries.</li> <li>SCALA: Run all following input a scala codes</li></ul>|string|1.5.0
 kyuubi.operation.log.dir.root|server_operation_logs|Root directory for query operation log at server-side.|string|1.4.0
-kyuubi.operation.max.result.count|0|Max rows of Spark query results. Rows that exceeds the limit would be ignored. By setting this value to 0 to disable the max rows limit.|int|1.6.0
+kyuubi.operation.max.result.count|0|(deprecated) Ebay legacy conf, please use the community conf `kyuubi.operation.result.max.rows`.|int|1.3.0
 kyuubi.operation.plan.only.excludes|ResetCommand,SetCommand,SetNamespaceCommand,UseStatement,SetCatalogAndNamespace|Comma-separated list of query plan names, in the form of simple class names, i.e, for `set abc=xyz`, the value will be `SetCommand`. For those auxiliary plans, such as `switch databases`, `set properties`, or `create temporary view` e.t.c, which are used for setup evaluating environments for analyzing actual queries, we can use this config to exclude them and let them take effect. See also kyuubi.operation.plan.only.mode.|seq|1.5.0
 kyuubi.operation.plan.only.mode|NONE|Whether to perform the statement in a PARSE, ANALYZE, OPTIMIZE, PHYSICAL, EXECUTION only way without executing the query. When it is NONE, the statement will be fully executed|string|1.4.0
 kyuubi.operation.progress.enabled|false|Whether to enable the operation progress. When true, the operation progress will be returned in `GetOperationStatus`.|boolean|1.6.0
 kyuubi.operation.query.timeout|&lt;undefined&gt;|Timeout for query executions at server-side, take affect with client-side timeout(`java.sql.Statement.setQueryTimeout`) together, a running query will be cancelled automatically if timeout. It's off by default, which means only client-side take fully control whether the query should timeout or not. If set, client-side timeout capped at this point. To cancel the queries right away without waiting task to finish, consider enabling kyuubi.operation.interrupt.on.cancel together.|duration|1.2.0
+kyuubi.operation.result.max.rows|0|Max rows of Spark query results. Rows that exceeds the limit would be ignored. By setting this value to 0 to disable the max rows limit.|int|1.6.0
 kyuubi.operation.scheduler.pool|&lt;undefined&gt;|The scheduler pool of job. Note that, this config should be used after change Spark config spark.scheduler.mode=FAIR.|string|1.1.1
 kyuubi.operation.spark.listener.enabled|true|When set to true, Spark engine registers a SQLOperationListener before executing the statement, logs a few summary statistics when each stage completes.|boolean|1.6.0
 kyuubi.operation.status.polling.max.attempts|5|(deprecated) - Using kyuubi.operation.thrift.client.request.max.attempts instead|int|1.4.0

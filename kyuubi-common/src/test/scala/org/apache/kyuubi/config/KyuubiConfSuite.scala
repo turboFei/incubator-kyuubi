@@ -24,6 +24,7 @@ import org.apache.kyuubi.KyuubiFunSuite
 class KyuubiConfSuite extends KyuubiFunSuite {
 
   import KyuubiConf._
+  import KyuubiEbayConf._
 
   test("kyuubi conf defaults") {
     val conf = new KyuubiConf()

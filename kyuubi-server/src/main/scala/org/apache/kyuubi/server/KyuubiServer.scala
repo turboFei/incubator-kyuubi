@@ -27,9 +27,10 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.security.UserGroupInformation
 
 import org.apache.kyuubi._
-import org.apache.kyuubi.config.KyuubiConf
-import org.apache.kyuubi.config.KyuubiConf.{FRONTEND_PROTOCOLS, FrontendProtocols, SERVER_EVENT_JSON_LOG_PATH, SERVER_EVENT_LOGGERS, SESSION_CLUSTER}
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
+import org.apache.kyuubi.config.KyuubiConf.{FRONTEND_PROTOCOLS, FrontendProtocols, SERVER_EVENT_JSON_LOG_PATH, SERVER_EVENT_LOGGERS}
 import org.apache.kyuubi.config.KyuubiConf.FrontendProtocols._
+import org.apache.kyuubi.config.KyuubiEbayConf.SESSION_CLUSTER
 import org.apache.kyuubi.events.{EventBus, EventLoggerType, KyuubiEvent, KyuubiServerInfoEvent}
 import org.apache.kyuubi.events.handler.ServerJsonLoggingEventHandler
 import org.apache.kyuubi.ha.HighAvailabilityConf._
@@ -48,7 +49,7 @@ object KyuubiServer extends Logging {
   private val clusterHadoopConf = new ConcurrentHashMap[Option[String], Configuration]().asScala
 
   def startServer(conf: KyuubiConf): KyuubiServer = {
-    clusterModeEnabled = conf.get(KyuubiConf.SESSION_CLUSTER_MODE_ENABLED)
+    clusterModeEnabled = conf.get(KyuubiEbayConf.SESSION_CLUSTER_MODE_ENABLED)
     loadHadoopConf(Some(conf))
     if (KyuubiServiceDiscovery.enableServiceDiscovery(conf) &&
       !KyuubiServiceDiscovery.supportServiceDiscovery(conf)) {

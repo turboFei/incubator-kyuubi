@@ -29,7 +29,7 @@ import org.apache.hive.service.rpc.thrift._
 import org.apache.kyuubi.KyuubiSQLException
 import org.apache.kyuubi.cli.Handle
 import org.apache.kyuubi.client.api.v1.dto.BatchRequest
-import org.apache.kyuubi.config.KyuubiConf.SESSION_CLUSTER
+import org.apache.kyuubi.config.KyuubiEbayConf.SESSION_CLUSTER
 import org.apache.kyuubi.config.KyuubiReservedKeys._
 import org.apache.kyuubi.ha.client.KyuubiServiceDiscovery
 import org.apache.kyuubi.service.{Serverable, Service, TBinaryFrontendService}

@@ -24,7 +24,7 @@ import org.apache.hadoop.security.UserGroupInformation
 import org.scalatest.time.SpanSugar.convertIntToGrainOfTime
 
 import org.apache.kyuubi.{KYUUBI_VERSION, KyuubiFunSuite, Utils}
-import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiConf._
 import org.apache.kyuubi.ha.HighAvailabilityConf
 import org.apache.kyuubi.ha.client.DiscoveryClientProvider
@@ -262,7 +262,7 @@ class EngineRefSuite extends KyuubiFunSuite {
     val conf = KyuubiConf(false)
     conf.set(KyuubiConf.ENGINE_SHARE_LEVEL, USER.toString)
     conf.set(KyuubiConf.ENGINE_TYPE, SPARK_SQL.toString)
-    conf.set(KyuubiConf.SESSION_CLUSTER, "cluster")
+    conf.set(KyuubiEbayConf.SESSION_CLUSTER, "cluster")
     val appName = new EngineRef(conf, user, id, null)
     assert(appName.defaultEngineName === s"kyuubi_cluster_${USER}_${SPARK_SQL}_${user}_default_$id")
   }

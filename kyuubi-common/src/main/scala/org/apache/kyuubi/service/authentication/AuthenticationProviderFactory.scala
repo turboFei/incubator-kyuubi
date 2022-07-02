@@ -19,7 +19,7 @@ package org.apache.kyuubi.service.authentication
 
 import javax.security.sasl.AuthenticationException
 
-import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.service.authentication.AuthMethods.AuthMethod
 import org.apache.kyuubi.util.ClassUtils
 
@@ -63,7 +63,7 @@ object AuthenticationProviderFactory {
   }
 
   def getBatchAccountAuthProvider(conf: KyuubiConf): Option[BatchAccountAuthenticationProvider] = {
-    conf.get(KyuubiConf.AUTHENTICATION_BATCH_ACCOUNT_CLASS) match {
+    conf.get(KyuubiEbayConf.AUTHENTICATION_BATCH_ACCOUNT_CLASS) match {
       case Some(className) =>
         val classLoader = Thread.currentThread.getContextClassLoader
         val cls = Class.forName(className, true, classLoader)

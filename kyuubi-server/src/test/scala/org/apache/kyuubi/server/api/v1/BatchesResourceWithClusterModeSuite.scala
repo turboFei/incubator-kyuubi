@@ -24,13 +24,13 @@ import scala.collection.JavaConverters._
 
 import org.apache.kyuubi.{KyuubiFunSuite, RestFrontendTestHelper}
 import org.apache.kyuubi.client.api.v1.dto.{Batch, BatchRequest}
-import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiConf.{ENGINE_CHECK_INTERVAL, ENGINE_SPARK_MAX_LIFETIME}
 import org.apache.kyuubi.engine.spark.SparkProcessBuilder
 
 class BatchesResourceWithClusterModeSuite extends KyuubiFunSuite with RestFrontendTestHelper {
   override protected lazy val conf: KyuubiConf = {
-    KyuubiConf().set(KyuubiConf.SESSION_CLUSTER_MODE_ENABLED, true)
+    KyuubiConf().set(KyuubiEbayConf.SESSION_CLUSTER_MODE_ENABLED, true)
   }
 
   test("open batch session") {
@@ -52,7 +52,7 @@ class BatchesResourceWithClusterModeSuite extends KyuubiFunSuite with RestFronte
     assert(500 == response.getStatus)
 
     requestObj.setConf(
-      (requestObj.getConf.asScala ++ Map(KyuubiConf.SESSION_CLUSTER.key -> "test")).asJava)
+      (requestObj.getConf.asScala ++ Map(KyuubiEbayConf.SESSION_CLUSTER.key -> "test")).asJava)
 
     response = webTarget.path("api/v1/batches")
       .request(MediaType.APPLICATION_JSON_TYPE)
@@ -63,7 +63,7 @@ class BatchesResourceWithClusterModeSuite extends KyuubiFunSuite with RestFronte
 
     // invalid cluster
     requestObj.setConf((requestObj.getConf.asScala ++ Map(
-      KyuubiConf.SESSION_CLUSTER.key -> "invalidCluster")).asJava)
+      KyuubiEbayConf.SESSION_CLUSTER.key -> "invalidCluster")).asJava)
 
     response = webTarget.path("api/v1/batches")
       .request(MediaType.APPLICATION_JSON_TYPE)

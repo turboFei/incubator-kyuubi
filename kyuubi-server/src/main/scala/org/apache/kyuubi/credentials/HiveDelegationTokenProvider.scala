@@ -29,7 +29,7 @@ import org.apache.hadoop.security.UserGroupInformation.AuthenticationMethod
 import org.apache.hadoop.security.token.Token
 
 import org.apache.kyuubi.Logging
-import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 
 class HiveDelegationTokenProvider extends HadoopDelegationTokenProvider with Logging {
   val HIVE_CONF_DIR = "HIVE_CONF_DIR"
@@ -43,7 +43,7 @@ class HiveDelegationTokenProvider extends HadoopDelegationTokenProvider with Log
 
   override def initialize(hadoopConf: Configuration, kyuubiConf: KyuubiConf): Unit = {
     val conf = new HiveConf(hadoopConf, classOf[HiveConf])
-    if (kyuubiConf.get(KyuubiConf.SESSION_CLUSTER_MODE_ENABLED)) {
+    if (kyuubiConf.get(KyuubiEbayConf.SESSION_CLUSTER_MODE_ENABLED)) {
       kyuubiConf.getEnvs.get(HIVE_CONF_DIR).foreach { hiveConfEnv =>
         val hiveSite = new File(hiveConfEnv, HIVE_SITE)
         if (hiveSite.isFile) {

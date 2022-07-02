@@ -34,6 +34,7 @@ import org.apache.spark.sql.types._
 
 import org.apache.kyuubi.{KyuubiSQLException, Logging}
 import org.apache.kyuubi.config.KyuubiConf.{OPERATION_RESULT_MAX_ROWS, OPERATION_SPARK_LISTENER_ENABLED, SESSION_PROGRESS_ENABLE}
+import org.apache.kyuubi.config.KyuubiEbayConf.EBAY_OPERATION_MAX_RESULT_COUNT
 import org.apache.kyuubi.engine.spark.KyuubiSparkUtil._
 import org.apache.kyuubi.engine.spark.events.SparkOperationEvent
 import org.apache.kyuubi.events.EventBus
@@ -138,6 +139,7 @@ class ExecuteStatement(
           new IterableFetchIterator[Row](result.toLocalIterator().asScala.toIterable)
         } else {
           val resultMaxRows = spark.conf.getOption(OPERATION_RESULT_MAX_ROWS.key).map(_.toInt)
+            .orElse(spark.conf.getOption(EBAY_OPERATION_MAX_RESULT_COUNT.key).map(_.toInt))
             .getOrElse(session.sessionManager.getConf.get(OPERATION_RESULT_MAX_ROWS))
           if (resultMaxRows <= 0) {
             info("Execute in full collect mode")

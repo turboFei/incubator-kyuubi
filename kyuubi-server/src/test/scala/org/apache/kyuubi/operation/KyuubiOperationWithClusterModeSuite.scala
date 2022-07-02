@@ -20,20 +20,20 @@ package org.apache.kyuubi.operation
 import java.sql.SQLException
 
 import org.apache.kyuubi.WithKyuubiServer
-import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 
 class KyuubiOperationWithClusterModeSuite extends WithKyuubiServer with HiveJDBCTestHelper {
   override protected def jdbcUrl: String = getJdbcUrl
 
   override protected val conf: KyuubiConf = {
     KyuubiConf().set(KyuubiConf.ENGINE_SHARE_LEVEL, "connection")
-      .set(KyuubiConf.SESSION_CLUSTER_MODE_ENABLED, true)
-      .set(KyuubiConf.SESSION_CLUSTER, "invalid-cluster")
+      .set(KyuubiEbayConf.SESSION_CLUSTER_MODE_ENABLED, true)
+      .set(KyuubiEbayConf.SESSION_CLUSTER, "invalid-cluster")
   }
 
   test("open session with cluster selector") {
     withSessionConf(Map.empty)(Map.empty)(Map(
-      KyuubiConf.SESSION_CLUSTER.key -> "test")) {
+      KyuubiEbayConf.SESSION_CLUSTER.key -> "test")) {
       withJdbcStatement() { statement =>
         val rs = statement.executeQuery("set spark.sql.kyuubi.session.cluster.test")
         assert(rs.next())
@@ -56,7 +56,7 @@ class KyuubiOperationWithClusterModeSuite extends WithKyuubiServer with HiveJDBC
 
   test("open session with invalid cluster selector & proxy user") {
     withSessionConf(Map("hive.server2.proxy.user" -> "proxy_user"))(Map.empty)(Map(
-      KyuubiConf.SESSION_CLUSTER.key -> "invalid")) {
+      KyuubiEbayConf.SESSION_CLUSTER.key -> "invalid")) {
       val sqlException = intercept[SQLException] {
         withJdbcStatement() { _ =>
         }
@@ -67,7 +67,7 @@ class KyuubiOperationWithClusterModeSuite extends WithKyuubiServer with HiveJDBC
 
   test("open session with invalid cluster selector") {
     withSessionConf(Map.empty)(Map.empty)(Map(
-      KyuubiConf.SESSION_CLUSTER.key -> "invalid")) {
+      KyuubiEbayConf.SESSION_CLUSTER.key -> "invalid")) {
       val sqlException = intercept[SQLException] {
         withJdbcStatement() { _ =>
         }
@@ -78,7 +78,7 @@ class KyuubiOperationWithClusterModeSuite extends WithKyuubiServer with HiveJDBC
 
   test("HADP-44681: The client conf should overwrite the server defined configuration") {
     withSessionConf(Map.empty)(Map.empty)(Map(
-      KyuubiConf.SESSION_CLUSTER.key -> "test",
+      KyuubiEbayConf.SESSION_CLUSTER.key -> "test",
       "spark.sql.kyuubi.session.cluster.test" -> "false")) {
       withJdbcStatement() { statement =>
         val rs = statement.executeQuery("set spark.sql.kyuubi.session.cluster.test")
@@ -90,7 +90,7 @@ class KyuubiOperationWithClusterModeSuite extends WithKyuubiServer with HiveJDBC
 
   test("HADP-44681: Support cluster user level conf") {
     withSessionConf(Map.empty)(Map.empty)(Map(
-      KyuubiConf.SESSION_CLUSTER.key -> "test")) {
+      KyuubiEbayConf.SESSION_CLUSTER.key -> "test")) {
       withJdbcStatement() { statement =>
         val rs = statement.executeQuery("set spark.user.test")
         assert(rs.next())

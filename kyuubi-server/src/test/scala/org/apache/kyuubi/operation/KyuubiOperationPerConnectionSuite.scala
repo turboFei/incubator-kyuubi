@@ -31,7 +31,7 @@ import org.scalatest.time.SpanSugar.convertIntToGrainOfTime
 
 import org.apache.kyuubi.{Utils, WithKyuubiServer}
 import org.apache.kyuubi.client.api.v1.dto.BatchRequest
-import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiConf.{ENGINE_CHECK_INTERVAL, ENGINE_SPARK_MAX_LIFETIME, SESSION_CONF_ADVISOR}
 import org.apache.kyuubi.engine.spark.SparkProcessBuilder
 import org.apache.kyuubi.jdbc.KyuubiHiveDriver
@@ -249,7 +249,7 @@ class KyuubiOperationPerConnectionSuite extends WithKyuubiServer with HiveJDBCTe
 
   test("without session cluster mode enabled, the session cluster doest not valid") {
     withSessionConf(Map.empty)(Map.empty)(Map(
-      KyuubiConf.SESSION_CLUSTER.key -> "test")) {
+      KyuubiEbayConf.SESSION_CLUSTER.key -> "test")) {
       withJdbcStatement() { statement =>
         val rs = statement.executeQuery("set spark.sql.kyuubi.session.cluster.test")
         assert(rs.next())

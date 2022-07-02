@@ -25,6 +25,7 @@ import org.apache.hadoop.yarn.client.api.YarnClient
 
 import org.apache.kyuubi.{Logging, Utils}
 import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.KyuubiEbayConf
 import org.apache.kyuubi.engine.ApplicationOperation._
 import org.apache.kyuubi.util.KyuubiHadoopUtils
 
@@ -34,7 +35,7 @@ class YarnApplicationOperation extends ApplicationOperation with Logging {
 
   override def initialize(conf: KyuubiConf): Unit = {
     val clusterOptList =
-      if (conf.get(KyuubiConf.SESSION_CLUSTER_MODE_ENABLED)) {
+      if (conf.get(KyuubiEbayConf.SESSION_CLUSTER_MODE_ENABLED)) {
         Utils.getDefinedPropertiesClusterList().map(Option(_))
       } else {
         List(None)

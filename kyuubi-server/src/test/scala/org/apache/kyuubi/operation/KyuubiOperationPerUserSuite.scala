@@ -20,7 +20,7 @@ package org.apache.kyuubi.operation
 import org.scalatest.time.SpanSugar._
 
 import org.apache.kyuubi.{Utils, WithKyuubiServer}
-import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.jdbc.hive.KyuubiConnection
 
 class KyuubiOperationPerUserSuite extends WithKyuubiServer with SparkQueryTests {
@@ -167,6 +167,21 @@ class KyuubiOperationPerUserSuite extends WithKyuubiServer with SparkQueryTests 
         assert(!resultLimit1.next())
 
         statement.executeQuery(s"set ${KyuubiConf.OPERATION_RESULT_MAX_ROWS.key}=0")
+        statement.executeQuery(s"set ${KyuubiEbayConf.EBAY_OPERATION_MAX_RESULT_COUNT.key}=1")
+        val resultUnLimit = statement.executeQuery("select * from va")
+        assert(resultUnLimit.next())
+        assert(resultUnLimit.next())
+      }
+    }
+    withSessionConf()(Map.empty)(Map(KyuubiEbayConf.EBAY_OPERATION_MAX_RESULT_COUNT.key -> "1")) {
+      withJdbcStatement("va") { statement =>
+        statement.executeQuery("create temporary view va as select * from values(1),(2)")
+
+        val resultLimit1 = statement.executeQuery("select * from va")
+        assert(resultLimit1.next())
+        assert(!resultLimit1.next())
+
+        statement.executeQuery(s"set ${KyuubiEbayConf.EBAY_OPERATION_MAX_RESULT_COUNT.key}=0")
         val resultUnLimit = statement.executeQuery("select * from va")
         assert(resultUnLimit.next())
         assert(resultUnLimit.next())

@@ -24,7 +24,7 @@ import scala.concurrent.duration.Duration
 
 import org.apache.hadoop.yarn.client.api.YarnClient
 
-import org.apache.kyuubi.config.KyuubiConf._
+import org.apache.kyuubi.config.KyuubiEbayConf._
 import org.apache.kyuubi.operation.log.OperationLog
 import org.apache.kyuubi.session.KyuubiSessionImpl
 import org.apache.kyuubi.util.KyuubiHadoopUtils._

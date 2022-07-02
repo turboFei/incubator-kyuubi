@@ -71,6 +71,7 @@ class AllKyuubiConfiguration extends KyuubiFunSuite {
 
   test("Check all kyuubi configs") {
     KyuubiConf
+    KyuubiEbayConf
     CtlConf
     FountConf
     HighAvailabilityConf

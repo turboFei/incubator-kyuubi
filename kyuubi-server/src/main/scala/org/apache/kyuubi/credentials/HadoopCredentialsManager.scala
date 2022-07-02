@@ -30,7 +30,7 @@ import scala.util.{Failure, Success, Try}
 import org.apache.hadoop.security.Credentials
 
 import org.apache.kyuubi.{Logging, Utils}
-import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiConf._
 import org.apache.kyuubi.service.AbstractService
 import org.apache.kyuubi.util.{KyuubiHadoopUtils, ThreadUtils}
@@ -99,7 +99,7 @@ class HadoopCredentialsManager private (name: String) extends AbstractService(na
 
   override def initialize(conf: KyuubiConf): Unit = {
     val clusterOptList =
-      if (conf.get(KyuubiConf.SESSION_CLUSTER_MODE_ENABLED)) {
+      if (conf.get(KyuubiEbayConf.SESSION_CLUSTER_MODE_ENABLED)) {
         Utils.getDefinedPropertiesClusterList().map(Option(_))
       } else {
         Seq(None)

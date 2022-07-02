@@ -28,6 +28,7 @@ import org.apache.hadoop.security.UserGroupInformation
 import org.apache.kyuubi.{KYUUBI_VERSION, KyuubiSQLException, Logging, Utils}
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf._
+import org.apache.kyuubi.config.KyuubiEbayConf.SESSION_CLUSTER
 import org.apache.kyuubi.config.KyuubiReservedKeys.KYUUBI_ENGINE_SUBMIT_TIME_KEY
 import org.apache.kyuubi.engine.EngineType.{EngineType, FLINK_SQL, HIVE_SQL, SPARK_SQL, TRINO}
 import org.apache.kyuubi.engine.ShareLevel.{CONNECTION, GROUP, SERVER, ShareLevel}
@@ -206,7 +207,7 @@ private[kyuubi] class EngineRef(
           val killMessage = engineManager.killApplication(
             builder.clusterManager(),
             engineRefId,
-            conf.get(KyuubiConf.SESSION_CLUSTER))
+            conf.get(SESSION_CLUSTER))
           process.destroyForcibly()
           MetricsSystem.tracing(_.incCount(MetricRegistry.name(ENGINE_TIMEOUT, appUser)))
           throw KyuubiSQLException(

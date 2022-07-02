@@ -27,13 +27,12 @@ import org.apache.http.entity.StringEntity
 import org.apache.http.impl.client.HttpClients
 
 import org.apache.kyuubi.Logging
-import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.service.authentication.PasswdAuthenticationProvider
 
 class KeyStoneAuthenticationProviderImpl(conf: KyuubiConf)
   extends PasswdAuthenticationProvider with Logging {
-  private val endpoint: String = conf.getOption("kyuubi.authentication.keystone.endpoint")
-    .getOrElse("https://os-identity.vip.ebayc3.com/v2.0/tokens")
+  private val endpoint: String = conf.get(KyuubiEbayConf.AUTHENTICATION_KEYSTONE_ENDPOINT)
   private val bodyTemplate: String =
     """
       |{

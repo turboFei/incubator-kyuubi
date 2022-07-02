@@ -18,7 +18,7 @@
 package org.apache.kyuubi.operation
 
 import org.apache.kyuubi.WithKyuubiServer
-import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.jdbc.hive.KyuubiStatement
 import org.apache.kyuubi.service.authentication.{AnonymousBatchAccountAuthenticationProviderImpl, KyuubiAuthenticationFactory}
 
@@ -28,7 +28,7 @@ class KyuubiOperationBatchAccountSuite extends WithKyuubiServer with HiveJDBCTes
   override protected val conf: KyuubiConf = {
     KyuubiConf().set(KyuubiConf.ENGINE_SHARE_LEVEL, "connection")
       .set(
-        KyuubiConf.AUTHENTICATION_BATCH_ACCOUNT_CLASS,
+        KyuubiEbayConf.AUTHENTICATION_BATCH_ACCOUNT_CLASS,
         classOf[AnonymousBatchAccountAuthenticationProviderImpl].getCanonicalName)
   }
 
