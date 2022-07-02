@@ -170,6 +170,8 @@ Key | Default | Meaning | Type | Since
 --- | --- | --- | --- | ---
 kyuubi.batch.application.check.interval|PT5S|The interval to check batch job application information.|duration|1.6.0
 kyuubi.batch.conf.ignore.list||A comma separated list of ignored keys for batch conf. If the batch conf contains any of them, the key and the corresponding value will be removed silently during batch job submission. Note that this rule is for server-side protection defined via administrators to prevent some essential configs from tampering. You can also pre-define some config for batch job submission with prefix: kyuubi.batchConf.[batchType]. For example, you can pre-define `spark.master` for spark batch job with key `kyuubi.batchConf.spark.spark.master`.|seq|1.6.0
+kyuubi.batch.spark.files||The spark files for batch job, it will be combined with the customer spark.files.|seq|1.6.0
+kyuubi.batch.spark.jars||The spark jars for batch job, it will be combined with the customer spark.jars.|seq|1.6.0
 
 
 ### Credentials

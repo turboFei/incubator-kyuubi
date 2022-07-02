@@ -19,7 +19,7 @@ package org.apache.kyuubi.engine.spark
 
 import scala.collection.mutable.ArrayBuffer
 
-import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.operation.log.OperationLog
 
 class SparkBatchProcessBuilder(
@@ -45,7 +45,8 @@ class SparkBatchProcessBuilder(
 
     val batchJobTag = batchConf.get(TAG_KEY).map(_ + ",").getOrElse("") + batchId
 
-    val allConf = batchConf ++ Map(TAG_KEY -> batchJobTag) ++ sparkAppNameConf() ++ procConf()
+    val allConf = batchConf ++ Map(TAG_KEY -> batchJobTag) ++ sparkAppNameConf() ++ procConf() ++
+      mergeBatchFiles(batchConf) ++ mergeBatchJars(batchConf)
 
     allConf.foreach { case (k, v) =>
       buffer += CONF
@@ -67,6 +68,34 @@ class SparkBatchProcessBuilder(
     Option(batchName).filterNot(_.isEmpty).map { appName =>
       Map(APP_KEY -> appName)
     }.getOrElse(Map())
+  }
+
+  private def mergeBatchFiles(sparkConf: Map[String, String]): Map[String, String] = {
+    val batchFiles = conf.get(KyuubiEbayConf.BATCH_SPARK_FILES)
+    if (batchFiles.nonEmpty) {
+      sparkConf.get(SPARK_FILES) match {
+        case Some(files) =>
+          Map(SPARK_FILES -> s"$files,${batchFiles.mkString(",")}")
+        case _ =>
+          Map(SPARK_FILES -> batchFiles.mkString(","))
+      }
+    } else {
+      Map()
+    }
+  }
+
+  private def mergeBatchJars(sparkConf: Map[String, String]): Map[String, String] = {
+    val batchJars = conf.get(KyuubiEbayConf.BATCH_SPARK_JARS)
+    if (batchJars.nonEmpty) {
+      sparkConf.get(SPARK_JARS) match {
+        case Some(jars) =>
+          Map(SPARK_JARS -> s"$jars,${batchJars.mkString(",")}")
+        case _ =>
+          Map(SPARK_JARS -> batchJars.mkString(","))
+      }
+    } else {
+      Map()
+    }
   }
 
   override protected def module: String = "kyuubi-spark-batch-submit"

@@ -89,4 +89,20 @@ object KyuubiEbayConf {
       .version("1.6.0")
       .stringConf
       .createWithDefault("https://os-identity.vip.ebayc3.com/v2.0/tokens")
+
+  val BATCH_SPARK_FILES: ConfigEntry[Seq[String]] =
+    buildConf("kyuubi.batch.spark.files")
+      .doc("The spark files for batch job, it will be combined with the customer spark.files.")
+      .version("1.6.0")
+      .stringConf
+      .toSequence()
+      .createWithDefault(Nil)
+
+  val BATCH_SPARK_JARS: ConfigEntry[Seq[String]] =
+    buildConf("kyuubi.batch.spark.jars")
+      .doc("The spark jars for batch job, it will be combined with the customer spark.jars.")
+      .version("1.6.0")
+      .stringConf
+      .toSequence()
+      .createWithDefault(Nil)
 }
