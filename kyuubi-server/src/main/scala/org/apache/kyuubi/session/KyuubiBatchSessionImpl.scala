@@ -28,6 +28,7 @@ import org.apache.kyuubi.{KyuubiSQLException, Utils}
 import org.apache.kyuubi.client.api.v1.dto.BatchRequest
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiEbayConf._
+import org.apache.kyuubi.engine.KyuubiApplicationManager
 import org.apache.kyuubi.events.{EventBus, KyuubiSessionEvent}
 import org.apache.kyuubi.metrics.MetricsConstants.{CONN_OPEN, CONN_TOTAL}
 import org.apache.kyuubi.metrics.MetricsSystem
@@ -127,6 +128,13 @@ class KyuubiBatchSessionImpl(
     Option(sessionEvent)
   }
 
+  override def checkSessionAccessPathURIs(): Unit = {
+    KyuubiApplicationManager.checkApplicationAccessPaths(
+      batchRequest.getBatchType,
+      normalizedConf,
+      sessionManager.getConf)
+  }
+
   override def open(): Unit = {
     MetricsSystem.tracing { ms =>
       ms.incCount(CONN_TOTAL)
@@ -156,6 +164,8 @@ class KyuubiBatchSessionImpl(
 
       sessionManager.insertMetadata(metaData)
     }
+
+    checkSessionAccessPathURIs()
 
     // we should call super.open before running batch job submission operation
     super.open()
