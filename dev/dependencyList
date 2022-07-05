@@ -19,7 +19,7 @@ HikariCP/4.0.3//HikariCP-4.0.3.jar
 ahc/9.8.4-RELEASE//ahc-9.8.4-RELEASE.jar
 aopalliance-repackaged/2.6.1//aopalliance-repackaged-2.6.1.jar
 automaton/1.11-8//automaton-1.11-8.jar
-classgraph/4.8.95//classgraph-4.8.95.jar
+classgraph/4.8.138//classgraph-4.8.138.jar
 common-annotations/2.2.0-RELEASE//common-annotations-2.2.0-RELEASE.jar
 commons-codec/1.15//commons-codec-1.15.jar
 commons-collections/3.2.2//commons-collections-3.2.2.jar
@@ -168,11 +168,11 @@ simpleclient_tracer_otel_agent/0.14.1//simpleclient_tracer_otel_agent-0.14.1.jar
 slf4j-api/1.7.35//slf4j-api-1.7.35.jar
 snakeyaml/1.30//snakeyaml-1.30.jar
 socket-interceptor/9.8.4-RELEASE//socket-interceptor-9.8.4-RELEASE.jar
-swagger-annotations/2.1.11//swagger-annotations-2.1.11.jar
-swagger-core/2.1.11//swagger-core-2.1.11.jar
-swagger-integration/2.1.11//swagger-integration-2.1.11.jar
-swagger-jaxrs2/2.1.11//swagger-jaxrs2-2.1.11.jar
-swagger-models/2.1.11//swagger-models-2.1.11.jar
+swagger-annotations/2.2.1//swagger-annotations-2.2.1.jar
+swagger-core/2.2.1//swagger-core-2.2.1.jar
+swagger-integration/2.2.1//swagger-integration-2.2.1.jar
+swagger-jaxrs2/2.2.1//swagger-jaxrs2-2.2.1.jar
+swagger-models/2.2.1//swagger-models-2.2.1.jar
 translog-api/1.1.13//translog-api-1.1.13.jar
 translog-cal/1.1.13//translog-cal-1.1.13.jar
 trustfabric-client/1.0.10-RELEASE//trustfabric-client-1.0.10-RELEASE.jar
