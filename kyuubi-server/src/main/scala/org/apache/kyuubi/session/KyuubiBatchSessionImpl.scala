@@ -133,6 +133,9 @@ class KyuubiBatchSessionImpl(
       batchRequest.getBatchType,
       normalizedConf,
       sessionManager.getConf)
+    KyuubiApplicationManager.checkApplicationAccessPath(
+      batchRequest.getResource,
+      sessionManager.getConf)
   }
 
   override def open(): Unit = {
