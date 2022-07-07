@@ -156,7 +156,7 @@ raptor-logger-legacy-api/0.2.0-RELEASE//raptor-logger-legacy-api-0.2.0-RELEASE.j
 raptor-troubleshooting-api/0.1.1-RELEASE//raptor-troubleshooting-api-0.1.1-RELEASE.jar
 raptor-validateinternals-api/0.2.0-RELEASE//raptor-validateinternals-api-0.2.0-RELEASE.jar
 scala-library/2.12.15//scala-library-2.12.15.jar
-scopt_2.12/4.0.1//scopt_2.12-4.0.1.jar
+scopt_2.12/4.1.0//scopt_2.12-4.1.0.jar
 simpleclient/0.14.1//simpleclient-0.14.1.jar
 simpleclient_common/0.14.1//simpleclient_common-0.14.1.jar
 simpleclient_dropwizard/0.14.1//simpleclient_dropwizard-0.14.1.jar
