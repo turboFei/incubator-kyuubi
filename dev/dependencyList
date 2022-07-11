@@ -90,6 +90,7 @@ jjwt/0.7.0//jjwt-0.7.0.jar
 jline/0.9.94//jline-0.9.94.jar
 json/20140107//json-20140107.jar
 jsp-api/2.2//jsp-api-2.2.jar
+jul-to-slf4j/1.7.35//jul-to-slf4j-1.7.35.jar
 kernel-legacy-util/1.0.0-RELEASE//kernel-legacy-util-1.0.0-RELEASE.jar
 kubernetes-client/5.12.1//kubernetes-client-5.12.1.jar
 kubernetes-model-admissionregistration/5.12.1//kubernetes-model-admissionregistration-5.12.1.jar
