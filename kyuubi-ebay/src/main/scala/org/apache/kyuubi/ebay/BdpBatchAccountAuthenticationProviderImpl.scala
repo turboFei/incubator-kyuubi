@@ -17,14 +17,10 @@
 
 package org.apache.kyuubi.ebay
 
-import java.io.IOException
-import java.security.cert.X509Certificate
-import javax.net.ssl.{SSLContext, TrustManager, X509TrustManager}
 import javax.security.sasl.AuthenticationException
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import org.apache.http.client.methods.{CloseableHttpResponse, HttpGet}
-import org.apache.http.impl.client.HttpClients
+import org.apache.http.client.methods.HttpGet
 
 import org.apache.kyuubi.Logging
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
@@ -32,7 +28,8 @@ import org.apache.kyuubi.service.authentication.BatchAccountAuthenticationProvid
 
 class BdpBatchAccountAuthenticationProviderImpl(conf: KyuubiConf)
   extends BatchAccountAuthenticationProvider with Logging {
-  import BdpBatchAccountAuthenticationProviderImpl._
+  import HttpClientUtils._
+
   private val endpoint: String = conf.get(KyuubiEbayConf.AUTHENTICATION_BATCH_ACCOUNT_ENDPOINT)
 
   override def authenticate(serviceAccount: String, batchAccount: String): Unit = {
@@ -49,7 +46,7 @@ class BdpBatchAccountAuthenticationProviderImpl(conf: KyuubiConf)
 
     while (retryCnt < maxRetries && !authPass) {
       try {
-        doAuth(endpoint, serviceAccount, batchAccount)
+        doAuth(serviceAccount, batchAccount)
         authPass = true
         authPass = true
       } catch {
@@ -76,71 +73,44 @@ class BdpBatchAccountAuthenticationProviderImpl(conf: KyuubiConf)
     }
   }
 
-  @throws[Exception]
-  private def parseAuth(
-      resp: CloseableHttpResponse,
-      serviceAccount: String,
-      batchAccount: String): Unit = {
-    if (resp == null) throw new AuthenticationException(
-      s"Fail to do request verify  $serviceAccount/$batchAccount")
-    val code = resp.getStatusLine.getStatusCode
-    val mapper = new ObjectMapper
-    val node = mapper.readTree(resp.getEntity.getContent)
-    if (code >= 300 || code < 200) {
-      if (node.get("error") != null) {
-        throw new AuthenticationException(
-          s"Fail to auth with $endpoint: ${node.get("error").get("message")}")
-      } else {
-        throw new AuthenticationException(s"Fail to auth with $endpoint: $code")
-      }
-    }
-
-    val result = node.get("result")
-    for (i <- (0 until result.size())) {
-      if (batchAccount.equals(result.get(i).textValue())) {
-        return
-      }
-    }
-    throw new AuthenticationException(
-      s"Service account:$serviceAccount is not allowed to impersonate $batchAccount")
-  }
-
-  @throws[Exception]
-  private def doAuth(url: String, serviceAccount: String, batchAccount: String): Unit = {
-    val httpClient = HttpClients.custom().setSSLContext(sslContext).build()
-    var response: CloseableHttpResponse = null
+  private def getServiceAccountMappingBatchAccounts(serviceAccount: String): Set[String] = {
     try {
-      val httpGet = new HttpGet(url.replace("$serviceAccount", serviceAccount))
-      response = httpClient.execute(httpGet)
-      parseAuth(response, serviceAccount, batchAccount)
-    } finally {
-      if (response != null) {
-        try {
-          response.close()
-        } catch {
-          case e: IOException =>
-            error("Fail to close http request", e)
+      val httpGet = new HttpGet(endpoint.replace("$serviceAccount", serviceAccount))
+      withHttpResponse(httpGet) { response =>
+        if (response == null) throw new AuthenticationException(
+          s"Fail to do request to get the batch account mapping of $serviceAccount")
+        val code = response.getStatusLine.getStatusCode
+        val mapper = new ObjectMapper
+        val node = mapper.readTree(response.getEntity.getContent)
+        if (code >= 300 || code < 200) {
+          if (node.get("error") != null) {
+            throw new AuthenticationException(
+              s"Fail to auth with $endpoint: ${node.get("error").get("message")}")
+          } else {
+            throw new AuthenticationException(s"Fail to auth with $endpoint: $code")
+          }
         }
+
+        val result = node.get("result")
+        val batchAccountMapping = (0 until result.size()).map(i => result.get(i).textValue()).toSet
+        BdpServiceAccountMappingCacheManager.getBdpServiceAccountMappingCacheMgr.map(
+          _.updateServiceAccountMappingCache(serviceAccount, batchAccountMapping))
+        batchAccountMapping
       }
-      if (httpClient != null) {
-        try {
-          httpClient.close()
-        } catch {
-          case e: IOException =>
-            error("Fail to close httpclient", e)
-        }
-      }
+    } catch {
+      case e: Throwable =>
+        error(s"Error getting service account batch account mapping for $serviceAccount", e)
+        BdpServiceAccountMappingCacheManager.getBdpServiceAccountMappingCacheMgr.map(
+          _.getServiceAccountBatchAccountsFromCache(serviceAccount)).getOrElse(throw e)
     }
   }
-}
 
-object BdpBatchAccountAuthenticationProviderImpl {
-  val UNQUESTIONING_TRUST_MANAGER = Array[TrustManager](new X509TrustManager() {
-    override def getAcceptedIssuers: Array[X509Certificate] = null
-    override def checkClientTrusted(certs: Array[X509Certificate], authType: String): Unit = {}
-    override def checkServerTrusted(certs: Array[X509Certificate], authType: String): Unit = {}
-  })
-
-  val sslContext = SSLContext.getInstance("SSL")
-  sslContext.init(null, UNQUESTIONING_TRUST_MANAGER, null)
+  @throws[Exception]
+  private def doAuth(serviceAccount: String, batchAccount: String): Unit = {
+    val batchAccounts = getServiceAccountMappingBatchAccounts(serviceAccount)
+    if (!batchAccounts.contains(batchAccount)) {
+      throw new AuthenticationException(
+        s"Service account:$serviceAccount is not allowed to impersonate $batchAccount")
+    }
+  }
 }

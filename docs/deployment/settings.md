@@ -137,10 +137,9 @@ You can configure the Kyuubi properties in `$KYUUBI_HOME/conf/kyuubi-defaults.co
 Key | Default | Meaning | Type | Since
 --- | --- | --- | --- | ---
 kyuubi.authentication|NONE|A comma separated list of client authentication types.<ul> <li>NOSASL: raw transport.</li> <li>NONE: no authentication check.</li> <li>KERBEROS: Kerberos/GSSAPI authentication.</li> <li>CUSTOM: User-defined authentication.</li> <li>LDAP: Lightweight Directory Access Protocol authentication.</li></ul> Note that: For KERBEROS, it is SASL/GSSAPI mechanism, and for NONE, CUSTOM and LDAP, they are all SASL/PLAIN mechanism. If only NOSASL is specified, the authentication will be NOSASL. For SASL authentication, KERBEROS and PLAIN auth type are supported at the same time, and only the first specified PLAIN auth type is valid.|seq|1.0.0
-kyuubi.authentication.batch.account.endpoint|https://bdp.vip.ebay.com/product/batch/$serviceAccount/service/mapping?|The endpoint for batch account verification.|string|1.6.0
+kyuubi.authentication.batch.account.load.all.interval|PT1H|The interval for loading all service account and batch account mapping.|duration|1.6.0
 kyuubi.authentication.batchAccount.class|&lt;undefined&gt;|The authentication class name for batch account authentication, eBay internal requirement|string|1.5.0
 kyuubi.authentication.custom.class|&lt;undefined&gt;|User-defined authentication implementation of org.apache.kyuubi.service.authentication.PasswdAuthenticationProvider|string|1.3.0
-kyuubi.authentication.keystone.endpoint|https://os-identity.vip.ebayc3.com/v2.0/tokens|The endpoint for keystone authentication.|string|1.6.0
 kyuubi.authentication.ldap.base.dn|&lt;undefined&gt;|LDAP base DN.|string|1.0.0
 kyuubi.authentication.ldap.domain|&lt;undefined&gt;|LDAP domain.|string|1.0.0
 kyuubi.authentication.ldap.guidKey|uid|LDAP attribute name whose values are unique in this LDAP server.For example:uid or cn.|string|1.2.0

@@ -25,6 +25,14 @@ import org.apache.kyuubi.config.KyuubiConf
 class BdpBatchAccountAuthenticationProviderImplSuite extends KyuubiFunSuite {
   test("auth") {
     val keystoneAuthenticator = new BdpBatchAccountAuthenticationProviderImpl(KyuubiConf())
+    val bdpMappingService = new BdpServiceAccountMappingCacheManager()
+    bdpMappingService.initialize(KyuubiConf())
+    bdpMappingService.start()
     intercept[AuthenticationException](keystoneAuthenticator.authenticate("fwang12", "b_stf"))
+    bdpMappingService.updateServiceAccountMappingCache(
+      "fwang12",
+      Set("b_stf"))
+    keystoneAuthenticator.authenticate("fwang12", "b_stf")
+    bdpMappingService.stop()
   }
 }

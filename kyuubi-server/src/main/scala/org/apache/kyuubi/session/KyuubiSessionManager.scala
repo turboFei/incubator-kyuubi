@@ -25,10 +25,11 @@ import org.apache.hive.service.rpc.thrift.TProtocolVersion
 
 import org.apache.kyuubi.KyuubiSQLException
 import org.apache.kyuubi.client.api.v1.dto.{Batch, BatchRequest}
-import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiConf._
 import org.apache.kyuubi.config.KyuubiEbayConf._
 import org.apache.kyuubi.credentials.HadoopCredentialsManager
+import org.apache.kyuubi.ebay.BdpServiceAccountMappingCacheManager
 import org.apache.kyuubi.engine.KyuubiApplicationManager
 import org.apache.kyuubi.metrics.MetricsConstants._
 import org.apache.kyuubi.metrics.MetricsSystem
@@ -55,6 +56,9 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
     addService(applicationManager)
     addService(credentialsManager)
     addService(metadataManager)
+    if (conf.get(KyuubiEbayConf.AUTHENTICATION_BATCH_ACCOUNT_LOAD_ALL_ENABLED)) {
+      addService(new BdpServiceAccountMappingCacheManager())
+    }
     initSessionLimiter(conf)
     super.initialize(conf)
   }

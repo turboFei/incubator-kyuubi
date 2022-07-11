@@ -17,14 +17,12 @@
 
 package org.apache.kyuubi.ebay
 
-import java.io.IOException
 import javax.security.sasl.AuthenticationException
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.apache.http.client.methods.CloseableHttpResponse
 import org.apache.http.client.methods.HttpPost
 import org.apache.http.entity.StringEntity
-import org.apache.http.impl.client.HttpClients
 
 import org.apache.kyuubi.Logging
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
@@ -32,20 +30,10 @@ import org.apache.kyuubi.service.authentication.PasswdAuthenticationProvider
 
 class KeyStoneAuthenticationProviderImpl(conf: KyuubiConf)
   extends PasswdAuthenticationProvider with Logging {
+  import HttpClientUtils._
+  import KeyStoneAuthenticationProviderImpl._
+
   private val endpoint: String = conf.get(KyuubiEbayConf.AUTHENTICATION_KEYSTONE_ENDPOINT)
-  private val bodyTemplate: String =
-    """
-      |{
-      | "auth":
-      | {
-      |   "passwordCredentials":
-      |     {
-      |       "username": "$username",
-      |       "password": "$password"
-      |     }
-      |  }
-      |}
-      |""".stripMargin
 
   override def authenticate(user: String, password: String): Unit = {
     info(s"Using keystone to auth for $user")
@@ -61,7 +49,7 @@ class KeyStoneAuthenticationProviderImpl(conf: KyuubiConf)
 
     while (retryCnt < maxRetries && !authPass) {
       try {
-        doAuth(endpoint, bodyTemplate.replace("$username", user).replace("$password", password))
+        doAuth(user, password)
         authPass = true
       } catch {
         case aue: AuthenticationException =>
@@ -100,33 +88,30 @@ class KeyStoneAuthenticationProviderImpl(conf: KyuubiConf)
   }
 
   @throws[Exception]
-  private def doAuth(url: String, body: String): Unit = {
-    val httpClient = HttpClients.createDefault
-    var response: CloseableHttpResponse = null
-    try {
-      val httpPost = new HttpPost(url)
-      httpPost.addHeader("Content-Type", "application/json")
-      val entity = new StringEntity(body)
-      httpPost.setEntity(entity)
-      response = httpClient.execute(httpPost)
+  private def doAuth(user: String, password: String): Unit = {
+    val body = authBodyTemplate.replace("$username", user).replace("$password", password)
+    val httpPost = new HttpPost(endpoint)
+    httpPost.addHeader("Content-Type", "application/json")
+    val entity = new StringEntity(body)
+    httpPost.setEntity(entity)
+    withHttpResponse(httpPost) { response =>
       parseAuth(response)
-    } finally {
-      if (response != null) {
-        try {
-          response.close()
-        } catch {
-          case e: IOException =>
-            error("Fail to close http request", e)
-        }
-      }
-      if (httpClient != null) {
-        try {
-          httpClient.close()
-        } catch {
-          case e: IOException =>
-            error("Fail to close httpclient", e)
-        }
-      }
     }
   }
+}
+
+object KeyStoneAuthenticationProviderImpl {
+  val authBodyTemplate: String =
+    """
+      |{
+      | "auth":
+      | {
+      |   "passwordCredentials":
+      |     {
+      |       "username": "$username",
+      |       "password": "$password"
+      |     }
+      |  }
+      |}
+      |""".stripMargin
 }

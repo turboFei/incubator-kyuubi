@@ -17,6 +17,8 @@
 
 package org.apache.kyuubi.config
 
+import java.time.Duration
+
 object KyuubiEbayConf {
   private def buildConf(key: String): ConfigBuilder = KyuubiConf.buildConf(key)
 
@@ -78,13 +80,39 @@ object KyuubiEbayConf {
 
   val AUTHENTICATION_BATCH_ACCOUNT_ENDPOINT: ConfigEntry[String] =
     buildConf("kyuubi.authentication.batch.account.endpoint")
+      .internal
       .doc("The endpoint for batch account verification.")
       .version("1.6.0")
       .stringConf
+      .checkValue(_.contains("$serviceAccount"), "the endpoint should contains `$serviceAccount`")
       .createWithDefault("https://bdp.vip.ebay.com/product/batch/$serviceAccount/service/mapping?")
+
+  val AUTHENTICATION_BATCH_ACCOUNT_LOAD_ALL_ENABLED: ConfigEntry[Boolean] =
+    buildConf("kyuubi.authentication.batch.account.load.all.enabled")
+      .internal
+      .doc("Whether to enable to load all service account and batch account mapping.")
+      .version("1.6.0")
+      .booleanConf
+      .createWithDefault(false)
+
+  val AUTHENTICATION_BATCH_ACCOUNT_LOAD_ALL_ENDPOINT: ConfigEntry[String] =
+    buildConf("kyuubi.authentication.batch.account.load.all.endpoint")
+      .internal
+      .doc("The endpoint for loading all service account and batch account mapping.")
+      .version("1.6.0")
+      .stringConf
+      .createWithDefault("https://bdp.vip.ebay.com/product/batch/service-account-mappings")
+
+  val AUTHENTICATION_BATCH_ACCOUNT_LOAD_ALL_INTERVAL: ConfigEntry[Long] =
+    buildConf("kyuubi.authentication.batch.account.load.all.interval")
+      .doc("The interval for loading all service account and batch account mapping.")
+      .version("1.6.0")
+      .timeConf
+      .createWithDefault(Duration.ofHours(1).toMillis)
 
   val AUTHENTICATION_KEYSTONE_ENDPOINT: ConfigEntry[String] =
     buildConf("kyuubi.authentication.keystone.endpoint")
+      .internal
       .doc("The endpoint for keystone authentication.")
       .version("1.6.0")
       .stringConf
@@ -105,4 +133,12 @@ object KyuubiEbayConf {
       .stringConf
       .toSequence()
       .createWithDefault(Nil)
+
+  val METADATA_STORE_JDBC_TABLE: OptionalConfigEntry[String] =
+    buildConf("kyuubi.metadata.store.jdbc.table")
+      .internal
+      .doc("The table name for jdbc metadata, which is used to isolate the prod and pre-prod env.")
+      .version("1.6.0")
+      .stringConf
+      .createOptional
 }

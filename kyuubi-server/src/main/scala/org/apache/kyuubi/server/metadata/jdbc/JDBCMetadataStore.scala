@@ -29,7 +29,7 @@ import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import com.zaxxer.hikari.{HikariConfig, HikariDataSource}
 
 import org.apache.kyuubi.{KyuubiException, Logging, Utils}
-import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.operation.OperationState
 import org.apache.kyuubi.server.metadata.MetadataStore
 import org.apache.kyuubi.server.metadata.api.{Metadata, MetadataFilter}
@@ -56,7 +56,8 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
     case CUSTOM => new GenericDatabaseDialect
   }
 
-  private val metadataTable = conf.get(METADATA_STORE_JDBC_TABLE).getOrElse(METADATA_TABLE)
+  private val metadataTable = conf.get(KyuubiEbayConf.METADATA_STORE_JDBC_TABLE)
+    .getOrElse(METADATA_TABLE)
 
   private var hikariDataSource: HikariDataSource = dbType match {
     case FOUNT =>
