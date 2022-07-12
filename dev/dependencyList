@@ -17,6 +17,8 @@
 
 HikariCP/4.0.3//HikariCP-4.0.3.jar
 ahc/9.8.4-RELEASE//ahc-9.8.4-RELEASE.jar
+animal-sniffer-annotations/1.19//animal-sniffer-annotations-1.19.jar
+annotations/4.1.1.4//annotations-4.1.1.4.jar
 aopalliance-repackaged/2.6.1//aopalliance-repackaged-2.6.1.jar
 automaton/1.11-8//automaton-1.11-8.jar
 classgraph/4.8.138//classgraph-4.8.138.jar
@@ -33,6 +35,8 @@ curator-framework/2.12.0//curator-framework-2.12.0.jar
 curator-recipes/2.12.0//curator-recipes-2.12.0.jar
 derby/10.14.2.0//derby-10.14.2.0.jar
 ebaysf-metrics/2.1.0-RELEASE//ebaysf-metrics-2.1.0-RELEASE.jar
+error_prone_annotations/2.10.0//error_prone_annotations-2.10.0.jar
+failsafe/2.4.4//failsafe-2.4.4.jar
 failureaccess/1.0.1//failureaccess-1.0.1.jar
 fliptables/1.0.2//fliptables-1.0.2.jar
 fount-client/0.2.2//fount-client-0.2.2.jar
@@ -40,6 +44,15 @@ fountcsvcClientLib/1.2.6//fountcsvcClientLib-1.2.6.jar
 generex/1.0.2//generex-1.0.2.jar
 google-http-client-jackson2/1.22.0//google-http-client-jackson2-1.22.0.jar
 google-http-client/1.22.0//google-http-client-1.22.0.jar
+grpc-api/1.47.0//grpc-api-1.47.0.jar
+grpc-context/1.47.0//grpc-context-1.47.0.jar
+grpc-core/1.47.0//grpc-core-1.47.0.jar
+grpc-grpclb/1.47.0//grpc-grpclb-1.47.0.jar
+grpc-netty/1.47.0//grpc-netty-1.47.0.jar
+grpc-protobuf-lite/1.47.0//grpc-protobuf-lite-1.47.0.jar
+grpc-protobuf/1.47.0//grpc-protobuf-1.47.0.jar
+grpc-stub/1.47.0//grpc-stub-1.47.0.jar
+gson/2.8.9//gson-2.8.9.jar
 guava/30.1-jre//guava-30.1-jre.jar
 hadoop-client-api/3.3.2//hadoop-client-api-3.3.2.jar
 hadoop-client-runtime/3.3.2//hadoop-client-runtime-3.3.2.jar
@@ -54,6 +67,7 @@ hk2-locator/2.6.1//hk2-locator-2.6.1.jar
 hk2-utils/2.6.1//hk2-utils-2.6.1.jar
 httpclient/4.5.13//httpclient-4.5.13.jar
 httpcore/4.4.15//httpcore-4.4.15.jar
+j2objc-annotations/1.3//j2objc-annotations-1.3.jar
 jackson-annotations/2.13.3//jackson-annotations-2.13.3.jar
 jackson-core/2.13.3//jackson-core-2.13.3.jar
 jackson-databind/2.13.3//jackson-databind-2.13.3.jar
@@ -79,6 +93,10 @@ jersey-entity-filtering/2.36//jersey-entity-filtering-2.36.jar
 jersey-hk2/2.36//jersey-hk2-2.36.jar
 jersey-media-json-jackson/2.36//jersey-media-json-jackson-2.36.jar
 jersey-server/2.36//jersey-server-2.36.jar
+jetcd-api/0.7.1//jetcd-api-0.7.1.jar
+jetcd-common/0.7.1//jetcd-common-0.7.1.jar
+jetcd-core/0.7.1//jetcd-core-0.7.1.jar
+jetcd-grpc/0.7.1//jetcd-grpc-0.7.1.jar
 jetty-http/9.4.48.v20220622//jetty-http-9.4.48.v20220622.jar
 jetty-io/9.4.48.v20220622//jetty-io-9.4.48.v20220622.jar
 jetty-security/9.4.48.v20220622//jetty-security-9.4.48.v20220622.jar
@@ -128,9 +146,15 @@ metrics-jvm/4.2.8//metrics-jvm-4.2.8.jar
 mina/9.8.4-RELEASE//mina-9.8.4-RELEASE.jar
 netty-all/4.1.73.Final//netty-all-4.1.73.Final.jar
 netty-buffer/4.1.73.Final//netty-buffer-4.1.73.Final.jar
+netty-codec-dns/4.1.74.Final//netty-codec-dns-4.1.74.Final.jar
+netty-codec-http/4.1.72.Final//netty-codec-http-4.1.72.Final.jar
+netty-codec-http2/4.1.72.Final//netty-codec-http2-4.1.72.Final.jar
+netty-codec-socks/4.1.72.Final//netty-codec-socks-4.1.72.Final.jar
 netty-codec/4.1.73.Final//netty-codec-4.1.73.Final.jar
 netty-common/4.1.73.Final//netty-common-4.1.73.Final.jar
+netty-handler-proxy/4.1.72.Final//netty-handler-proxy-4.1.72.Final.jar
 netty-handler/4.1.73.Final//netty-handler-4.1.73.Final.jar
+netty-resolver-dns/4.1.74.Final//netty-resolver-dns-4.1.74.Final.jar
 netty-resolver/4.1.73.Final//netty-resolver-4.1.73.Final.jar
 netty-tcnative-classes/2.0.46.Final//netty-tcnative-classes-2.0.46.Final.jar
 netty-transport-classes-epoll/4.1.73.Final//netty-transport-classes-epoll-4.1.73.Final.jar
@@ -139,12 +163,16 @@ netty-transport-native-epoll/4.1.73.Final/linux-aarch_64/netty-transport-native-
 netty-transport-native-epoll/4.1.73.Final/linux-x86_64/netty-transport-native-epoll-4.1.73.Final-linux-x86_64.jar
 netty-transport-native-kqueue/4.1.73.Final/osx-aarch_64/netty-transport-native-kqueue-4.1.73.Final-osx-aarch_64.jar
 netty-transport-native-kqueue/4.1.73.Final/osx-x86_64/netty-transport-native-kqueue-4.1.73.Final-osx-x86_64.jar
-netty-transport-native-unix-common/4.1.73.Final//netty-transport-native-unix-common-4.1.73.Final.jar
+netty-transport-native-unix-common/4.1.72.Final//netty-transport-native-unix-common-4.1.72.Final.jar
 netty-transport/4.1.73.Final//netty-transport-4.1.73.Final.jar
 okhttp/3.12.12//okhttp-3.12.12.jar
 okio/1.15.0//okio-1.15.0.jar
 osgi-resource-locator/1.0.3//osgi-resource-locator-1.0.3.jar
 paranamer/2.8//paranamer-2.8.jar
+perfmark-api/0.25.0//perfmark-api-0.25.0.jar
+proto-google-common-protos/2.0.1//proto-google-common-protos-2.0.1.jar
+protobuf-java-util/3.19.2//protobuf-java-util-3.19.2.jar
+protobuf-java/3.19.2//protobuf-java-3.19.2.jar
 raptor-cal-client-api/0.2.0-RELEASE//raptor-cal-client-api-0.2.0-RELEASE.jar
 raptor-component-common/0.3.0-RELEASE//raptor-component-common-0.3.0-RELEASE.jar
 raptor-component-kernel/0.3.0-RELEASE//raptor-component-kernel-0.3.0-RELEASE.jar
@@ -179,5 +207,7 @@ translog-cal/1.1.13//translog-cal-1.1.13.jar
 trustfabric-client/1.0.10-RELEASE//trustfabric-client-1.0.10-RELEASE.jar
 uKernel/9.8.4-RELEASE//uKernel-9.8.4-RELEASE.jar
 uKernelCore/10.1.1-RELEASE//uKernelCore-10.1.1-RELEASE.jar
+vertx-core/4.2.7//vertx-core-4.2.7.jar
+vertx-grpc/4.2.7//vertx-grpc-4.2.7.jar
 zjsonpatch/0.3.0//zjsonpatch-0.3.0.jar
 zookeeper/3.4.14//zookeeper-3.4.14.jar

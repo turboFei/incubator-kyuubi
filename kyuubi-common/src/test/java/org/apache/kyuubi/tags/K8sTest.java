@@ -15,31 +15,15 @@
  * limitations under the License.
  */
 
-package org.apache.kyuubi.engine.spark
+package org.apache.kyuubi.tags;
 
-import org.apache.kyuubi.ha.HighAvailabilityConf.HA_NAMESPACE
-import org.apache.kyuubi.ha.client.DiscoveryClient
-import org.apache.kyuubi.ha.client.DiscoveryClientProvider
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+import org.scalatest.TagAnnotation;
 
-trait WithDiscoverySparkSQLEngine extends WithSparkSQLEngine {
-
-  def namespace: String
-
-  override def withKyuubiConf: Map[String, String] = {
-    Map(HA_NAMESPACE.key -> namespace)
-  }
-
-  override protected def beforeEach(): Unit = {
-    super.beforeEach()
-    startSparkEngine()
-  }
-
-  override protected def afterEach(): Unit = {
-    super.afterEach()
-    stopSparkEngine()
-  }
-
-  def withDiscoveryClient(f: DiscoveryClient => Unit): Unit = {
-    DiscoveryClientProvider.withDiscoveryClient(kyuubiConf)(f)
-  }
-}
+@TagAnnotation
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.METHOD, ElementType.TYPE})
+public @interface K8sTest {}
