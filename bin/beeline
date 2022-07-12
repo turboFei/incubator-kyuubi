@@ -32,7 +32,10 @@ RUNNER="${JAVA_HOME}/bin/java"
 
 ## Find the Kyuubi beeline Jar
 if [[ -z "$KYUUBI_BEELINE_JARS" ]]; then
-  KYUUBI_BEELINE_JARS="$KYUUBI_HOME/jars"
+  KYUUBI_BEELINE_JARS="$KYUUBI_HOME/beeline-jars"
+  if [[ ! -d ${KYUUBI_BEELINE_JARS} ]]; then
+      KYUUBI_BEELINE_JARS="$KYUUBI_HOME/jars"
+  fi
   if [[ ! -d ${KYUUBI_BEELINE_JARS} ]]; then
     echo -e "\nCandidate Kyuubi beeline jars $KYUUBI_BEELINE_JARS doesn't exist, using $KYUUBI_HOME/kyuubi-hive-beeline/target/"
     KYUUBI_BEELINE_JARS="$KYUUBI_HOME/kyuubi-hive-beeline/target"
