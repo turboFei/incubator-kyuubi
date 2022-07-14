@@ -141,11 +141,4 @@ object KyuubiEbayConf {
       .version("1.6.0")
       .stringConf
       .createOptional
-
-  val HTTP_PROXY_CLIENT_IP_HEADER: ConfigEntry[String] =
-    buildConf("kyuubi.http.proxy.client.ip.header")
-      .internal
-      .version("1.6.0")
-      .stringConf
-      .createWithDefault("X-eBay-Web-Tier-IP")
 }
