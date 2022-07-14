@@ -169,8 +169,6 @@ Key | Default | Meaning | Type | Since
 --- | --- | --- | --- | ---
 kyuubi.batch.application.check.interval|PT5S|The interval to check batch job application information.|duration|1.6.0
 kyuubi.batch.conf.ignore.list||A comma separated list of ignored keys for batch conf. If the batch conf contains any of them, the key and the corresponding value will be removed silently during batch job submission. Note that this rule is for server-side protection defined via administrators to prevent some essential configs from tampering. You can also pre-define some config for batch job submission with prefix: kyuubi.batchConf.[batchType]. For example, you can pre-define `spark.master` for spark batch job with key `kyuubi.batchConf.spark.spark.master`.|seq|1.6.0
-kyuubi.batch.spark.files||The spark files for batch job, it will be combined with the customer spark.files.|seq|1.6.0
-kyuubi.batch.spark.jars||The spark jars for batch job, it will be combined with the customer spark.jars.|seq|1.6.0
 
 
 ### Credentials
@@ -457,6 +455,8 @@ kyuubi.session.engine.trino.showProgress.debug|false|When true, show the progres
 kyuubi.session.idle.timeout|PT6H|session idle timeout, it will be closed when it's not accessed for this duration|duration|1.2.0
 kyuubi.session.local.dir.allow.list||The local dir list that are allowed to access by the kyuubi session application. User might set some parameters such as `spark.files` and it will upload some local files when launching the kyuubi engine, if the local dir allow list is defined, kyuubi will check whether the path to upload is in the allow list. Note that, if it is empty, there is no limitation for that and please use absolute path list.|seq|1.6.0
 kyuubi.session.name|&lt;undefined&gt;|A human readable name of session and we use empty string by default. This name will be recorded in event. Note that, we only apply this value from session conf.|string|1.4.0
+kyuubi.session.spark.files||The spark files for kyuubi session, it will be combined with the customer spark.files.|seq|1.6.0
+kyuubi.session.spark.jars||The spark jars for kyuubi session, it will be combined with the customer spark.jars.|seq|1.6.0
 kyuubi.session.timeout|PT6H|(deprecated)session timeout, it will be closed when it's not accessed for this duration|duration|1.0.0
 
 

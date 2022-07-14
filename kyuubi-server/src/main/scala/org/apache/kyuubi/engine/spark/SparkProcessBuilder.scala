@@ -26,7 +26,7 @@ import com.google.common.annotations.VisibleForTesting
 import org.apache.hadoop.security.UserGroupInformation
 
 import org.apache.kyuubi._
-import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiEbayConf._
 import org.apache.kyuubi.engine.{KyuubiApplicationManager, ProcBuilder}
 import org.apache.kyuubi.ha.HighAvailabilityConf
@@ -69,6 +69,8 @@ class SparkProcessBuilder(
         == AuthTypes.KERBEROS) {
       allConf = allConf ++ zkAuthKeytabFileConf(allConf)
     }
+
+    allConf = allConf ++ mergeKyuubiFiles(allConf) ++ mergeKyuubiJars(allConf)
 
     /**
      * Converts kyuubi configs to configs that Spark could identify.
@@ -144,6 +146,34 @@ class SparkProcessBuilder(
           Map(SPARK_FILES -> s"$files,${zkAuthKeytab.get}")
         case _ =>
           Map(SPARK_FILES -> zkAuthKeytab.get)
+      }
+    } else {
+      Map()
+    }
+  }
+
+  protected def mergeKyuubiFiles(sparkConf: Map[String, String]): Map[String, String] = {
+    val batchFiles = conf.get(KyuubiEbayConf.KYUUBI_SESSION_SPARK_FILES)
+    if (batchFiles.nonEmpty) {
+      sparkConf.get(SPARK_FILES) match {
+        case Some(files) =>
+          Map(SPARK_FILES -> s"$files,${batchFiles.mkString(",")}")
+        case _ =>
+          Map(SPARK_FILES -> batchFiles.mkString(","))
+      }
+    } else {
+      Map()
+    }
+  }
+
+  protected def mergeKyuubiJars(sparkConf: Map[String, String]): Map[String, String] = {
+    val batchJars = conf.get(KyuubiEbayConf.KYUUBI_SESSION_SPARK_JARS)
+    if (batchJars.nonEmpty) {
+      sparkConf.get(SPARK_JARS) match {
+        case Some(jars) =>
+          Map(SPARK_JARS -> s"$jars,${batchJars.mkString(",")}")
+        case _ =>
+          Map(SPARK_JARS -> batchJars.mkString(","))
       }
     } else {
       Map()
