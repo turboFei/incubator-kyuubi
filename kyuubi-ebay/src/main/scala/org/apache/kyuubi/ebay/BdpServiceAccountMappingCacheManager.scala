@@ -30,7 +30,7 @@ import org.apache.kyuubi.service.AbstractService
 import org.apache.kyuubi.util.ThreadUtils
 
 class BdpServiceAccountMappingCacheManager(name: String) extends AbstractService(name) {
-  def this() = this(getClass.getName)
+  def this() = this(classOf[BdpServiceAccountMappingCacheManager].getSimpleName)
 
   import HttpClientUtils._
 
@@ -61,14 +61,17 @@ class BdpServiceAccountMappingCacheManager(name: String) extends AbstractService
     ThreadUtils.shutdown(bdpBatchMappingLoader)
   }
 
-  def updateServiceAccountMappingCache(serviceAccount: String, batchAccounts: Set[String]): Unit = {
-    val isNewOne = !serviceAccountMappingCache.contains(serviceAccount)
-    serviceAccountMappingCache.update(serviceAccount, batchAccounts)
-    if (isNewOne) {
-      info(s"Added $serviceAccount -> $batchAccounts into service account mapping cache," +
-        s" current size is ${serviceAccountMappingCache.size}")
+  def updateServiceAccountMappingCache(serviceAccount: String, batchAccounts: Set[String]): Unit =
+    synchronized {
+      val isNewOne = !serviceAccountMappingCache.contains(serviceAccount)
+      if (!isNewOne || batchAccounts.nonEmpty) {
+        serviceAccountMappingCache.update(serviceAccount, batchAccounts)
+        if (isNewOne) {
+          info(s"Added $serviceAccount -> $batchAccounts into service account mapping cache," +
+            s" current size is ${serviceAccountMappingCache.size}")
+        }
+      }
     }
-  }
 
   def getServiceAccountBatchAccountsFromCache(serviceAccount: String): Set[String] = {
     serviceAccountMappingCache.get(serviceAccount).getOrElse(Set.empty)
