@@ -111,10 +111,16 @@ object KyuubiServer extends Logging {
     if (clusterModeEnabled) {
       clusterList = Utils.getDefinedPropertiesClusterList()
       clusterList.foreach { cluster =>
+        val clusterKyuubiConf = kyuubiConf.clone
+        Utils.getDefaultPropertiesFileForCluster(Option(cluster)).foreach { clusterPropertiesFile =>
+          Utils.getPropertiesFromFile(Option(clusterPropertiesFile)).foreach {
+            case (key, value) => clusterKyuubiConf.set(key, value)
+          }
+        }
         clusterHadoopConf.put(
           Option(cluster),
           KyuubiHadoopUtils.newHadoopConf(
-            kyuubiConf,
+            clusterKyuubiConf,
             clusterOpt = Option(cluster)))
       }
     } else {
