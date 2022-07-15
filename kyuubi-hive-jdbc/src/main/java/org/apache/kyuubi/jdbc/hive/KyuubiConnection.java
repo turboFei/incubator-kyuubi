@@ -22,6 +22,8 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.security.KeyStore;
 import java.security.SecureRandom;
@@ -843,6 +845,11 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
     }
     if (sessVars.containsKey(KYUUBI_PROXY_BATCH_ACCOUNT)) {
       openConf.put(KYUUBI_PROXY_BATCH_ACCOUNT, sessVars.get(KYUUBI_PROXY_BATCH_ACCOUNT));
+    }
+    try {
+      openConf.put("kyuubi.client.ipAddress", InetAddress.getLocalHost().getHostAddress());
+    } catch (UnknownHostException e) {
+      LOG.debug("Error getting Kyuubi session local client ip address", e);
     }
     openReq.setConfiguration(openConf);
 
