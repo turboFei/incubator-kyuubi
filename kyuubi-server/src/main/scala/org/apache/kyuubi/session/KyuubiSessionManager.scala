@@ -118,13 +118,23 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
       batchRequest: BatchRequest,
       recoveryMetadata: Option[Metadata] = None): KyuubiBatchSessionImpl = {
     val username = Option(user).filter(_.nonEmpty).getOrElse("anonymous")
+    var userDefaultConf = this.getConf.getUserDefaults(user)
+    if (conf.get(BATCH_SPARK_HBASE_ENABLED.key).map(_.toBoolean)
+        .getOrElse(userDefaultConf.get(BATCH_SPARK_HBASE_ENABLED))) {
+      val hbaseConfigTag = this.getConf.get(BATCH_SPARK_HBASE_CONFIG_TAG)
+      this.getConf.getTagConfOnly(hbaseConfigTag).foreach { case (key, value) =>
+        userDefaultConf.set(key, value)
+      }
+      userDefaultConf.set(BATCH_SPARK_HBASE_ENABLED, true)
+      userDefaultConf.set(BATCH_SPARK_HBASE_CONFIG_TAG, hbaseConfigTag)
+    }
     new KyuubiBatchSessionImpl(
       username,
       password,
       ipAddress,
       conf,
       this,
-      this.getConf.getUserDefaults(user),
+      userDefaultConf,
       batchRequest,
       recoveryMetadata)
   }

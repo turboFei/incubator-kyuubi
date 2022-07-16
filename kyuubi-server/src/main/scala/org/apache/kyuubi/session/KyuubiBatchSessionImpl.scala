@@ -89,6 +89,13 @@ class KyuubiBatchSessionImpl(
     sessionClusterConf.getUserDefaults(user).getAll.foreach { case (key, value) =>
       sessionConf.set(key, value)
     }
+
+    if (sessionConf.get(BATCH_SPARK_HBASE_ENABLED)) {
+      val hbaseConfigTag = sessionConf.get(BATCH_SPARK_HBASE_CONFIG_TAG)
+      sessionClusterConf.getTagConfOnly(hbaseConfigTag).foreach { case (key, value) =>
+        sessionConf.set(key, value)
+      }
+    }
   }
 
   // TODO: Support batch conf advisor

@@ -174,6 +174,10 @@ case class KyuubiConf(loadSysDefault: Boolean = true) extends Logging {
     serverOnlyConfEntries.foreach(cloned.unset)
     cloned
   }
+
+  def getTagConfOnly(tag: String): Map[String, String] = {
+    getAllWithPrefix(s"___${tag}___", "")
+  }
 }
 
 /**

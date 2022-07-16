@@ -141,4 +141,21 @@ object KyuubiEbayConf {
       .version("1.6.0")
       .stringConf
       .createOptional
+
+  val BATCH_SPARK_HBASE_ENABLED: ConfigEntry[Boolean] =
+    buildConf("kyuubi.batch.spark.hbase.enabled")
+      .doc("Whether to enable the spark batch job with hbase environment, if it is true, kyuubi" +
+        " will inject hbase lib into batch application classpath and upload the hbase" +
+        " configuration file hbase-site.xml")
+      .version("1.6.0")
+      .booleanConf
+      .createWithDefault(false)
+
+  val BATCH_SPARK_HBASE_CONFIG_TAG: ConfigEntry[String] =
+    buildConf("kyuubi.batch.spark.hbase.config.tag")
+      .internal
+      .doc("The config tag for batch spark hbase conf.")
+      .version("1.6.0")
+      .stringConf
+      .createWithDefault("spark_hbase")
 }
