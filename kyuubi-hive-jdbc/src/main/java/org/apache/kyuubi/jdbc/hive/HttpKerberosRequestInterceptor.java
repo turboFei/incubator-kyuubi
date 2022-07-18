@@ -66,7 +66,7 @@ public class HttpKerberosRequestInterceptor extends HttpRequestInterceptorBase {
           HttpAuthUtils.getKerberosServiceTicket(principal, host, serverHttpUrl, assumeSubject);
       // Set the session key token (Base64 encoded) in the headers
       httpRequest.addHeader(
-          HttpAuthUtils.AUTHORIZATION + ": " + HttpAuthUtils.NEGOTIATE + " ", kerberosAuthHeader);
+          HttpAuthUtils.AUTHORIZATION, HttpAuthUtils.NEGOTIATE + " " + kerberosAuthHeader);
     } catch (Exception e) {
       throw new HttpException(e.getMessage(), e);
     } finally {
