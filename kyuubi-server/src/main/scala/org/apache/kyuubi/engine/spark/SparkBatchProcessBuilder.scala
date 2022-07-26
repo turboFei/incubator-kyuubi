@@ -52,7 +52,7 @@ class SparkBatchProcessBuilder(
     (batchKyuubiConf.getAll ++ sparkAppNameConf() ++ procConf() ++ mergeKyuubiFiles(
       batchConf) ++ mergeKyuubiJars(batchConf)).foreach { case (k, v) =>
       buffer += CONF
-      buffer += s"$k=$v"
+      buffer += s"${convertConfigKey(k)}=$v"
     }
 
     buffer += PROXY_USER
