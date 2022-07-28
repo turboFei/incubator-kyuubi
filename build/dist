@@ -234,6 +234,9 @@ if [[ "$CLIENT_ONLY" == "true" ]]; then
   mkdir -p "${DISTDIR}/bin"
   mkdir -p "${DISTDIR}/conf"
   mkdir -p "${DISTDIR}/externals"
+  mkdir -p "${DISTDIR}/pid"
+  mkdir -p "${DISTDIR}/logs"
+  mkdir -p "${DISTDIR}/work"
   echo "Kyuubi $VERSION $GITREVSTRING built for" > "$DISTDIR/RELEASE"
   echo "Build flags: $@" >> "$DISTDIR/RELEASE"
 
