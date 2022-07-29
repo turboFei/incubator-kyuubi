@@ -48,17 +48,27 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
   lazy val sessionConfAdvisor: SessionConfAdvisor = PluginLoader.loadSessionConfAdvisor(conf)
   lazy val sessionClusterModeEnabled: Boolean = conf.get(SESSION_CLUSTER_MODE_ENABLED)
   val applicationManager = new KyuubiApplicationManager()
-  private val metadataManager = new MetadataManager()
+  private lazy val metadataManager: Option[MetadataManager] = {
+    // Currently, the metadata manager is used by the REST frontend which provides batch job APIs,
+    // so we initialize it only when Kyuubi starts with the REST frontend.
+    if (conf.get(FRONTEND_PROTOCOLS).map(FrontendProtocols.withName)
+        .contains(FrontendProtocols.REST)) {
+      Option(new MetadataManager())
+    } else {
+      None
+    }
+  }
 
   private var limiter: Option[SessionLimiter] = None
 
   override def initialize(conf: KyuubiConf): Unit = {
+    this.conf = conf
     addService(applicationManager)
     addService(credentialsManager)
-    addService(metadataManager)
     if (conf.get(KyuubiEbayConf.AUTHENTICATION_BATCH_ACCOUNT_LOAD_ALL_ENABLED)) {
       addService(new BdpServiceAccountMappingCacheManager())
     }
+    metadataManager.foreach(addService)
     initSessionLimiter(conf)
     super.initialize(conf)
   }
@@ -182,23 +192,23 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
   }
 
   def insertMetadata(metadata: Metadata): Unit = {
-    metadataManager.insertMetadata(metadata)
+    metadataManager.foreach(_.insertMetadata(metadata))
   }
 
   def updateMetadata(metadata: Metadata): Unit = {
-    metadataManager.updateMetadata(metadata)
+    metadataManager.foreach(_.updateMetadata(metadata))
   }
 
   def getMetadataRequestsRetryRef(identifier: String): Option[MetadataRequestsRetryRef] = {
-    Option(metadataManager.getMetadataRequestsRetryRef(identifier))
+    Option(metadataManager.map(_.getMetadataRequestsRetryRef(identifier)).orNull)
   }
 
   def deRegisterMetadataRequestsRetryRef(identifier: String): Unit = {
-    metadataManager.deRegisterRequestsRetryRef(identifier)
+    metadataManager.foreach(_.deRegisterRequestsRetryRef(identifier))
   }
 
   def getBatchFromMetadataStore(batchId: String): Batch = {
-    metadataManager.getBatch(batchId)
+    metadataManager.map(_.getBatch(batchId)).orNull
   }
 
   def getBatchesFromMetadataStore(
@@ -210,24 +220,18 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
       endTime: Long,
       from: Int,
       size: Int): Seq[Batch] = {
-    metadataManager.getBatches(
-      batchType,
-      batchUser,
-      batchState,
-      cluster,
-      createTime,
-      endTime,
-      from,
-      size)
+    metadataManager.map(
+      _.getBatches(batchType, batchUser, batchState, cluster, createTime, endTime, from, size))
+      .getOrElse(Seq.empty)
   }
 
   def getBatchMetadata(batchId: String): Metadata = {
-    metadataManager.getBatchSessionMetadata(batchId)
+    metadataManager.map(_.getBatchSessionMetadata(batchId)).orNull
   }
 
   @VisibleForTesting
   def cleanupMetadata(identifier: String): Unit = {
-    metadataManager.cleanupMetadataById(identifier)
+    metadataManager.foreach(_.cleanupMetadataById(identifier))
   }
 
   override def start(): Unit = synchronized {
@@ -241,7 +245,7 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
 
   def getBatchSessionsToRecover(kyuubiInstance: String): Seq[KyuubiBatchSessionImpl] = {
     Seq(OperationState.PENDING, OperationState.RUNNING).flatMap { stateToRecover =>
-      metadataManager.getBatchesRecoveryMetadata(
+      metadataManager.map(_.getBatchesRecoveryMetadata(
         stateToRecover.toString,
         kyuubiInstance,
         0,
@@ -261,17 +265,17 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
           metadata.requestConf,
           batchRequest,
           Some(metadata))
-      }
+      }).getOrElse(Seq.empty)
     }
   }
 
   def getPeerInstanceClosedBatchSessions(kyuubiInstance: String): Seq[Metadata] = {
     Seq(OperationState.PENDING, OperationState.RUNNING).flatMap { stateToKill =>
-      metadataManager.getPeerInstanceClosedBatchesMetadata(
+      metadataManager.map(_.getPeerInstanceClosedBatchesMetadata(
         stateToKill.toString,
         kyuubiInstance,
         0,
-        Int.MaxValue)
+        Int.MaxValue)).getOrElse(Seq.empty)
     }
   }
 
