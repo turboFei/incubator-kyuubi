@@ -89,18 +89,16 @@ class JpsApplicationOperation extends ApplicationOperation {
 
   override def getApplicationInfoByTag(
       tag: String,
-      clusterOpt: Option[String]): Map[String, String] = {
+      clusterOpt: Option[String]): ApplicationInfo = {
     val commandOption = getEngine(tag)
     if (commandOption.nonEmpty) {
       val idAndCmd = commandOption.get
       val (id, cmd) = idAndCmd.splitAt(idAndCmd.indexOf(" "))
-      Map(
-        APP_ID_KEY -> id,
-        APP_NAME_KEY -> cmd,
-        APP_STATE_KEY -> "RUNNING")
+      ApplicationInfo(id = id, name = cmd, state = ApplicationState.RUNNING)
     } else {
-      Map(APP_STATE_KEY -> "FINISHED")
+      ApplicationInfo(id = null, name = null, state = ApplicationState.NOT_FOUND)
     }
+    // TODO check if the process is zombie
   }
 
   override def stop(): Unit = {}
