@@ -17,7 +17,6 @@
 
 package org.apache.kyuubi.server
 
-import java.net.InetAddress
 import java.util.concurrent.ConcurrentHashMap
 
 import scala.collection.JavaConverters._
@@ -28,11 +27,10 @@ import org.apache.hadoop.security.UserGroupInformation
 
 import org.apache.kyuubi._
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
-import org.apache.kyuubi.config.KyuubiConf.{FRONTEND_PROTOCOLS, FrontendProtocols, SERVER_EVENT_JSON_LOG_PATH, SERVER_EVENT_LOGGERS}
+import org.apache.kyuubi.config.KyuubiConf.{FRONTEND_PROTOCOLS, FrontendProtocols}
 import org.apache.kyuubi.config.KyuubiConf.FrontendProtocols._
 import org.apache.kyuubi.config.KyuubiEbayConf.SESSION_CLUSTER
-import org.apache.kyuubi.events.{EventBus, EventLoggerType, KyuubiEvent, KyuubiServerInfoEvent}
-import org.apache.kyuubi.events.handler.ServerJsonLoggingEventHandler
+import org.apache.kyuubi.events.{EventBus, KyuubiServerInfoEvent, ServerEventHandlerRegister}
 import org.apache.kyuubi.ha.HighAvailabilityConf._
 import org.apache.kyuubi.ha.client.{AuthTypes, KyuubiServiceDiscovery}
 import org.apache.kyuubi.metrics.{MetricsConf, MetricsSystem}
@@ -187,25 +185,7 @@ class KyuubiServer(name: String) extends Serverable(name) {
   }
 
   private def initLoggerEventHandler(conf: KyuubiConf): Unit = {
-    val hadoopConf = KyuubiHadoopUtils.newHadoopConf(conf)
-    conf.get(SERVER_EVENT_LOGGERS)
-      .map(EventLoggerType.withName)
-      .foreach {
-        case EventLoggerType.JSON =>
-          val hostName = InetAddress.getLocalHost.getCanonicalHostName
-          val handler = ServerJsonLoggingEventHandler(
-            s"server-$hostName",
-            SERVER_EVENT_JSON_LOG_PATH,
-            hadoopConf,
-            conf)
-
-          // register JsonLogger as a event handler for default event bus
-          EventBus.register[KyuubiEvent](handler)
-        case logger =>
-          // TODO: Add more implementations
-          throw new IllegalArgumentException(s"Unrecognized event logger: $logger")
-      }
-
+    ServerEventHandlerRegister.registerServerEventLoggers(conf)
   }
 
   override protected def stopServer(): Unit = {}
