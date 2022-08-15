@@ -21,19 +21,21 @@ import java.io._
 import java.util.{Base64, Map => JMap}
 
 import scala.collection.JavaConverters._
+import scala.util.{Failure, Success, Try}
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.hdfs.security.token.delegation.DelegationTokenIdentifier
 import org.apache.hadoop.io.Text
 import org.apache.hadoop.security.{Credentials, SecurityUtil, UserGroupInformation}
 import org.apache.hadoop.security.token.{Token, TokenIdentifier}
+import org.apache.hadoop.security.token.delegation.AbstractDelegationTokenIdentifier
 import org.apache.hadoop.yarn.api.records.ApplicationId
 import org.apache.hadoop.yarn.conf.YarnConfiguration
 
-import org.apache.kyuubi.Utils
+import org.apache.kyuubi.{Logging, Utils}
 import org.apache.kyuubi.config.KyuubiConf
 
-object KyuubiHadoopUtils {
+object KyuubiHadoopUtils extends Logging {
   val HADOOP_CONF_DIR = "HADOOP_CONF_DIR"
   val HADOOP_CONF_FILES =
     Seq("core-site.xml", "hdfs-site.xml", "mapred-site.xml", "yarn-site.xml", "hive-site.xml")
@@ -122,14 +124,26 @@ object KyuubiHadoopUtils {
       .toMap
   }
 
-  def getTokenIssueDate(token: Token[_ <: TokenIdentifier]): Long = {
-    // It is safe to deserialize any token identifier to hdfs `DelegationTokenIdentifier`
-    // as all token identifiers have the same binary format.
-    val tokenIdentifier = new DelegationTokenIdentifier
-    val buf = new ByteArrayInputStream(token.getIdentifier)
-    val in = new DataInputStream(buf)
-    tokenIdentifier.readFields(in)
-    tokenIdentifier.getIssueDate
+  def getTokenIssueDate(token: Token[_ <: TokenIdentifier]): Option[Long] = {
+    token.decodeIdentifier() match {
+      case tokenIdent: AbstractDelegationTokenIdentifier =>
+        Some(tokenIdent.getIssueDate)
+      case null =>
+        // TokenIdentifiers not found in ServiceLoader
+        val tokenIdentifier = new DelegationTokenIdentifier
+        val buf = new ByteArrayInputStream(token.getIdentifier)
+        val in = new DataInputStream(buf)
+        Try(tokenIdentifier.readFields(in)) match {
+          case Success(_) =>
+            Some(tokenIdentifier.getIssueDate)
+          case Failure(e) =>
+            warn(s"Can not decode identifier of token $token", e)
+            None
+        }
+      case tokenIdent =>
+        debug(s"Unsupported TokenIdentifier kind: ${tokenIdent.getKind}")
+        None
+    }
   }
 
   /**
