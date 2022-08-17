@@ -59,5 +59,12 @@
                 <module>kyuubi-trino-it</module>
             </modules>
         </profile>
+
+        <profile>
+            <id>jdbc-it</id>
+            <modules>
+                <module>kyuubi-jdbc-it</module>
+            </modules>
+        </profile>
     </profiles>
 </project>
