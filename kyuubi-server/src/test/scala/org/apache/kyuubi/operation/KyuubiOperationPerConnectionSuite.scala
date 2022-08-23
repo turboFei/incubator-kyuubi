@@ -17,9 +17,10 @@
 
 package org.apache.kyuubi.operation
 
+import java.nio.ByteBuffer
 import java.sql.SQLException
 import java.util
-import java.util.Properties
+import java.util.{Properties, UUID}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
@@ -30,11 +31,14 @@ import org.scalatest.time.SpanSugar.convertIntToGrainOfTime
 import org.apache.kyuubi.{Utils, WithKyuubiServer}
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiConf.SESSION_CONF_ADVISOR
+import org.apache.kyuubi.engine.ApplicationOperation.APP_STATE_KEY
 import org.apache.kyuubi.jdbc.KyuubiHiveDriver
 import org.apache.kyuubi.jdbc.hive.KyuubiConnection
 import org.apache.kyuubi.jdbc.hive.logs.KyuubiEngineLogListener
 import org.apache.kyuubi.plugin.SessionConfAdvisor
 import org.apache.kyuubi.service.authentication.KyuubiAuthenticationFactory
+import org.apache.kyuubi.session.KyuubiSessionManager
+import org.apache.kyuubi.shade.org.apache.hive.service.rpc.thrift.TSessionHandle
 
 /**
  * UT with Connection level engine shared cost much time, only run basic jdbc tests.
@@ -266,6 +270,27 @@ class KyuubiOperationPerConnectionSuite extends WithKyuubiServer with HiveJDBCTe
         val sparkUrl = conn.getSparkURL
         assert(sparkUrl.nonEmpty)
       }
+    }
+  }
+
+  test("HADP-44628: Enable the timeout for KyuubiConnection::isValid") {
+    withJdbcStatement() { statement =>
+      val conn = statement.getConnection.asInstanceOf[KyuubiConnection]
+      val sessionHandleFiled = conn.getClass.getDeclaredField("sessHandle")
+      sessionHandleFiled.setAccessible(true)
+      val sessionHandle = sessionHandleFiled.get(conn).asInstanceOf[TSessionHandle]
+      val pbb = ByteBuffer.wrap(sessionHandle.getSessionId.getGuid)
+      val engineId = new UUID(pbb.getLong, pbb.getLong).toString
+      conn.createStatement().getConnection
+      assert(conn.isValid(3000))
+      val applicationMgr =
+        server.backendService.sessionManager.asInstanceOf[KyuubiSessionManager].applicationManager
+      applicationMgr.killApplication(None, engineId, None)
+      eventually(timeout(120.seconds), interval(100.milliseconds)) {
+        assert(applicationMgr.getApplicationInfo(None, engineId, None) ===
+          Some(Map(APP_STATE_KEY -> "FINISHED")))
+      }
+      assert(!conn.isValid(3000))
     }
   }
 }
