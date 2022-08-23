@@ -2266,6 +2266,7 @@
             <modules>
                 <module>extensions/spark/kyuubi-extension-spark-common</module>
                 <module>extensions/spark/kyuubi-extension-spark-3-3</module>
+                <module>extensions/spark/kyuubi-spark-connector-hive</module>
             </modules>
         </profile>
 
