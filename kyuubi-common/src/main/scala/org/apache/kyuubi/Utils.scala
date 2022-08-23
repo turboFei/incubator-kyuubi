@@ -78,7 +78,7 @@ object Utils extends Logging {
       .map(d => new File(d + File.separator + KYUUBI_CONF_FILE_NAME))
       .filter(_.exists())
       .orElse {
-        Option(getClass.getClassLoader.getResource(KYUUBI_CONF_FILE_NAME)).map { url =>
+        Option(Utils.getContextOrKyuubiClassLoader.getResource(KYUUBI_CONF_FILE_NAME)).map { url =>
           new File(url.getFile)
         }.filter(_.exists())
       }
@@ -356,4 +356,19 @@ object Utils extends Logging {
         (key, value)
     }.asInstanceOf[Seq[(K, V)]]
   }
+
+  /**
+   * Get the ClassLoader which loaded Kyuubi.
+   */
+  def getKyuubiClassLoader: ClassLoader = getClass.getClassLoader
+
+  /**
+   * Get the Context ClassLoader on this thread or, if not present, the ClassLoader that
+   * loaded Kyuubi.
+   *
+   * This should be used whenever passing a ClassLoader to Class.ForName or finding the currently
+   * active loader when setting up ClassLoader delegation chains.
+   */
+  def getContextOrKyuubiClassLoader: ClassLoader =
+    Option(Thread.currentThread().getContextClassLoader).getOrElse(getKyuubiClassLoader)
 }

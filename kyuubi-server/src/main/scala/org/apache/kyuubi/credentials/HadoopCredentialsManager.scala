@@ -350,7 +350,9 @@ object HadoopCredentialsManager extends Logging {
 
   def loadProviders(kyuubiConf: KyuubiConf): Map[String, HadoopDelegationTokenProvider] = {
     val loader =
-      ServiceLoader.load(classOf[HadoopDelegationTokenProvider], getClass.getClassLoader)
+      ServiceLoader.load(
+        classOf[HadoopDelegationTokenProvider],
+        Utils.getContextOrKyuubiClassLoader)
     val providers = mutable.ArrayBuffer[HadoopDelegationTokenProvider]()
 
     val iterator = loader.iterator
