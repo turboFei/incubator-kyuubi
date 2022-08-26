@@ -2428,6 +2428,7 @@
                         <artifactId>maven-javadoc-plugin</artifactId>
                         <configuration>
                             <quiet>true</quiet>
+                            <doclint>none</doclint>
                         </configuration>
                         <executions>
                             <execution>
