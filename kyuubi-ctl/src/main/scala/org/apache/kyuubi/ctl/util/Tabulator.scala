@@ -34,7 +34,6 @@ private[kyuubi] object Tabulator {
   }
 
   private def formatTextTable(header: Array[String], rows: Array[Array[String]]): String = {
-    val normalizedRows = rows.map(row => row.map(Option(_).getOrElse("")))
-    FlipTable.of(header, normalizedRows)
+    FlipTable.of(header, rows)
   }
 }
