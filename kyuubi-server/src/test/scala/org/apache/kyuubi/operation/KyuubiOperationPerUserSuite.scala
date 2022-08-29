@@ -22,6 +22,7 @@ import org.scalatest.time.SpanSugar._
 
 import org.apache.kyuubi.{Utils, WithKyuubiServer}
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
+import org.apache.kyuubi.jdbc.hive.KyuubiConnection
 import org.apache.kyuubi.session.{KyuubiSessionImpl, KyuubiSessionManager, SessionHandle}
 
 class KyuubiOperationPerUserSuite extends WithKyuubiServer with SparkQueryTests {
@@ -137,6 +138,15 @@ class KyuubiOperationPerUserSuite extends WithKyuubiServer with SparkQueryTests 
     assert(r2 contains "abc")
 
     assert(r1 !== r2)
+  }
+
+  ignore("HADP-44628: Enable the timeout for KyuubiConnection::isValid") {
+    withJdbcStatement() { statement =>
+      val conn = statement.getConnection
+      assert(conn.isInstanceOf[KyuubiConnection])
+      assert(!conn.isValid(1))
+      assert(conn.isValid(3000))
+    }
   }
 
   test("HADP-44779: Support to get update count") {

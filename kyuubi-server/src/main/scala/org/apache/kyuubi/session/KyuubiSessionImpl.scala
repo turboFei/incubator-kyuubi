@@ -230,14 +230,4 @@ class KyuubiSessionImpl(
       MetricsSystem.tracing(_.decCount(MetricRegistry.name(CONN_OPEN, user)))
     }
   }
-
-  override def getInfo(infoType: TGetInfoType): TGetInfoValue = {
-    if (client != null) {
-      withAcquireRelease() {
-        client.getInfo(infoType).getInfoValue
-      }
-    } else {
-      super.getInfo(infoType)
-    }
-  }
 }

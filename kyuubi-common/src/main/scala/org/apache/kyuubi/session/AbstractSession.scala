@@ -75,7 +75,7 @@ abstract class AbstractSession(
     }
   }
 
-  protected def withAcquireRelease[T](userAccess: Boolean = true)(f: => T): T = {
+  private def withAcquireRelease[T](userAccess: Boolean = true)(f: => T): T = {
     acquire(userAccess)
     try f
     finally release(userAccess)
