@@ -119,7 +119,7 @@ class KyuubiOperationYarnClusterSuite extends WithKyuubiServerOnYarn with HiveJD
     val batchJobSubmissionOp = session.batchJobSubmissionOp
 
     eventually(timeout(3.minutes), interval(50.milliseconds)) {
-      val appInfo = batchJobSubmissionOp.currentApplicationState
+      val appInfo = batchJobSubmissionOp.currentApplicationInfo
       assert(appInfo.nonEmpty)
       assert(appInfo.exists(_.id.startsWith("application_")))
     }
@@ -148,7 +148,7 @@ class KyuubiOperationYarnClusterSuite extends WithKyuubiServerOnYarn with HiveJD
     val appUrl = rows("url")
     val appError = rows("error")
 
-    val appInfo2 = batchJobSubmissionOp.currentApplicationState.get
+    val appInfo2 = batchJobSubmissionOp.currentApplicationInfo.get
     assert(appId === appInfo2.id)
     assert(appName === appInfo2.name)
     assert(appState === appInfo2.state.toString)
@@ -171,8 +171,8 @@ class KyuubiOperationYarnClusterSuite extends WithKyuubiServerOnYarn with HiveJD
     val batchJobSubmissionOp = session.batchJobSubmissionOp
 
     eventually(timeout(3.minutes), interval(50.milliseconds)) {
-      assert(batchJobSubmissionOp.currentApplicationState.isDefined)
-      assert(batchJobSubmissionOp.currentApplicationState.get.id == null)
+      assert(batchJobSubmissionOp.currentApplicationInfo.isDefined)
+      assert(batchJobSubmissionOp.currentApplicationInfo.get.id == null)
       assert(batchJobSubmissionOp.getStatus.state === OperationState.ERROR)
     }
   }
