@@ -235,4 +235,39 @@ class KyuubiOperationPerUserSuite extends WithKyuubiServer with SparkQueryTests 
       }
     }
   }
+
+  test("HADP-46611: support to save the result into temp table") {
+    withDatabases("kyuubi") { _ =>
+      withSessionConf(Map.empty)(Map(
+        KyuubiConf.OPERATION_TEMP_TABLE_DATABASE.key -> "kyuubi",
+        KyuubiConf.OPERATION_TEMP_TABLE_COLLECT.key -> "true",
+        KyuubiConf.OPERATION_INCREMENTAL_COLLECT.key -> "true"))(Map.empty) {
+        withJdbcStatement() { statement =>
+          statement.executeQuery("create database if not exists kyuubi")
+          var rs = statement.executeQuery("SELECT system_user(), session_user()")
+          assert(rs.next())
+          assert(rs.getString(1) === Utils.currentUser)
+          assert(rs.getString(2) === Utils.currentUser)
+          assert(!rs.next())
+          // use a new statement to prevent the temp table cleanup
+          val statement2 = statement.getConnection.createStatement()
+          rs = statement2.executeQuery("show tables in kyuubi")
+          assert(rs.next())
+          val db = rs.getString(1)
+          val tempTableName = rs.getString(2)
+          assert(db === "kyuubi")
+          assert(tempTableName.startsWith("kyuubi_temp_"))
+          assert(!rs.next())
+          rs = statement2.executeQuery(s"select * from $db.$tempTableName")
+          assert(rs.next())
+          assert(rs.getString(1) === Utils.currentUser)
+          assert(rs.getString(2) === Utils.currentUser)
+          // cleanup the temp table
+          statement.close()
+          rs = statement2.executeQuery("show tables in kyuubi")
+          assert(!rs.next())
+        }
+      }
+    }
+  }
 }

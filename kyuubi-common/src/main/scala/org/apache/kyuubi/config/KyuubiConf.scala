@@ -1268,6 +1268,23 @@ object KyuubiConf {
       .booleanConf
       .createWithDefault(false)
 
+  val OPERATION_TEMP_TABLE_DATABASE: ConfigEntry[String] =
+    buildConf("kyuubi.operation.temp.table.database")
+      .internal
+      .doc("The database used for the temp tables.")
+      .version("1.7.0")
+      .stringConf
+      .createWithDefault("default")
+
+  val OPERATION_TEMP_TABLE_COLLECT: ConfigEntry[Boolean] =
+    buildConf("kyuubi.operation.temp.table.collect")
+      .internal
+      .doc(s"When true and ${OPERATION_INCREMENTAL_COLLECT.key} is true," +
+        s" engine will try to save the result into a temp table first.")
+      .version("1.7.0")
+      .booleanConf
+      .createWithDefault(false)
+
   val OPERATION_RESULT_MAX_ROWS: ConfigEntry[Int] =
     buildConf("kyuubi.operation.result.max.rows")
       .doc("Max rows of Spark query results. Rows that exceeds the limit would be ignored. " +

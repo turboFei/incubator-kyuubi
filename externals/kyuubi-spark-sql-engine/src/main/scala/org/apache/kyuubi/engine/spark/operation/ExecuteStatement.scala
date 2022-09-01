@@ -17,12 +17,14 @@
 
 package org.apache.kyuubi.engine.spark.operation
 
+import java.util.Locale
 import java.util.concurrent.RejectedExecutionException
 
 import scala.collection.JavaConverters._
 
 import org.apache.hive.service.rpc.thrift.TProgressUpdateResp
 import org.apache.spark.kyuubi.{SparkProgressMonitor, SQLOperationListener}
+import org.apache.spark.kyuubi.SparkUtilsHelper.redact
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.execution.QueryExecution
 import org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanExec
@@ -32,8 +34,8 @@ import org.apache.spark.sql.execution.datasources.v2.{AppendDataExecV1, Overwrit
 import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.types._
 
-import org.apache.kyuubi.{KyuubiSQLException, Logging}
-import org.apache.kyuubi.config.KyuubiConf.{OPERATION_RESULT_MAX_ROWS, OPERATION_SPARK_LISTENER_ENABLED, SESSION_PROGRESS_ENABLE}
+import org.apache.kyuubi.{KyuubiSQLException, Logging, Utils}
+import org.apache.kyuubi.config.KyuubiConf.{OPERATION_RESULT_MAX_ROWS, OPERATION_SPARK_LISTENER_ENABLED, OPERATION_TEMP_TABLE_COLLECT, OPERATION_TEMP_TABLE_DATABASE, SESSION_PROGRESS_ENABLE}
 import org.apache.kyuubi.config.KyuubiEbayConf.EBAY_OPERATION_MAX_RESULT_COUNT
 import org.apache.kyuubi.engine.spark.KyuubiSparkUtil._
 import org.apache.kyuubi.engine.spark.events.SparkOperationEvent
@@ -53,6 +55,7 @@ class ExecuteStatement(
 
   private val operationLog: OperationLog = OperationLog.createOperationLog(session, getHandle)
   override def getOperationLog: Option[OperationLog] = Option(operationLog)
+  private var schema: StructType = _
 
   private val operationSparkListenerEnabled =
     spark.conf.getOption(OPERATION_SPARK_LISTENER_ENABLED.key) match {
@@ -75,10 +78,10 @@ class ExecuteStatement(
   EventBus.post(SparkOperationEvent(this))
 
   override protected def resultSchema: StructType = {
-    if (result == null || result.schema.isEmpty) {
+    if (schema == null || schema.isEmpty) {
       new StructType().add("Result", "string")
     } else {
-      result.schema
+      schema
     }
   }
 
@@ -125,6 +128,44 @@ class ExecuteStatement(
     }
   }
 
+  // temp table collect
+  private def isDQLStatement(statement: String): Boolean = {
+    val normalizedStatement = statement.toUpperCase(Locale.ROOT).trim
+    normalizedStatement.startsWith("WITH") || normalizedStatement.startsWith("SELECT")
+  }
+  private val tempTableDb =
+    spark.conf.getOption(OPERATION_TEMP_TABLE_DATABASE.key) match {
+      case Some(db) => db
+      case _ => session.sessionManager.getConf.get(OPERATION_TEMP_TABLE_DATABASE)
+    }
+  private val tempTableCollect =
+    spark.conf.getOption(OPERATION_TEMP_TABLE_COLLECT.key) match {
+      case Some(s) => s.toBoolean
+      case _ => session.sessionManager.getConf.get(OPERATION_TEMP_TABLE_COLLECT)
+    }
+  private val tempTableName: String = s"$tempTableDb.kyuubi_temp_$statementId".replaceAll("-", "_")
+  private var tempTableEnabled: Boolean = false
+  private def withStatement[T](statement: String)(f: => T): T = {
+    spark.sparkContext.setJobDescription(redact(
+      spark.sessionState.conf.stringRedactionPattern,
+      statement))
+    try {
+      f
+    } finally {
+      spark.sparkContext.setJobDescription(redactedStatement)
+    }
+  }
+  private def clearTempTableIfNeeded(): Unit = {
+    if (tempTableEnabled) {
+      Utils.tryLogNonFatalError {
+        withLocalProperties[Unit] {
+          val dropTempTable = s"DROP TABLE IF EXISTS $tempTableName"
+          withStatement(dropTempTable)(spark.sql(dropTempTable))
+        }
+      }
+    }
+  }
+
   private def executeStatement(): Unit = withLocalProperties {
     try {
       setState(OperationState.RUNNING)
@@ -132,6 +173,34 @@ class ExecuteStatement(
       Thread.currentThread().setContextClassLoader(spark.sharedState.jarClassLoader)
       operationListener.foreach(spark.sparkContext.addSparkListener(_))
       result = spark.sql(statement)
+      schema = result.schema
+      // only save to temp table for incremental collect mode
+      if (tempTableCollect && incrementalCollect && isDQLStatement(statement)) {
+        tempTableEnabled = true
+        val tempTableSchema = result.schema.zipWithIndex.map { case (dt, index) =>
+          val colType = dt.dataType match {
+            case NullType => StringType.simpleString
+            case _ => dt.dataType.simpleString
+          }
+          s"c$index $colType"
+        }.mkString(",")
+        val saveToTempTable =
+          try {
+            val tempTableDDL = s"CREATE TEMPORARY TABLE $tempTableName ($tempTableSchema)"
+            val insertTempTable = s"INSERT OVERWRITE $tempTableName $statement"
+            withStatement(tempTableDDL)(spark.sql(tempTableDDL))
+            withStatement(insertTempTable)(spark.sql(insertTempTable))
+            true
+          } catch {
+            case e: Throwable =>
+              error(s"Error creating temp table $tempTableName to save the result of $statement", e)
+              false
+          }
+        if (saveToTempTable) {
+          val selectFromTempTable = s"SELECT * FROM $tempTableName"
+          result = withStatement(selectFromTempTable)(spark.sql(selectFromTempTable))
+        }
+      }
       withMetrics(result.queryExecution)
       iter =
         if (incrementalCollect) {
@@ -231,5 +300,10 @@ class ExecuteStatement(
       EventBus.post(
         SparkOperationEvent(this, operationListener.flatMap(_.getExecutionId)))
     }
+  }
+
+  override def close(): Unit = {
+    clearTempTableIfNeeded()
+    super.close()
   }
 }
