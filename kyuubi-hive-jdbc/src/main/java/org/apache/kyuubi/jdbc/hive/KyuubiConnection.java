@@ -394,7 +394,7 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
   }
 
   public String getSparkURL() {
-    return engineUrl;
+    return engineUrl.split(",")[0];
   }
 
   public static List<String> parseInitFile(String initFile) throws IOException {
