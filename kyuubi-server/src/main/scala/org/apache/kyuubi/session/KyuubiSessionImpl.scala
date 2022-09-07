@@ -238,6 +238,7 @@ class KyuubiSessionImpl(
 
   override def getInfo(infoType: TGetInfoType): TGetInfoValue = {
     if (client != null) {
+      waitForEngineLaunched()
       withAcquireRelease() {
         client.getInfo(infoType).getInfoValue
       }
