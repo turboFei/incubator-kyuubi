@@ -2274,6 +2274,9 @@
         <profile>
             <id>hadoop-client-3</id>
             <!-- Default kyuubi client hadoop profile. Uses global properties. -->
+            <properties>
+                <jdbc.standalone.version>hadoop3_standalone</jdbc.standalone.version>
+            </properties>
         </profile>
 
         <profile>
@@ -2286,6 +2289,7 @@
                 <jdbc.hadoop.client.artifactId>hadoop-common</jdbc.hadoop.client.artifactId>
                 <beeline.hadoop.client.artifactId>hadoop-common</beeline.hadoop.client.artifactId>
                 <hadoop.client.binary.version>hadoop2</hadoop.client.binary.version>
+                <jdbc.standalone.version>hadoop2_standalone</jdbc.standalone.version>
             </properties>
         </profile>
 
