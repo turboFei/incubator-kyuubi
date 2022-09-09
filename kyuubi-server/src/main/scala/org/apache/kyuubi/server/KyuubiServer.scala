@@ -185,7 +185,7 @@ class KyuubiServer(name: String) extends Serverable(name) {
   }
 
   private def initLoggerEventHandler(conf: KyuubiConf): Unit = {
-    ServerEventHandlerRegister.registerServerEventLoggers(conf)
+    ServerEventHandlerRegister.registerEventLoggers(conf)
   }
 
   override protected def stopServer(): Unit = {}

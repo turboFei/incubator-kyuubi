@@ -249,7 +249,7 @@ object SparkSQLEngine extends Logging {
 
     def initLoggerEventHandler(conf: KyuubiConf): Unit = {
       val sparkEventRegister = new SparkEventHandlerRegister(spark)
-      sparkEventRegister.registerEngineEventLoggers(conf)
+      sparkEventRegister.registerEventLoggers(conf)
     }
   }
 
