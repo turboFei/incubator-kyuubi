@@ -181,7 +181,7 @@ raptor-legacy-module/0.3.0-RELEASE//raptor-legacy-module-0.3.0-RELEASE.jar
 raptor-logger-legacy-api/0.2.0-RELEASE//raptor-logger-legacy-api-0.2.0-RELEASE.jar
 raptor-troubleshooting-api/0.1.1-RELEASE//raptor-troubleshooting-api-0.1.1-RELEASE.jar
 raptor-validateinternals-api/0.2.0-RELEASE//raptor-validateinternals-api-0.2.0-RELEASE.jar
-scala-library/2.12.15//scala-library-2.12.15.jar
+scala-library/2.12.16//scala-library-2.12.16.jar
 scopt_2.12/4.1.0//scopt_2.12-4.1.0.jar
 simpleclient/0.16.0//simpleclient-0.16.0.jar
 simpleclient_common/0.16.0//simpleclient_common-0.16.0.jar
