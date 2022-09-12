@@ -18,20 +18,20 @@
 package org.apache.kyuubi.jdbc.hive;
 
 import java.io.*;
-import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
+import java.lang.reflect.*;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.security.KeyStore;
 import java.security.SecureRandom;
 import java.sql.*;
+import java.sql.Array;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.concurrent.*;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.zip.GZIPInputStream;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManagerFactory;
@@ -1877,5 +1877,397 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
 
   public String getEngineUrl() {
     return engineUrl;
+  }
+
+  public final Integer TRANSFROM_DATA_BATCH_BYTE_SIZE = 5 * 1024 * 1024;
+
+  public String uploadData(
+      String localPath, String table, Map<String, String> partitions, Boolean isOverwrite)
+      throws SQLException {
+    return uploadData(localPath, table, partitions, null, isOverwrite);
+  }
+
+  public String uploadData(
+      String localPath,
+      String table,
+      Map<String, String> partitions,
+      Map<String, String> options,
+      Boolean isOverwrite)
+      throws SQLException {
+    if (StringUtils.isBlank(localPath) || StringUtils.isBlank(table)) {
+      throw new SQLException("Empty local file path or table name is not allowed");
+    } else {
+      localPath = localPath.trim();
+      table = table.trim();
+    }
+
+    // Transfer data
+    String path = transferData(localPath);
+
+    LOG.info(String.format("Start to load data from temporary folder"));
+    String partitionSpec = generateOptions(partitions, "PARTITION");
+    String optionSpec = generateOptions(options, "OPTION");
+    String sql =
+        String.format(
+            "UPLOAD DATA INPATH '%s' %s INTO TABLE %s %s %s",
+            path,
+            (isOverwrite != null && isOverwrite) ? "OVERWRITE" : "",
+            table,
+            partitionSpec,
+            optionSpec);
+    PreparedStatement preparedStatement = null;
+    ResultSet resultSet = null;
+    try {
+      preparedStatement = prepareStatement(sql);
+      resultSet = preparedStatement.executeQuery();
+      if (resultSet.next()) {
+        // Remote file path
+        return resultSet.getString(2);
+      } else {
+        throw new SQLException(
+            String.format(
+                "Failed to upload %s to table %s with partitions %s",
+                localPath, table, partitionSpec));
+      }
+    } finally {
+      if (resultSet != null) {
+        try {
+          resultSet.close();
+        } catch (Exception e) {
+          LOG.warn("Failed to close ResultSet, details: " + e.getMessage());
+          throw e;
+        }
+      }
+      if (preparedStatement != null) {
+        try {
+          preparedStatement.close();
+        } catch (Exception e) {
+          LOG.warn("Failed to close Statement, details: " + e.getMessage());
+          throw e;
+        }
+      }
+    }
+  }
+
+  private String transferData(String localPath) throws SQLException {
+    String path = UUID.randomUUID().toString();
+    FileChannel fileChannel = null;
+    try {
+      fileChannel = new FileInputStream(localPath).getChannel();
+      long totalSize = fileChannel.size();
+      if (totalSize <= 0) {
+        throw new SQLException(String.format("Empty file with size=0 is not allowed"));
+      }
+      long totalRead = 0;
+      ByteBuffer buff = ByteBuffer.allocate(TRANSFROM_DATA_BATCH_BYTE_SIZE);
+      Integer read = fileChannel.read(buff);
+      while (read > 0) {
+        buff.flip();
+        TTransferDataReq req = new TTransferDataReq(sessHandle, path, buff);
+        TTransferDataResp resp = client.TransferData(req);
+        // validate connection
+        Utils.verifySuccess(resp.getStatus());
+        totalRead += read;
+        LOG.info(String.format("%d%% data transferred", totalRead * 100 / totalSize));
+        read = fileChannel.read(buff);
+      }
+    } catch (Exception e) {
+      throw new SQLException(e);
+    } finally {
+      if (fileChannel != null) {
+        try {
+          fileChannel.close();
+        } catch (IOException e) {
+          throw new SQLException(e);
+        }
+      }
+    }
+    return path;
+  }
+
+  public Boolean downloadFromQuery(String query, String localdst) throws SQLException {
+    return downloadFromQuery(query, null, null, localdst);
+  }
+
+  public Boolean downloadFromQuery(String query, String format, String localdst)
+      throws SQLException {
+    return downloadFromQuery(query, format, null, localdst);
+  }
+
+  public Boolean downloadFromQuery(
+      String query, Map<String, String> downloadOptions, String localdst) throws SQLException {
+    return downloadFromQuery(query, null, downloadOptions, localdst);
+  }
+
+  public Boolean downloadFromQuery(
+      String query, String format, Map<String, String> downloadOptions, String localdst)
+      throws SQLException {
+    return downloadDataFromThriftServer(null, query, format, downloadOptions, localdst);
+  }
+
+  public Boolean downloadFromTable(String tableName, String localdst) throws SQLException {
+    return downloadFromTable(tableName, null, null, localdst);
+  }
+
+  public Boolean downloadFromTable(String tableName, String format, String localdst)
+      throws SQLException {
+    return downloadFromTable(tableName, format, null, localdst);
+  }
+
+  public Boolean downloadFromTable(
+      String tableName, Map<String, String> downloadOptions, String localdst) throws SQLException {
+    return downloadFromTable(tableName, null, downloadOptions, localdst);
+  }
+
+  public Boolean downloadFromTable(
+      String tableName, String format, Map<String, String> downloadOptions, String localdst)
+      throws SQLException {
+    return downloadDataFromThriftServer(tableName, null, format, downloadOptions, localdst);
+  }
+
+  public Boolean downloadDataFromThriftServer(
+      String tableName,
+      String query,
+      String format,
+      final Map<String, String> downloadOptions,
+      String localdst)
+      throws SQLException {
+
+    File dest = new File(localdst);
+    if (dest.exists()) {
+      if (dest.listFiles().length > 0) {
+        if (downloadOptions != null
+            && Boolean.parseBoolean(downloadOptions.get("overwrite"))
+            && downloadOptions.get("fileName") != null) {
+          File[] files =
+              dest.listFiles(
+                  new FilenameFilter() {
+                    @Override
+                    public boolean accept(File dir, String name) {
+                      return name.startsWith(downloadOptions.get("fileName"));
+                    }
+                  });
+          for (File file : files) {
+            file.delete();
+          }
+        } else {
+          throw new SQLException("The destination directory is not empty: " + localdst);
+        }
+      }
+    } else {
+      dest.mkdirs();
+    }
+
+    try {
+      KyuubiQueryResultSet rs =
+          downloadDataStreamFromThriftServer(tableName, query, format, downloadOptions);
+
+      // Read data size
+      long totalDataSize = -1L;
+      if (rs.next()) {
+        totalDataSize = rs.getLong("SIZE");
+        LOG.info("Download " + totalDataSize + " bytes data from thrift server.");
+      }
+      Long startTime = System.currentTimeMillis();
+
+      // read data
+      long readedDataSize = 0L;
+      Set<String> files = new LinkedHashSet<>();
+      while (rs.next()) {
+        String fileName = rs.getString("FILE_NAME");
+        InputStream is = rs.getBinaryStream("DATA");
+        long size = rs.getLong("SIZE");
+        String progress = fileName + ".progress";
+
+        files.add(fileName);
+
+        if (size > 0L) {
+          readedDataSize += size;
+          File file = new File(localdst + File.separator + progress);
+          FileOutputStream fop = new FileOutputStream(file, true);
+          if (!file.exists()) {
+            file.createNewFile();
+          }
+
+          byte[] buff = new byte[(int) size];
+          is.read(buff);
+
+          fop.write(buff);
+          fop.flush();
+          fop.close();
+
+          Long time = System.currentTimeMillis();
+
+          if (time - startTime > 60 * 1000) {
+            LOG.info(
+                "Download status: total data size: "
+                    + totalDataSize
+                    + ", downloaded data size: "
+                    + readedDataSize
+                    + ", "
+                    + String.format("%.2f", (readedDataSize * 1.0 / totalDataSize) * 100)
+                    + "%.");
+            startTime = time;
+          }
+        }
+
+        // Finished to download this file.
+        if (size == -1) {
+          new File(localdst + File.separator + progress)
+              .renameTo(new File(localdst + File.separator + fileName));
+        }
+      }
+
+      rs.close();
+
+      // decompression data
+      if (downloadOptions != null
+          && !files.isEmpty()
+          && !files.iterator().next().startsWith("part-")
+          && files.iterator().next().endsWith(".csv.gz")
+          && downloadOptions.get("autoDecompress") != null
+          && Boolean.parseBoolean(downloadOptions.get("autoDecompress"))
+          && downloadOptions.get("fileName") != null) {
+        OutputStream os = null;
+        try {
+          os =
+              new FileOutputStream(
+                  localdst + File.separator + downloadOptions.get("fileName") + ".csv");
+          byte[] buffer = new byte[1024];
+          for (String file : files) {
+            InputStream is = null;
+            try {
+              is = new GZIPInputStream(new FileInputStream(localdst + File.separator + file));
+              int bytes_read;
+              while ((bytes_read = is.read(buffer)) > 0) {
+                os.write(buffer, 0, bytes_read);
+              }
+            } finally {
+              if (is != null) {
+                is.close();
+              }
+            }
+            if (downloadOptions.get("removeCompress") != null
+                && Boolean.parseBoolean(downloadOptions.get("removeCompress"))) {
+              new File(localdst + File.separator + file).delete();
+            }
+          }
+        } finally {
+          if (os != null) {
+            os.close();
+          }
+        }
+      }
+      return true;
+    } catch (Exception e) {
+      throw new SQLException(
+          "Failed to download file from thriftserver: " + e.getMessage(), " 08S01", e);
+    }
+  }
+
+  public KyuubiQueryResultSet downloadDataStreamFromThriftServer(
+      String tableName, String query, String format, final Map<String, String> downloadOptions)
+      throws SQLException {
+    TDownloadDataReq req = new TDownloadDataReq(sessHandle);
+    req.setTableName(tableName);
+    req.setQuery(query);
+    req.setFormat(format);
+    req.setDownloadOptions(downloadOptions);
+
+    KyuubiQueryResultSet rs;
+    try {
+      TDownloadDataResp resp = client.DownloadData(req);
+      LOG.info("Generating download files for [" + (tableName == null ? query : tableName) + "].");
+      waitForDownloadToComplete(resp);
+      Utils.verifySuccess(resp.getStatus());
+
+      KyuubiStatement statement = new KyuubiStatement(this, client, sessHandle);
+      try {
+        // Update stmtHandle to support close KyuubiStatement#closeClientOperation.
+        Field field = statement.getClass().getDeclaredField("stmtHandle");
+        field.setAccessible(true);
+        field.set(statement, resp.getOperationHandle());
+      } catch (Exception ignored) {
+      }
+      rs =
+          new KyuubiQueryResultSet.Builder(statement)
+              .setClient(client)
+              .setSessionHandle(sessHandle)
+              .setStmtHandle(resp.getOperationHandle())
+              .setFetchSize(1)
+              .setScrollable(false)
+              .build();
+    } catch (TException e) {
+      throw new SQLException(
+          "Failed to download data stream from thriftserver: " + e.getMessage(), " 08S01", e);
+    }
+    return rs;
+  }
+
+  private TGetOperationStatusResp waitForDownloadToComplete(TDownloadDataResp resp)
+      throws SQLException {
+    boolean operationComplete = false;
+    TGetOperationStatusReq statusReq = new TGetOperationStatusReq(resp.getOperationHandle());
+    TGetOperationStatusResp statusResp = null;
+    ReentrantLock transportLock = new ReentrantLock(true);
+
+    while (!operationComplete) {
+      try {
+        transportLock.lock();
+        try {
+          statusResp = client.GetOperationStatus(statusReq);
+        } finally {
+          transportLock.unlock();
+        }
+        Utils.verifySuccessWithInfo(statusResp.getStatus());
+        if (statusResp.isSetOperationState()) {
+          switch (statusResp.getOperationState()) {
+            case CLOSED_STATE:
+            case FINISHED_STATE:
+              operationComplete = true;
+              break;
+            case CANCELED_STATE:
+              // 01000 -> warning
+              throw new SQLException("Query was cancelled", "01000");
+            case ERROR_STATE:
+              // Get the error details from the underlying exception
+              throw new SQLException(
+                  statusResp.getErrorMessage(),
+                  statusResp.getSqlState(),
+                  statusResp.getErrorCode());
+            case UKNOWN_STATE:
+              throw new SQLException("Unknown query", "HY000");
+            case INITIALIZED_STATE:
+            case PENDING_STATE:
+            case RUNNING_STATE:
+              break;
+          }
+        }
+      } catch (SQLException e) {
+        throw e;
+      } catch (Exception e) {
+        throw new SQLException(e.toString(), "08S01", e);
+      }
+    }
+
+    return statusResp;
+  }
+
+  private String generateOptions(Map<String, String> options, String optionsName) {
+    StringBuffer optionSpec = new StringBuffer();
+    if (options != null && !options.isEmpty()) {
+      for (String partition : options.keySet()) {
+        String value = options.get(partition);
+        if (optionSpec.toString().isEmpty()) {
+          optionSpec.append(optionsName);
+          optionSpec.append("(");
+          optionSpec.append(partition + "='" + value + "'");
+        } else {
+          optionSpec.append("," + partition + "='" + value + "'");
+        }
+      }
+      optionSpec.append(")");
+    }
+    return optionSpec.toString();
   }
 }
