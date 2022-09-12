@@ -17,6 +17,7 @@
 
 package org.apache.kyuubi.service
 
+import java.nio.ByteBuffer
 import java.util.concurrent.{ExecutionException, TimeoutException, TimeUnit}
 
 import scala.concurrent.CancellationException
@@ -148,6 +149,28 @@ abstract class AbstractBackendService(name: String)
         foreignCatalog,
         foreignSchema,
         foreignTable)
+  }
+
+  override def transferData(
+      sessionHandle: SessionHandle,
+      values: ByteBuffer,
+      path: String): OperationHandle = {
+    sessionManager.getSession(sessionHandle).transferData(values, path)
+  }
+
+  override def downloadData(
+      sessionHandle: SessionHandle,
+      tableName: String,
+      query: String,
+      format: String,
+      options: Map[String, String]): OperationHandle = {
+    sessionManager
+      .getSession(sessionHandle)
+      .downloadData(
+        tableName,
+        query,
+        format,
+        options)
   }
 
   override def getOperationStatus(operationHandle: OperationHandle): OperationStatus = {

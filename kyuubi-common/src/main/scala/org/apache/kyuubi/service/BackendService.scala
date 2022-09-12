@@ -17,6 +17,8 @@
 
 package org.apache.kyuubi.service
 
+import java.nio.ByteBuffer
+
 import org.apache.hive.service.rpc.thrift._
 
 import org.apache.kyuubi.operation.{OperationHandle, OperationStatus}
@@ -99,6 +101,14 @@ trait BackendService {
       orientation: FetchOrientation,
       maxRows: Int,
       fetchLog: Boolean): TRowSet
+
+  def transferData(sessionHandle: SessionHandle, buffer: ByteBuffer, path: String): OperationHandle
+  def downloadData(
+      sessionHandle: SessionHandle,
+      tableName: String,
+      query: String,
+      format: String,
+      options: Map[String, String]): OperationHandle
 
   def sessionManager: SessionManager
 }

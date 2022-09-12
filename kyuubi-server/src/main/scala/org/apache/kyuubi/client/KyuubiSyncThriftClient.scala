@@ -17,6 +17,7 @@
 
 package org.apache.kyuubi.client
 
+import java.nio.ByteBuffer
 import java.util.concurrent.{ExecutorService, ScheduledExecutorService, TimeUnit}
 import java.util.concurrent.locks.ReentrantLock
 
@@ -349,6 +350,28 @@ class KyuubiSyncThriftClient private (
     req.setForeignSchemaName(foreignSchema)
     req.setForeignTableName(foreignTable)
     val resp = withLockAcquiredAsyncRequest(GetCrossReference(req))
+    ThriftUtils.verifyTStatus(resp.getStatus)
+    resp.getOperationHandle
+  }
+
+  def transferData(values: ByteBuffer, path: String): TOperationHandle = {
+    val req = new TTransferDataReq(_remoteSessionHandle, path, values)
+    val resp = withLockAcquiredAsyncRequest(TransferData(req))
+    ThriftUtils.verifyTStatus(resp.getStatus)
+    resp.getOperationHandle
+  }
+
+  def downloadData(
+      tableName: String,
+      query: String,
+      format: String,
+      options: Map[String, String]): TOperationHandle = {
+    val req = new TDownloadDataReq(_remoteSessionHandle)
+    req.setTableName(tableName)
+    req.setQuery(query)
+    req.setFormat(format)
+    req.setDownloadOptions(options.asJava)
+    val resp = withLockAcquiredAsyncRequest(DownloadData(req))
     ThriftUtils.verifyTStatus(resp.getStatus)
     resp.getOperationHandle
   }

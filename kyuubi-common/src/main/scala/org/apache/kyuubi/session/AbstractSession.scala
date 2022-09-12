@@ -17,6 +17,8 @@
 
 package org.apache.kyuubi.session
 
+import java.nio.ByteBuffer
+
 import scala.collection.JavaConverters._
 
 import org.apache.hive.service.rpc.thrift.{TGetInfoType, TGetInfoValue, TProtocolVersion, TRowSet, TTableSchema}
@@ -203,6 +205,26 @@ abstract class AbstractSession(
         foreignCatalog,
         foreignSchema,
         foreignTable)
+    runOperation(operation)
+  }
+
+  override def transferData(values: ByteBuffer, path: String): OperationHandle = {
+    val operation = sessionManager.operationManager.newTransferDataOperation(this, values, path)
+    runOperation(operation)
+  }
+
+  override def downloadData(
+      tableName: String,
+      query: String,
+      format: String,
+      options: Map[String, String]): OperationHandle = {
+    val operation = sessionManager.operationManager
+      .newDownloadDataOperation(
+        this,
+        tableName,
+        query,
+        format,
+        options)
     runOperation(operation)
   }
 

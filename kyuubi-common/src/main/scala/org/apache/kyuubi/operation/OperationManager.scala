@@ -17,6 +17,8 @@
 
 package org.apache.kyuubi.operation
 
+import java.nio.ByteBuffer
+
 import org.apache.hive.service.rpc.thrift._
 
 import org.apache.kyuubi.KyuubiSQLException
@@ -90,6 +92,20 @@ abstract class OperationManager(name: String) extends AbstractService(name) {
       foreignCatalog: String,
       foreignSchema: String,
       foreignTable: String): Operation
+  def newTransferDataOperation(
+      session: Session,
+      values: ByteBuffer,
+      path: String): Operation = {
+    throw new UnsupportedOperationException()
+  }
+  def newDownloadDataOperation(
+      session: Session,
+      tableName: String,
+      query: String,
+      format: String,
+      options: Map[String, String]): Operation = {
+    throw new UnsupportedOperationException()
+  }
 
   final def addOperation(operation: Operation): Operation = synchronized {
     handleToOperation.put(operation.getHandle, operation)

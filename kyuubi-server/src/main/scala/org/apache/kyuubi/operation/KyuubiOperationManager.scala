@@ -17,6 +17,7 @@
 
 package org.apache.kyuubi.operation
 
+import java.nio.ByteBuffer
 import java.util.concurrent.TimeUnit
 
 import org.apache.hive.service.rpc.thrift.TRowSet
@@ -180,6 +181,24 @@ class KyuubiOperationManager private (name: String) extends OperationManager(nam
       foreignCatalog,
       foreignSchema,
       foreignTable)
+    addOperation(operation)
+  }
+
+  override def newTransferDataOperation(
+      session: Session,
+      values: ByteBuffer,
+      path: String): Operation = {
+    val operation = new TransferDataOperation(session, values, path)
+    addOperation(operation)
+  }
+
+  override def newDownloadDataOperation(
+      session: Session,
+      tableName: String,
+      query: String,
+      format: String,
+      options: Map[String, String]): Operation = {
+    val operation = new DownloadDataOperation(session, tableName, query, format, options)
     addOperation(operation)
   }
 

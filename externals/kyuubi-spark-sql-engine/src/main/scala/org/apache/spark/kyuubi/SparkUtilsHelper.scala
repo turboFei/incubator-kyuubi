@@ -17,6 +17,9 @@
 
 package org.apache.spark.kyuubi
 
+import java.io.Closeable
+import java.net.URI
+
 import scala.util.matching.Regex
 
 import org.apache.spark.SparkConf
@@ -43,4 +46,11 @@ object SparkUtilsHelper extends Logging {
   def getLocalDir(conf: SparkConf): String = {
     Utils.getLocalDir(conf)
   }
+
+  def resolveURI(path: String): URI = Utils.resolveURI(path)
+
+  def bytesToString(size: BigInt): String = Utils.bytesToString(size)
+
+  def tryWithResource[R <: Closeable, T](createResource: => R)(f: R => T): T =
+    Utils.tryWithResource(createResource)(f)
 }

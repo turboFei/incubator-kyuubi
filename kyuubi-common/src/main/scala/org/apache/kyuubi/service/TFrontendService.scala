@@ -579,17 +579,45 @@ abstract class TFrontendService(name: String)
     resp
   }
 
-  override def DownloadData(req: TDownloadDataReq): TDownloadDataResp = {
-    debug(req.toString)
-    val resp = new TDownloadDataResp()
-    resp.setStatus(KyuubiSQLException.featureNotSupported().toTStatus)
-    resp
-  }
-
   override def TransferData(req: TTransferDataReq): TTransferDataResp = {
     debug(req.toString)
     val resp = new TTransferDataResp()
-    resp.setStatus(KyuubiSQLException.featureNotSupported().toTStatus)
+    try {
+      val opHandle = be.transferData(
+        SessionHandle(req.getSessionHandle),
+        req.bufferForValues(),
+        req.getPath)
+      val tOperationHandle = opHandle.toTOperationHandle
+      tOperationHandle.setOperationType(TOperationType.UNKNOWN)
+      resp.setOperationHandle(tOperationHandle)
+      resp.setStatus(OK_STATUS)
+    } catch {
+      case e: Exception =>
+        error("Error transferring data: ", e)
+        resp.setStatus(KyuubiSQLException.toTStatus(e))
+    }
+    resp
+  }
+
+  override def DownloadData(req: TDownloadDataReq): TDownloadDataResp = {
+    debug(req.toString)
+    val resp = new TDownloadDataResp()
+    try {
+      val opHandle = be.downloadData(
+        SessionHandle(req.getSessionHandle),
+        req.getTableName,
+        req.getQuery,
+        req.getFormat,
+        req.getDownloadOptions.asScala.toMap)
+      val tOperationHandle = opHandle.toTOperationHandle
+      tOperationHandle.setOperationType(TOperationType.UNKNOWN)
+      resp.setOperationHandle(tOperationHandle)
+      resp.setStatus(OK_STATUS)
+    } catch {
+      case e: Exception =>
+        error("Error downloading data: ", e)
+        resp.setStatus(KyuubiSQLException.toTStatus(e))
+    }
     resp
   }
 

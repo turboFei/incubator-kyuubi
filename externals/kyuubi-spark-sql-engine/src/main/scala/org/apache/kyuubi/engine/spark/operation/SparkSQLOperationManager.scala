@@ -17,6 +17,7 @@
 
 package org.apache.kyuubi.engine.spark.operation
 
+import java.nio.ByteBuffer
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
@@ -181,5 +182,23 @@ class SparkSQLOperationManager private (name: String) extends OperationManager(n
       foreignSchema: String,
       foreignTable: String): Operation = {
     throw KyuubiSQLException.featureNotSupported()
+  }
+
+  override def newTransferDataOperation(
+      session: Session,
+      values: ByteBuffer,
+      path: String): Operation = {
+    val op = new TransferDataOperation(session, values, path)
+    addOperation(op)
+  }
+
+  override def newDownloadDataOperation(
+      session: Session,
+      tableName: String,
+      query: String,
+      format: String,
+      options: Map[String, String]): Operation = {
+    val op = new DownloadDataOperation(session, tableName, query, format, options.asJava)
+    addOperation(op)
   }
 }

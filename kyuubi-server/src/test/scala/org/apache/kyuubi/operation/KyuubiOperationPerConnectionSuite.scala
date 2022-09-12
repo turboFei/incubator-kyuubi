@@ -17,13 +17,16 @@
 
 package org.apache.kyuubi.operation
 
+import java.io.File
+import java.net.URI
 import java.sql.SQLException
 import java.util
-import java.util.Properties
+import java.util.{Collections, Properties}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 
+import org.apache.commons.io.FileUtils
 import org.apache.hive.service.rpc.thrift._
 import org.scalatest.time.SpanSugar.convertIntToGrainOfTime
 
@@ -293,6 +296,63 @@ class KyuubiOperationPerConnectionSuite extends WithKyuubiServer with HiveJDBCTe
         }
         assert(!conn.isValid(3000))
       }
+    }
+  }
+
+  test("transfer data and download data") {
+    withSessionHandle { (client, handle) =>
+      val transferDataReq = new TTransferDataReq()
+      transferDataReq.setSessionHandle(handle)
+      transferDataReq.setValues("test".getBytes("UTF-8"))
+      transferDataReq.setPath("test")
+      val transferResp = client.TransferData(transferDataReq)
+      val fetchResultReq = new TFetchResultsReq()
+      fetchResultReq.setOperationHandle(transferResp.getOperationHandle)
+      fetchResultReq.setFetchType(0)
+      fetchResultReq.setMaxRows(10)
+      var fetchResultResp = client.FetchResults(fetchResultReq)
+      var results = fetchResultResp.getResults
+      val transferredFile = new File(
+        new URI(results.getColumns.get(0).getStringVal.getValues.get(0)).getPath)
+      assert(transferredFile.exists())
+      assert(FileUtils.readFileToString(transferredFile, "UTF-8") === "test")
+
+      val downloadDataReq = new TDownloadDataReq()
+      downloadDataReq.setSessionHandle(handle)
+      downloadDataReq.setQuery("select 'test' as kyuubi")
+      downloadDataReq.setFormat("parquet")
+      downloadDataReq.setDownloadOptions(Collections.emptyMap[String, String]())
+      val downloadResp = client.DownloadData(downloadDataReq)
+      fetchResultReq.setOperationHandle(downloadResp.getOperationHandle)
+      fetchResultReq.setFetchType(0)
+      fetchResultReq.setMaxRows(10)
+      fetchResultResp = client.FetchResults(fetchResultReq)
+      results = fetchResultResp.getResults
+
+      val col1 = results.getColumns.get(0).getStringVal.getValues // FILE_NAME
+      val col2 = results.getColumns.get(1).getBinaryVal.getValues // DATA
+      val col3 = results.getColumns.get(2).getStringVal.getValues // SCHEMA
+      val col4 = results.getColumns.get(3).getI64Val.getValues // SIZE
+
+      // the first row is schema
+      assert(col1.get(0).isEmpty)
+      assert(col2.get(0).capacity() === 0)
+      assert(col3.get(0) === "kyuubi")
+      val dataSize = col4.get(0)
+
+      // the second row is the content
+      assert(col1.get(1).endsWith("parquet"))
+      assert(col2.get(1).capacity() === dataSize)
+      val parquetContent = new String(col2.get(1).array(), "UTF-8")
+      assert(parquetContent.startsWith("PAR1") && parquetContent.endsWith("PAR1"))
+      assert(col3.get(1).isEmpty)
+      assert(col4.get(1) === dataSize)
+
+      // the last row is the EOF
+      assert(col1.get(2).endsWith("parquet"))
+      assert(col2.get(2).capacity() === 0)
+      assert(col3.get(2).isEmpty)
+      assert(col4.get(2) === -1)
     }
   }
 }

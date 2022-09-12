@@ -158,4 +158,33 @@ object KyuubiEbayConf {
       .version("1.6.0")
       .stringConf
       .createWithDefault("spark_hbase")
+
+  val DATA_UPLOAD_ENABLED: ConfigEntry[Boolean] =
+    buildConf("kyuubi.data.upload.enabled")
+      .doc("Enable data upload")
+      .internal
+      .booleanConf
+      .createWithDefault(true)
+
+  val DATA_UPLOAD_TEMPORARY_BASE_DIR: ConfigEntry[String] =
+    buildConf("kyuubi.data.upload.temporary.base.dir")
+      .doc("Temporary path for data uploading.")
+      .internal
+      .stringConf
+      .createWithDefault("/tmp/spark-uploads")
+
+  val DATA_UPLOAD_TEMPORARY_FILE_MAX_SIZE: ConfigEntry[Long] =
+    buildConf("kyuubi.data.upload.temporary.file.max.size")
+      .doc("The max size of file uploaded in bytes for data uploading.")
+      .internal
+      .longConf
+      .createWithDefault(200 * 1024 * 1024)
+
+  val DATA_DOWNLOAD_MAX_SIZE: ConfigEntry[Long] =
+    buildConf("spark.sql.hive.thriftServer.data.download.max.size")
+      .doc("The maximum data size allowed downloaded.")
+      .internal
+      .longConf
+      .createWithDefault(100L * 1024 * 1024 * 1024) // 100G
+
 }

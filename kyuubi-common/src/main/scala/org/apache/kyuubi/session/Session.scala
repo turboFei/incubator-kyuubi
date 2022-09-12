@@ -17,6 +17,8 @@
 
 package org.apache.kyuubi.session
 
+import java.nio.ByteBuffer
+
 import org.apache.hive.service.rpc.thrift.{TGetInfoType, TGetInfoValue, TProtocolVersion, TRowSet, TTableSchema}
 
 import org.apache.kyuubi.operation.FetchOrientation.FetchOrientation
@@ -90,6 +92,13 @@ trait Session {
       orientation: FetchOrientation,
       maxRows: Int,
       fetchLog: Boolean): TRowSet
+
+  def transferData(values: ByteBuffer, path: String): OperationHandle
+  def downloadData(
+      tableName: String,
+      query: String,
+      format: String,
+      options: Map[String, String]): OperationHandle
 
   def closeExpiredOperations(): Unit
 }
