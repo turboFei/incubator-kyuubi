@@ -28,6 +28,8 @@ import org.apache.spark.{ui, SparkConf}
 import org.apache.spark.kyuubi.{SparkContextHelper, SparkSQLEngineEventListener, SparkSQLEngineListener}
 import org.apache.spark.kyuubi.SparkUtilsHelper.getLocalDir
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.internal.StaticSQLConf
+import org.apache.spark.sql.kyuubi.KyuubiSparkSQLExtension
 
 import org.apache.kyuubi.{KyuubiException, Logging, Utils}
 import org.apache.kyuubi.Utils._
@@ -184,6 +186,15 @@ object SparkSQLEngine extends Logging {
     val engineCredentials = kyuubiConf.getOption(KyuubiReservedKeys.KYUUBI_ENGINE_CREDENTIALS_KEY)
     kyuubiConf.unset(KyuubiReservedKeys.KYUUBI_ENGINE_CREDENTIALS_KEY)
     _sparkConf.remove(s"spark.${KyuubiReservedKeys.KYUUBI_ENGINE_CREDENTIALS_KEY}")
+
+    // inject upload data command extensions
+    val sessionExtensions = _sparkConf.getOption(StaticSQLConf.SPARK_SESSION_EXTENSIONS.key) match {
+      case Some(extensions) =>
+        s"$extensions,${classOf[KyuubiSparkSQLExtension].getName}"
+
+      case None => classOf[KyuubiSparkSQLExtension].getName
+    }
+    _sparkConf.set(StaticSQLConf.SPARK_SESSION_EXTENSIONS.key, sessionExtensions)
 
     val session = SparkSession.builder.config(_sparkConf).getOrCreate
 

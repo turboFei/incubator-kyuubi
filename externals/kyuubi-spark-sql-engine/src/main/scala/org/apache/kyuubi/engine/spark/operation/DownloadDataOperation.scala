@@ -17,27 +17,27 @@
 
 package org.apache.kyuubi.engine.spark.operation
 
-import java.io.{File, FileNotFoundException}
+import java.io.FileNotFoundException
 import java.util.{ArrayList => JArrayList, List => JList, Map => JMap}
 
 import scala.collection.JavaConverters._
 import scala.math.BigDecimal.RoundingMode
 
 import org.apache.commons.lang3.StringUtils
-import org.apache.hadoop.fs.{FileSystem, Path, PathFilter}
+import org.apache.hadoop.fs.{Path, PathFilter}
 import org.apache.hive.service.rpc.thrift.TTableSchema
 import org.apache.spark.kyuubi.SparkUtilsHelper
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.catalog.HiveTableRelation
 import org.apache.spark.sql.execution._
 import org.apache.spark.sql.execution.datasources.LogicalRelation
-import org.apache.spark.sql.internal.StaticSQLConf
 import org.apache.spark.sql.kyuubi.operation.DownloadDataHelper._
 import org.apache.spark.sql.types._
 
 import org.apache.kyuubi.KyuubiSQLException
 import org.apache.kyuubi.config.KyuubiEbayConf._
 import org.apache.kyuubi.engine.spark.schema.SchemaHelper
+import org.apache.kyuubi.engine.spark.session.SparkSessionImpl
 import org.apache.kyuubi.operation.IterableFetchIterator
 import org.apache.kyuubi.operation.log.OperationLog
 import org.apache.kyuubi.session.Session
@@ -72,10 +72,8 @@ class DownloadDataOperation(
   override def statement: String = s"Generating download files with arguments " +
     s"[${tableName}, ${query}, ${format}, ${writeOptions}]"
 
-  private val scratchDir = spark.sessionState.conf.getConf(StaticSQLConf.SPARK_SCRATCH_DIR)
-  private val pathPrefix = new Path(scratchDir + File.separator + "DownloadData" + File.separator +
-    session.user + File.separator + session.handle.identifier.toString)
-  private val fs: FileSystem = pathPrefix.getFileSystem(spark.sparkContext.hadoopConfiguration)
+  private val sessionScratchDir = session.asInstanceOf[SparkSessionImpl].sessionScratchDir
+  private val fs = sessionScratchDir.getFileSystem(spark.sparkContext.hadoopConfiguration)
 
   override protected def runInternal(): Unit = {
     downloadData()
@@ -104,7 +102,7 @@ class DownloadDataOperation(
             tableName,
             query,
             format,
-            new Path(pathPrefix, statementId),
+            new Path(sessionScratchDir, statementId),
             options,
             writeOptions,
             dataDownloadMaxSize))
@@ -116,7 +114,7 @@ class DownloadDataOperation(
             tableName,
             query,
             format,
-            new Path(pathPrefix, statementId),
+            new Path(sessionScratchDir, statementId),
             options,
             writeOptions,
             dataDownloadMaxSize))

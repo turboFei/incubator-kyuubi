@@ -27,7 +27,7 @@ import org.apache.spark.sql.types.StructType
 
 import org.apache.kyuubi.{KyuubiSQLException, Utils}
 import org.apache.kyuubi.config.KyuubiConf
-import org.apache.kyuubi.config.KyuubiReservedKeys.{KYUUBI_SESSION_USER_KEY, KYUUBI_STATEMENT_ID_KEY}
+import org.apache.kyuubi.config.KyuubiReservedKeys.{KYUUBI_SESSION_ID_KEY, KYUUBI_SESSION_USER_KEY, KYUUBI_STATEMENT_ID_KEY}
 import org.apache.kyuubi.engine.spark.KyuubiSparkUtil.SPARK_SCHEDULER_POOL_KEY
 import org.apache.kyuubi.engine.spark.operation.SparkOperation.TIMEZONE_KEY
 import org.apache.kyuubi.engine.spark.schema.{RowSet, SchemaHelper}
@@ -78,6 +78,7 @@ abstract class SparkOperation(session: Session)
       spark.sparkContext.setJobGroup(statementId, redactedStatement, forceCancel)
       spark.sparkContext.setLocalProperty(KYUUBI_SESSION_USER_KEY, session.user)
       spark.sparkContext.setLocalProperty(KYUUBI_STATEMENT_ID_KEY, statementId)
+      spark.sparkContext.setLocalProperty(KYUUBI_SESSION_ID_KEY, session.handle.identifier.toString)
       schedulerPool match {
         case Some(pool) =>
           spark.sparkContext.setLocalProperty(SPARK_SCHEDULER_POOL_KEY, pool)
@@ -89,6 +90,7 @@ abstract class SparkOperation(session: Session)
       spark.sparkContext.setLocalProperty(SPARK_SCHEDULER_POOL_KEY, null)
       spark.sparkContext.setLocalProperty(KYUUBI_SESSION_USER_KEY, null)
       spark.sparkContext.setLocalProperty(KYUUBI_STATEMENT_ID_KEY, null)
+      spark.sparkContext.setLocalProperty(KYUUBI_SESSION_ID_KEY, null)
       spark.sparkContext.clearJobGroup()
     }
   }

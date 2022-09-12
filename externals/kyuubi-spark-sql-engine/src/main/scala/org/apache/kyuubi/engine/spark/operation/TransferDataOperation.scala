@@ -18,19 +18,18 @@
 package org.apache.kyuubi.engine.spark.operation
 
 import java.io.FileOutputStream
-import java.net.URI
 import java.nio.ByteBuffer
 import java.util.Locale
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
-import org.apache.spark.kyuubi.SparkUtilsHelper
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.StructType
 
 import org.apache.kyuubi.KyuubiSQLException
 import org.apache.kyuubi.config.KyuubiEbayConf._
 import org.apache.kyuubi.engine.spark.operation.TransferDataOperation.uploadDataSizeExceeded
+import org.apache.kyuubi.engine.spark.session.SparkSessionImpl
 import org.apache.kyuubi.operation.ArrayFetchIterator
 import org.apache.kyuubi.session.Session
 
@@ -53,17 +52,13 @@ class TransferDataOperation(
         throw KyuubiSQLException("UPLOAD DATA is not supported")
       }
       val hadoopConf = spark.sparkContext.hadoopConfiguration
-      val dataUploadBaseDir = SparkUtilsHelper.resolveURI(
-        session.sessionManager.getConf.get(DATA_UPLOAD_TEMPORARY_BASE_DIR))
-      val fileSystem = FileSystem.get(dataUploadBaseDir, hadoopConf)
+      val sessionScratchDir = session.asInstanceOf[SparkSessionImpl].sessionScratchDir
+      val fileSystem = sessionScratchDir.getFileSystem(hadoopConf)
 
-      val sessionId = session.handle.identifier.toString
-      val sessionPath = new Path(dataUploadBaseDir).toString.stripSuffix("/") +
-        "/" + sanitize(sessionId)
-      if (!fileSystem.exists(new Path(sessionPath))) {
-        fileSystem.mkdirs(new Path(sessionPath))
+      if (!fileSystem.exists(sessionScratchDir)) {
+        fileSystem.mkdirs(sessionScratchDir)
       }
-      val targetPath = new Path(getDataPath(dataUploadBaseDir, sessionId, path))
+      val targetPath = new Path(sessionScratchDir, sanitize(path))
       persistData(fileSystem, hadoopConf, targetPath)
       iter = new ArrayFetchIterator[Row](Array(Row(targetPath.toString)))
     } catch onError(cancel = true)
@@ -113,11 +108,6 @@ class TransferDataOperation(
 
   private def sanitize(str: String): String = {
     str.replaceAll("[ :/]", "-").replaceAll("[.${}'\"]", "_").toLowerCase(Locale.ROOT)
-  }
-
-  def getDataPath(uploadDataBaseDir: URI, sessionId: String, path: String): String = {
-    new Path(uploadDataBaseDir).toString.stripSuffix("/") +
-      "/" + sanitize(sessionId) + "/" + sanitize(path)
   }
 }
 

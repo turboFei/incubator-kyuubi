@@ -299,7 +299,7 @@ class KyuubiOperationPerConnectionSuite extends WithKyuubiServer with HiveJDBCTe
     }
   }
 
-  test("transfer data and download data") {
+  test("transfer data and download data and upload data command") {
     withSessionHandle { (client, handle) =>
       val transferDataReq = new TTransferDataReq()
       transferDataReq.setSessionHandle(handle)
@@ -353,6 +353,27 @@ class KyuubiOperationPerConnectionSuite extends WithKyuubiServer with HiveJDBCTe
       assert(col2.get(2).capacity() === 0)
       assert(col3.get(2).isEmpty)
       assert(col4.get(2) === -1)
+
+      // create table ta
+      val executeStmtReq = new TExecuteStatementReq()
+      executeStmtReq.setStatement("create table ta(c1 string) using parquet")
+      executeStmtReq.setSessionHandle(handle)
+      executeStmtReq.setRunAsync(false)
+      client.ExecuteStatement(executeStmtReq)
+
+      // upload data
+      executeStmtReq.setStatement("UPLOAD DATA INPATH 'test' OVERWRITE INTO TABLE ta")
+      client.ExecuteStatement(executeStmtReq)
+
+      // check upload result
+      executeStmtReq.setStatement("SELECT * FROM ta")
+      val executeStatementResp = client.ExecuteStatement(executeStmtReq)
+
+      fetchResultReq.setOperationHandle(executeStatementResp.getOperationHandle)
+      fetchResultResp = client.FetchResults(fetchResultReq)
+      val resultSet = fetchResultResp.getResults.getColumns.asScala
+      assert(resultSet.size == 1)
+      assert(resultSet.head.getStringVal.getValues.get(0) === "test")
     }
   }
 }

@@ -17,8 +17,11 @@
 
 package org.apache.kyuubi.engine.spark.session
 
+import org.apache.hadoop.fs.Path
 import org.apache.hive.service.rpc.thrift.TProtocolVersion
+import org.apache.spark.kyuubi.SparkUtilsHelper
 import org.apache.spark.sql.{AnalysisException, SparkSession}
+import org.apache.spark.sql.internal.StaticSQLConf
 
 import org.apache.kyuubi.engine.spark.events.SessionEvent
 import org.apache.kyuubi.engine.spark.operation.SparkSQLOperationManager
@@ -37,6 +40,7 @@ class SparkSessionImpl(
     sessionManager: SessionManager,
     val spark: SparkSession)
   extends AbstractSession(protocol, user, password, ipAddress, conf, sessionManager) {
+  import SparkSessionImpl._
 
   private def setModifiableConfig(key: String, value: String): Unit = {
     try {
@@ -81,5 +85,27 @@ class SparkSessionImpl(
     super.close()
     spark.sessionState.catalog.getTempViewNames().foreach(spark.catalog.uncacheTable(_))
     sessionManager.operationManager.asInstanceOf[SparkSQLOperationManager].closeILoop(handle)
+    cleanupSessionScratchDir()
+  }
+
+  private[kyuubi] val sessionScratchDir: Path = {
+    getSessionScratchDir(spark, user, handle.identifier.toString)
+  }
+
+  private def cleanupSessionScratchDir(): Unit = {
+    val fileSystem = sessionScratchDir.getFileSystem(spark.sparkContext.hadoopConfiguration)
+    if (fileSystem.exists(sessionScratchDir)) {
+      fileSystem.delete(sessionScratchDir, true)
+    }
+  }
+}
+
+object SparkSessionImpl {
+  def getSessionScratchDir(
+      spark: SparkSession,
+      user: String,
+      sessionId: String): Path = {
+    val scratchDir = spark.sessionState.conf.getConf(StaticSQLConf.SPARK_SCRATCH_DIR)
+    new Path(SparkUtilsHelper.resolveURI(Seq(scratchDir, user, sessionId).mkString(Path.SEPARATOR)))
   }
 }
