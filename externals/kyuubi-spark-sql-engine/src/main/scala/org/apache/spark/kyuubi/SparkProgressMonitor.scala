@@ -24,17 +24,39 @@ import scala.collection.immutable.SortedMap
 import org.apache.hive.service.rpc.thrift.TJobExecutionStatus
 import org.apache.spark.kyuubi.SparkProgressMonitor._
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.execution.ui.ExecutionPage
 import org.apache.spark.status.api.v1.StageStatus
 
 import org.apache.kyuubi.engine.spark.operation.progress.{SparkOperationProgressStatus, SparkStage, SparkStageProgress}
 
-class SparkProgressMonitor(spark: SparkSession, jobGroup: String) {
+class SparkProgressMonitor(spark: SparkSession, jobGroup: String, planEnabled: Boolean) {
 
   private val statusStore = spark.sparkContext.statusStore
 
   private lazy val progressMap: Map[SparkStage, SparkStageProgress] = {
-    val stages = statusStore.jobsList(null)
+    val jobs = statusStore.jobsList(null)
       .filter(_.jobGroup == Option(jobGroup))
+    val sqlPlan: Option[String] =
+      if (planEnabled) {
+        val sqlId = jobs.lastOption.map(_.jobId).map(statusStore.jobWithAssociatedSql)
+          .map(_._2).getOrElse(None)
+        sqlId match {
+          case Some(id) =>
+            val executionPage =
+              spark.sparkContext.ui.map(_.getTabs).flatMap { tab =>
+                tab.flatMap(_.pages).find(_.isInstanceOf[ExecutionPage])
+              }
+            executionPage.map { page =>
+              page.render(new MockHttpServletRequest(id)).mkString("\n")
+            }
+
+          case None => None
+        }
+      } else {
+        None
+      }
+
+    val stages = jobs
       .flatMap(_.stageIds)
       .flatMap(stageId => statusStore.asOption(statusStore.lastStageAttempt(stageId)))
       .map(stage => {
@@ -49,7 +71,8 @@ class SparkProgressMonitor(spark: SparkSession, jobGroup: String) {
           stage.numTasks,
           completedTasksCount,
           stage.numActiveTasks,
-          stage.numFailedTasks)
+          stage.numFailedTasks,
+          sqlPlan)
         (sparkStage, sparkStageProgress)
       })
     SortedMap(stages: _*)
@@ -91,7 +114,7 @@ class SparkProgressMonitor(spark: SparkSession, jobGroup: String) {
           String.valueOf(running),
           String.valueOf(pending),
           String.valueOf(failed),
-          "")
+          progress.plan.getOrElse(""))
     }.toList.asJavaCollection
     new util.ArrayList[util.List[String]](progressRows)
   }
@@ -167,7 +190,7 @@ object SparkProgressMonitor {
     "RUNNING",
     "PENDING",
     "FAILED",
-    "")
+    "PLAN")
 
   private val COLUMN_1_WIDTH = 16
 

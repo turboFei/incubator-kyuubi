@@ -33,7 +33,9 @@ class SparkOperationProgressSuite extends WithSparkSQLEngine with HiveJDBCTestHe
     "spark.master" -> "local[1]",
     "spark.ui.liveUpdate.period" -> "0",
     "kyuubi.operation.progress.enabled" -> "true",
-    "kyuubi.operation.status.polling.timeout" -> "1000")
+    "kyuubi.operation.status.polling.timeout" -> "1000",
+    "spark.ui.enabled" -> "true",
+    "spark.ui.port" -> "0")
 
   test("test operation progress") {
     withSessionHandle { (client, handle) =>
@@ -70,7 +72,7 @@ class SparkOperationProgressSuite extends WithSparkSQLEngine with HiveJDBCTestHe
           "RUNNING",
           "PENDING",
           "FAILED",
-          ""))(headers.asScala)
+          "PLAN"))(headers.asScala)
         assert(rows.size() == 1)
         progress match {
           case 0.0 =>
@@ -118,4 +120,56 @@ class SparkOperationProgressSuite extends WithSparkSQLEngine with HiveJDBCTestHe
     }
   }
 
+  test("test operation plan progress") {
+    withSessionHandle { (client, handle) =>
+      val preReq = new TExecuteStatementReq()
+      preReq.setStatement("show databases")
+      preReq.setSessionHandle(handle)
+      preReq.setRunAsync(false)
+      client.ExecuteStatement(preReq)
+
+      val preReq2 = new TExecuteStatementReq()
+      preReq2.setStatement("set kyuubi.operation.progress.plan.enabled=true")
+      preReq2.setSessionHandle(handle)
+      preReq2.setRunAsync(false)
+      client.ExecuteStatement(preReq2)
+
+      val sql = "SELECT java_method('java.lang.Thread', 'sleep', 10000l) FROM range(1, 3, 1, 2)"
+      val req = new TExecuteStatementReq()
+      req.setStatement(sql)
+      req.setRunAsync(true)
+      req.setSessionHandle(handle)
+      val resp = client.ExecuteStatement(req)
+      var checkFlag = false
+      eventually(Timeout(25.seconds)) {
+        val statusReq = new TGetOperationStatusReq(resp.getOperationHandle)
+        val statusResp = client.GetOperationStatus(statusReq)
+        val headers = statusResp.getProgressUpdateResponse.getHeaderNames
+        val progress = statusResp.getProgressUpdateResponse.getProgressedPercentage
+        val rows = statusResp.getProgressUpdateResponse.getRows
+        val footerSummary = statusResp.getProgressUpdateResponse.getFooterSummary
+        assertResult(Seq(
+          "STAGES",
+          "ATTEMPT",
+          "STATUS",
+          "TOTAL",
+          "COMPLETED",
+          "RUNNING",
+          "PENDING",
+          "FAILED",
+          "PLAN"))(headers.asScala)
+        assert(rows.size() == 1)
+        progress match {
+          case 1.0 =>
+            val plan = rows.get(0).asScala.last
+            assert(plan.startsWith("<html>") && plan.endsWith("</html>"))
+            assert("STAGES: 01/01" === footerSummary)
+            checkFlag = true
+
+          case _ =>
+        }
+        assert(checkFlag)
+      }
+    }
+  }
 }

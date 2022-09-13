@@ -1867,6 +1867,15 @@ object KyuubiConf {
       .booleanConf
       .createWithDefault(false)
 
+  val SESSION_PROGRESS_PLAN_ENABLE: ConfigEntry[Boolean] =
+    buildConf("kyuubi.operation.progress.plan.enabled")
+      .doc("Whether to enable the operation progress plan. When true," +
+        " the operation progress plan will be returned in `GetOperationStatus`.")
+      .internal
+      .version("1.7.0")
+      .booleanConf
+      .createWithDefault(false)
+
   val SERVER_SECRET_REDACTION_PATTERN: OptionalConfigEntry[Regex] =
     buildConf("kyuubi.server.redaction.regex")
       .doc("Regex to decide which Kyuubi contain sensitive information. When this regex matches " +

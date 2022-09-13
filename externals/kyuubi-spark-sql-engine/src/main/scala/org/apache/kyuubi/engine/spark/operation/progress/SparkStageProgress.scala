@@ -30,7 +30,8 @@ case class SparkStageProgress(
     totalTaskCount: Int,
     completedTasksCount: Int,
     runningTaskCount: Int,
-    failedTaskCount: Int)
+    failedTaskCount: Int,
+    plan: Option[String])
 
 object SparkOperationProgressStatus extends Enumeration {
   type SparkOperationProgressStatus = Value

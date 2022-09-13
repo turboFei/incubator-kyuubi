@@ -35,7 +35,7 @@ import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.types._
 
 import org.apache.kyuubi.{KyuubiSQLException, Logging, Utils}
-import org.apache.kyuubi.config.KyuubiConf.{OPERATION_RESULT_MAX_ROWS, OPERATION_SPARK_LISTENER_ENABLED, OPERATION_TEMP_TABLE_COLLECT, OPERATION_TEMP_TABLE_DATABASE, SESSION_PROGRESS_ENABLE}
+import org.apache.kyuubi.config.KyuubiConf._
 import org.apache.kyuubi.config.KyuubiEbayConf.EBAY_OPERATION_MAX_RESULT_COUNT
 import org.apache.kyuubi.engine.spark.KyuubiSparkUtil._
 import org.apache.kyuubi.engine.spark.events.SparkOperationEvent
@@ -73,6 +73,11 @@ class ExecuteStatement(
   private val progressEnable = spark.conf.getOption(SESSION_PROGRESS_ENABLE.key) match {
     case Some(s) => s.toBoolean
     case _ => session.sessionManager.getConf.get(SESSION_PROGRESS_ENABLE)
+  }
+
+  private val progressPlanEnable = spark.conf.getOption(SESSION_PROGRESS_PLAN_ENABLE.key) match {
+    case Some(s) => s.toBoolean
+    case _ => session.sessionManager.getConf.get(SESSION_PROGRESS_PLAN_ENABLE)
   }
 
   EventBus.post(SparkOperationEvent(this))
@@ -267,7 +272,7 @@ class ExecuteStatement(
 
   override def getStatus: OperationStatus = {
     if (progressEnable) {
-      val progressMonitor = new SparkProgressMonitor(spark, statementId)
+      val progressMonitor = new SparkProgressMonitor(spark, statementId, progressPlanEnable)
       setOperationJobProgress(new TProgressUpdateResp(
         progressMonitor.headers,
         progressMonitor.rows,
