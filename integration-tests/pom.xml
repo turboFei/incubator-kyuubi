@@ -66,5 +66,12 @@
                 <module>kyuubi-jdbc-it</module>
             </modules>
         </profile>
+
+        <profile>
+            <id>zookeeper-it</id>
+            <modules>
+                <module>kyuubi-zookeeper-it</module>
+            </modules>
+        </profile>
     </profiles>
 </project>
