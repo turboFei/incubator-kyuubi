@@ -19,7 +19,6 @@ package org.apache.kyuubi.engine.spark.session
 
 import org.apache.hadoop.fs.Path
 import org.apache.hive.service.rpc.thrift.{TGetInfoType, TGetInfoValue, TProtocolVersion}
-import org.apache.spark.kyuubi.SparkUtilsHelper
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.sql.internal.StaticSQLConf
 
@@ -116,7 +115,8 @@ object SparkSessionImpl {
       spark: SparkSession,
       user: String,
       sessionId: String): Path = {
-    val scratchDir = spark.sessionState.conf.getConf(StaticSQLConf.SPARK_SCRATCH_DIR)
-    new Path(SparkUtilsHelper.resolveURI(Seq(scratchDir, user, sessionId).mkString(Path.SEPARATOR)))
+    val scratchPath = new Path(spark.sessionState.conf.getConf(StaticSQLConf.SPARK_SCRATCH_DIR))
+    val fileSystem = scratchPath.getFileSystem(spark.sparkContext.hadoopConfiguration)
+    fileSystem.makeQualified(new Path(scratchPath, Seq(user, sessionId).mkString(Path.SEPARATOR)))
   }
 }

@@ -18,7 +18,6 @@
 package org.apache.spark.kyuubi
 
 import java.io.Closeable
-import java.net.URI
 
 import scala.util.matching.Regex
 
@@ -46,8 +45,6 @@ object SparkUtilsHelper extends Logging {
   def getLocalDir(conf: SparkConf): String = {
     Utils.getLocalDir(conf)
   }
-
-  def resolveURI(path: String): URI = Utils.resolveURI(path)
 
   def bytesToString(size: BigInt): String = Utils.bytesToString(size)
 

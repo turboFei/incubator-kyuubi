@@ -608,7 +608,7 @@ abstract class TFrontendService(name: String)
         req.getTableName,
         req.getQuery,
         req.getFormat,
-        req.getDownloadOptions.asScala.toMap)
+        Option(req.getDownloadOptions).map(_.asScala.toMap).getOrElse(Map.empty[String, String]))
       val tOperationHandle = opHandle.toTOperationHandle
       tOperationHandle.setOperationType(TOperationType.UNKNOWN)
       resp.setOperationHandle(tOperationHandle)
