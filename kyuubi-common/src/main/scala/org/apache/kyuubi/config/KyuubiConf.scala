@@ -53,6 +53,9 @@ case class KyuubiConf(loadSysDefault: Boolean = true) extends Logging {
   }
 
   def set[T](entry: ConfigEntry[T], value: T): KyuubiConf = {
+    require(entry != null, "entry cannot be null")
+    require(value != null, s"value cannot be null for key: ${entry.key}")
+    require(containsConfigEntry(entry), s"$entry is not registered")
     if (settings.put(entry.key, entry.strConverter(value)) == null) {
       logDeprecationWarning(entry.key)
     }
@@ -60,13 +63,14 @@ case class KyuubiConf(loadSysDefault: Boolean = true) extends Logging {
   }
 
   def set[T](entry: OptionalConfigEntry[T], value: T): KyuubiConf = {
+    require(containsConfigEntry(entry), s"$entry is not registered")
     set(entry.key, entry.strConverter(Option(value)))
     this
   }
 
   def set(key: String, value: String): KyuubiConf = {
-    require(key != null)
-    require(value != null)
+    require(key != null, "key cannot be null")
+    require(value != null, s"value cannot be null for key: $key")
     if (settings.put(key, value) == null) {
       logDeprecationWarning(key)
     }
@@ -74,6 +78,7 @@ case class KyuubiConf(loadSysDefault: Boolean = true) extends Logging {
   }
 
   def setIfMissing[T](entry: ConfigEntry[T], value: T): KyuubiConf = {
+    require(containsConfigEntry(entry), s"$entry is not registered")
     if (settings.putIfAbsent(entry.key, entry.strConverter(value)) == null) {
       logDeprecationWarning(entry.key)
     }
@@ -90,6 +95,7 @@ case class KyuubiConf(loadSysDefault: Boolean = true) extends Logging {
   }
 
   def get[T](config: ConfigEntry[T]): T = {
+    require(containsConfigEntry(config), s"$config is not registered")
     config.readFrom(reader)
   }
 
@@ -103,6 +109,7 @@ case class KyuubiConf(loadSysDefault: Boolean = true) extends Logging {
   }
 
   def unset(entry: ConfigEntry[_]): KyuubiConf = {
+    require(containsConfigEntry(entry), s"$entry is not registered")
     unset(entry.key)
   }
 
@@ -193,14 +200,40 @@ object KyuubiConf {
   /** the cluster default file name prefix */
   final val KYUUBI_CLUSTER_CONF_FILE_NAME_PREFIX = KYUUBI_CONF_FILE_NAME + "."
 
-  val kyuubiConfEntries: java.util.Map[String, ConfigEntry[_]] =
-    java.util.Collections.synchronizedMap(new java.util.HashMap[String, ConfigEntry[_]]())
+  private[this] val kyuubiConfEntriesUpdateLock = new Object
 
-  private def register(entry: ConfigEntry[_]): Unit = kyuubiConfEntries.synchronized {
-    require(
-      !kyuubiConfEntries.containsKey(entry.key),
-      s"Duplicate ConfigEntry. ${entry.key} has been registered")
-    kyuubiConfEntries.put(entry.key, entry)
+  @volatile
+  private[this] var kyuubiConfEntries: java.util.Map[String, ConfigEntry[_]] =
+    java.util.Collections.emptyMap()
+
+  private[config] def register(entry: ConfigEntry[_]): Unit =
+    kyuubiConfEntriesUpdateLock.synchronized {
+      require(
+        !kyuubiConfEntries.containsKey(entry.key),
+        s"Duplicate ConfigEntry. ${entry.key} has been registered")
+      val updatedMap = new java.util.HashMap[String, ConfigEntry[_]](kyuubiConfEntries)
+      updatedMap.put(entry.key, entry)
+      kyuubiConfEntries = updatedMap
+    }
+
+  // For testing only
+  private[config] def unregister(entry: ConfigEntry[_]): Unit =
+    kyuubiConfEntriesUpdateLock.synchronized {
+      val updatedMap = new java.util.HashMap[String, ConfigEntry[_]](kyuubiConfEntries)
+      updatedMap.remove(entry.key)
+      kyuubiConfEntries = updatedMap
+    }
+
+  private[config] def getConfigEntry(key: String): ConfigEntry[_] = {
+    kyuubiConfEntries.get(key)
+  }
+
+  private[config] def getConfigEntries(): java.util.Collection[ConfigEntry[_]] = {
+    kyuubiConfEntries.values()
+  }
+
+  private[config] def containsConfigEntry(entry: ConfigEntry[_]): Boolean = {
+    getConfigEntry(entry.key) == entry
   }
 
   def buildConf(key: String): ConfigBuilder = {
