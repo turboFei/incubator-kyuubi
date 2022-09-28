@@ -62,8 +62,9 @@ case class KyuubiSessionEvent(
 
 object KyuubiSessionEvent {
   def apply(session: KyuubiSession): KyuubiSessionEvent = {
-    assert(KyuubiServer.kyuubiServer != null)
-    val serverIP = KyuubiServer.kyuubiServer.frontendServices.head.connectionUrl
+    // TODO: backport KYUUBI #3575
+    val serverIP =
+      Option(KyuubiServer.kyuubiServer).map(_.frontendServices.head.connectionUrl).getOrElse("")
     KyuubiSessionEvent(
       session.handle.identifier.toString,
       session.protocol.getValue,

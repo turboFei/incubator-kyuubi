@@ -157,7 +157,9 @@ abstract class TFrontendService(name: String)
               proxyUser,
               conf)
           } catch {
-            case _: Throwable => throw e
+            case be: Throwable =>
+              error("Error fallback to verify batch account access", be)
+              throw e
           }
       }
       proxyUser
