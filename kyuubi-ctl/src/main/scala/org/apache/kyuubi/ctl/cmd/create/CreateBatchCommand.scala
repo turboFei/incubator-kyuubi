@@ -16,12 +16,13 @@
  */
 package org.apache.kyuubi.ctl.cmd.create
 
-import java.util.{List => JList, Map => JMap}
+import java.util.{HashMap => JHashMap, List => JList, Map => JMap}
 
 import scala.collection.JavaConverters._
 
 import org.apache.kyuubi.client.BatchRestApi
 import org.apache.kyuubi.client.api.v1.dto.{Batch, BatchRequest}
+import org.apache.kyuubi.client.util.BatchUtils
 import org.apache.kyuubi.ctl.CliConfig
 import org.apache.kyuubi.ctl.RestClientFactory.withKyuubiRestClient
 import org.apache.kyuubi.ctl.cmd.Command
@@ -40,10 +41,19 @@ class CreateBatchCommand(cliConfig: CliConfig) extends Command[Batch](cliConfig)
       val batchRestApi: BatchRestApi = new BatchRestApi(kyuubiRestClient)
 
       val request = map.get("request").asInstanceOf[JMap[String, Object]]
-      val config = request.get("configs").asInstanceOf[JMap[Object, Object]].asScala
+      var config = request.get("configs").asInstanceOf[JMap[Object, Object]].asScala
         .map { case (k, v) => (k.toString, v.toString) }.asJava
       val args = request.get("args").asInstanceOf[JList[Object]].asScala
         .map(x => x.toString).asJava
+      if (config.containsKey(CreateBatchCommand.SPARK_BATCH_ETL_SQL_FILES)) {
+        val sparkEtlFiles = config.get(CreateBatchCommand.SPARK_BATCH_ETL_SQL_FILES).split(",")
+        val sparkEtlStatements = BatchUtils.getStatementsFromFiles(sparkEtlFiles.toSeq.asJava)
+        val newConfig = new JHashMap[String, String]()
+        newConfig.putAll(config)
+        newConfig.remove(CreateBatchCommand.SPARK_BATCH_ETL_SQL_FILES)
+        newConfig.put(BatchUtils.SPARK_BATCH_ETL_SQL_STATEMENTS_KEY, sparkEtlStatements)
+        config = newConfig
+      }
       val batchRequest = new BatchRequest(
         request.get("batchType").asInstanceOf[String],
         request.get("resource").asInstanceOf[String],
@@ -59,4 +69,8 @@ class CreateBatchCommand(cliConfig: CliConfig) extends Command[Batch](cliConfig)
   def render(batch: Batch): Unit = {
     info(Render.renderBatchInfo(batch))
   }
+}
+
+object CreateBatchCommand {
+  val SPARK_BATCH_ETL_SQL_FILES = "spark.kyuubi.batch.etl.sql.files"
 }

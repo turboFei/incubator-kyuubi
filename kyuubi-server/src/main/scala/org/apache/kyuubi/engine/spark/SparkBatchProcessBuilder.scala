@@ -17,8 +17,14 @@
 
 package org.apache.kyuubi.engine.spark
 
+import java.io.File
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+
 import scala.collection.mutable.ArrayBuffer
 
+import org.apache.kyuubi.Utils
+import org.apache.kyuubi.client.util.BatchUtils
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.engine.KyuubiApplicationManager
 import org.apache.kyuubi.operation.log.OperationLog
@@ -36,6 +42,8 @@ class SparkBatchProcessBuilder(
   extends SparkProcessBuilder(proxyUser, conf, batchId, extraEngineLog) {
   import SparkProcessBuilder._
 
+  private var batchSqlFileDir: File = _
+
   override protected val commands: Array[String] = {
     val buffer = new ArrayBuffer[String]()
     buffer += executable
@@ -46,6 +54,16 @@ class SparkBatchProcessBuilder(
 
     val batchKyuubiConf = new KyuubiConf(false)
     batchConf.foreach(entry => { batchKyuubiConf.set(entry._1, entry._2) })
+
+    // for spark batch etl sql jobs
+    batchConf.get(BatchUtils.SPARK_BATCH_ETL_SQL_STATEMENTS_KEY).foreach { etlStatements =>
+      batchSqlFileDir = Utils.createTempDir(namePrefix = batchId).toFile
+      val etlSqlFile = new File(batchSqlFileDir, batchId + ".sql")
+      Files.write(etlSqlFile.toPath(), etlStatements.getBytes(StandardCharsets.UTF_8))
+      batchKyuubiConf.unset(BatchUtils.SPARK_BATCH_ETL_SQL_STATEMENTS_KEY)
+      batchKyuubiConf.set("spark.etl.sql.files", etlSqlFile.getAbsolutePath)
+    }
+
     // tag batch application
     KyuubiApplicationManager.tagApplication(batchId, "spark", clusterManager(), batchKyuubiConf)
 
@@ -76,5 +94,12 @@ class SparkBatchProcessBuilder(
 
   override def clusterManager(): Option[String] = {
     batchConf.get(MASTER_KEY).orElse(defaultMaster)
+  }
+
+  override def close(destroyProcess: Boolean = !waitCompletion): Unit = {
+    super.close(destroyProcess)
+    Option(batchSqlFileDir).foreach { dir =>
+      Utils.tryLogNonFatalError(Utils.deleteDirectoryRecursively(dir))
+    }
   }
 }

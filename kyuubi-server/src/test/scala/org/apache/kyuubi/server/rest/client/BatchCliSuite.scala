@@ -27,6 +27,7 @@ import org.scalatest.time.SpanSugar.convertIntToGrainOfTime
 
 import org.apache.kyuubi.{BatchTestHelper, RestClientTestHelper, Utils}
 import org.apache.kyuubi.ctl.TestPrematureExit
+import org.apache.kyuubi.ctl.cmd.create.CreateBatchCommand
 import org.apache.kyuubi.metrics.{MetricsConstants, MetricsSystem}
 import org.apache.kyuubi.session.KyuubiSessionManager
 
@@ -34,12 +35,16 @@ class BatchCliSuite extends RestClientTestHelper with TestPrematureExit with Bat
 
   val basePath: String = Utils.getCodeSourceLocation(getClass)
   val batchFile: String = s"${basePath}/batch.yaml"
+  val batchEtlSqlFile = s"${basePath}/batch.sql"
+  val batchEtlFile = s"${basePath}/batch_etl.yaml"
 
   override def beforeAll(): Unit = {
     super.beforeAll()
 
     System.setProperty("kyuubi.ctl.rest.base.url", baseUri.toString)
     System.setProperty("kyuubi.ctl.rest.spnego.host", "localhost")
+
+    Files.write(Paths.get(batchEtlSqlFile), "select 1".getBytes(StandardCharsets.UTF_8))
 
     val batch_basic = s"""apiVersion: v1
                          |username: ${ldapUser}
@@ -61,6 +66,22 @@ class BatchCliSuite extends RestClientTestHelper with TestPrematureExit with Bat
                          |options:
                          |  verbose: true""".stripMargin
     Files.write(Paths.get(batchFile), batch_basic.getBytes(StandardCharsets.UTF_8))
+
+    val batch_etl = s"""apiVersion: v1
+                       |username: ${ldapUser}
+                       |request:
+                       |  batchType: Spark
+                       |  name: ${sparkBatchTestAppName}
+                       |  resource: spark-internal
+                       |  className: org.apache.spark.sql.ebay.ETLSqlDriver
+                       |  args:
+                       |   - 1
+                       |  configs:
+                       |    spark.master: local
+                       |    ${CreateBatchCommand.SPARK_BATCH_ETL_SQL_FILES}: $batchEtlSqlFile
+                       |options:
+                       |  verbose: true""".stripMargin
+    Files.write(Paths.get(batchEtlFile), batch_etl.getBytes(StandardCharsets.UTF_8))
   }
 
   override def afterEach(): Unit = {
@@ -320,6 +341,23 @@ class BatchCliSuite extends RestClientTestHelper with TestPrematureExit with Bat
       "--endTime",
       "20220101000000")
     testPrematureExitForControlCli(listArgs1, "Batch List (from 0 total 0)")
+  }
+
+  test("submit batch test with etl sql files") {
+    val submitArgs = Array(
+      "submit",
+      "batch",
+      "-f",
+      batchEtlFile,
+      "--password",
+      ldapUserPasswd,
+      "--waitCompletion",
+      "true")
+    val result = testPrematureExitForControlCli(submitArgs, "")
+    assert(result.contains(s"/bin/spark-submit"))
+    assert(!result.contains("ShutdownHookManager: Shutdown hook called"))
+    val numberOfRows = result.split("\n").length
+    assert(numberOfRows <= 100)
   }
 
   private def getBatchIdFromBatchReport(batchReport: String): String = {

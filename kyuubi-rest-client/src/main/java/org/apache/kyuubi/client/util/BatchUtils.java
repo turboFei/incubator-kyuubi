@@ -17,9 +17,15 @@
 
 package org.apache.kyuubi.client.util;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import org.apache.kyuubi.client.exception.KyuubiRestException;
 
 public final class BatchUtils {
   /** The batch has not been submitted to resource manager yet. */
@@ -54,5 +60,22 @@ public final class BatchUtils {
 
   public static boolean isTerminalState(String state) {
     return state != null && terminalBatchStates.contains(state.toUpperCase(Locale.ROOT));
+  }
+
+  /** ebay batch etl sql */
+  public static String SPARK_BATCH_ETL_SQL_STATEMENTS_KEY = "spark.kyuubi.batch.etl.sql.statements";
+
+  public static String getStatementsFromFiles(List<String> fileNames) {
+    StringBuilder sb = new StringBuilder();
+    for (String fileName : fileNames) {
+      try {
+        Path path = Paths.get(fileName);
+        sb.append(new String(Files.readAllBytes(path), StandardCharsets.UTF_8));
+        sb.append("\n;");
+      } catch (IOException e) {
+        throw new KyuubiRestException("Error reading statements from " + fileName, e);
+      }
+    }
+    return sb.toString();
   }
 }
