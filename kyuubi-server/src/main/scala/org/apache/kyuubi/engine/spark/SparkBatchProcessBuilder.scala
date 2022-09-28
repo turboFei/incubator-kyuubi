@@ -62,6 +62,8 @@ class SparkBatchProcessBuilder(
       Files.write(etlSqlFile.toPath(), etlStatements.getBytes(StandardCharsets.UTF_8))
       batchKyuubiConf.unset(BatchUtils.SPARK_BATCH_ETL_SQL_STATEMENTS_KEY)
       batchKyuubiConf.set("spark.etl.sql.files", etlSqlFile.getAbsolutePath)
+      // TODO: revert it after typo fixed
+      batchKyuubiConf.set("spark.ebay.sql.files", etlSqlFile.getAbsolutePath)
     }
 
     // tag batch application
