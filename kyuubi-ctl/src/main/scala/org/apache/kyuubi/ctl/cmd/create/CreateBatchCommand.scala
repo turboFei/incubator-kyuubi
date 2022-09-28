@@ -16,14 +16,14 @@
  */
 package org.apache.kyuubi.ctl.cmd.create
 
-import java.util.{HashMap => JHashMap, List => JList, Map => JMap}
+import java.util.{Collections, HashMap => JHashMap, List => JList, Map => JMap}
 
 import scala.collection.JavaConverters._
 
 import org.apache.kyuubi.client.BatchRestApi
 import org.apache.kyuubi.client.api.v1.dto.{Batch, BatchRequest}
 import org.apache.kyuubi.client.util.BatchUtils
-import org.apache.kyuubi.ctl.CliConfig
+import org.apache.kyuubi.ctl.{CliConfig, ControlCliException}
 import org.apache.kyuubi.ctl.RestClientFactory.withKyuubiRestClient
 import org.apache.kyuubi.ctl.cmd.Command
 import org.apache.kyuubi.ctl.util.{CtlUtils, Render, Validator}
@@ -41,10 +41,16 @@ class CreateBatchCommand(cliConfig: CliConfig) extends Command[Batch](cliConfig)
       val batchRestApi: BatchRestApi = new BatchRestApi(kyuubiRestClient)
 
       val request = map.get("request").asInstanceOf[JMap[String, Object]]
-      var config = request.get("configs").asInstanceOf[JMap[Object, Object]].asScala
-        .map { case (k, v) => (k.toString, v.toString) }.asJava
-      val args = request.get("args").asInstanceOf[JList[Object]].asScala
-        .map(x => x.toString).asJava
+      if (request == null) {
+        error(s"No batch request field specified in yaml")
+        throw ControlCliException(1)
+      }
+      var config = Option(request.get("configs").asInstanceOf[JMap[Object, Object]].asScala)
+        .map(_.map { case (k, v) => (k.toString, v.toString) }.asJava)
+        .getOrElse(Collections.emptyMap())
+      val args = Option(request.get("args").asInstanceOf[JList[Object]].asScala)
+        .map(_.map(x => x.toString).asJava)
+        .getOrElse(Collections.emptyList())
       if (config.containsKey(CreateBatchCommand.SPARK_BATCH_ETL_SQL_FILES)) {
         val sparkEtlFiles = config.get(CreateBatchCommand.SPARK_BATCH_ETL_SQL_FILES).split(",")
         val sparkEtlStatements = BatchUtils.getStatementsFromFiles(sparkEtlFiles.toSeq.asJava)
