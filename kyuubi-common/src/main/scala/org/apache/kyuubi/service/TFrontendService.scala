@@ -143,11 +143,23 @@ abstract class TFrontendService(name: String)
     if (proxyUser == null && batchAccount == null) {
       realUser
     } else if (proxyUser != null) {
-      KyuubiAuthenticationFactory.verifyProxyAccess(
-        realUser,
-        proxyUser,
-        ipAddress,
-        hadoopConf(sessionConf.asScala.toMap))
+      try {
+        KyuubiAuthenticationFactory.verifyProxyAccess(
+          realUser,
+          proxyUser,
+          ipAddress,
+          hadoopConf(sessionConf.asScala.toMap))
+      } catch {
+        case e: Throwable => // fall back to verify the batch account
+          try {
+            KyuubiAuthenticationFactory.verifyBatchAccountAccess(
+              realUser,
+              proxyUser,
+              conf)
+          } catch {
+            case _: Throwable => throw e
+          }
+      }
       proxyUser
     } else {
       KyuubiAuthenticationFactory.verifyBatchAccountAccess(

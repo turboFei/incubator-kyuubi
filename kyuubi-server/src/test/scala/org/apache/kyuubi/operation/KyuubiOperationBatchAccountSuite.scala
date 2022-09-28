@@ -44,4 +44,17 @@ class KyuubiOperationBatchAccountSuite extends WithKyuubiServer with HiveJDBCTes
       }
     }
   }
+
+  test("fallback to verify batch account if proxy user is specified") {
+    withSessionConf(Map(
+      KyuubiAuthenticationFactory.HS2_PROXY_USER -> "b_stf"))(Map.empty)(Map.empty) {
+      withJdbcStatement() { statement =>
+        val kyuubiStatement = statement.asInstanceOf[KyuubiStatement]
+        val rs = kyuubiStatement.executeScala(
+          "org.apache.hadoop.security.UserGroupInformation.getCurrentUser().getShortUserName()")
+        assert(rs.next())
+        assert(rs.getString(1).contains("b_stf"))
+      }
+    }
+  }
 }

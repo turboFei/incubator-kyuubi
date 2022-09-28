@@ -199,11 +199,23 @@ class KyuubiRestFrontendService(override val serverable: Serverable)
       realUser
     } else {
       sessionConf.get(KyuubiAuthenticationFactory.HS2_PROXY_USER).map { proxyUser =>
-        KyuubiAuthenticationFactory.verifyProxyAccess(
-          realUser,
-          proxyUser,
-          ipAddress,
-          hadoopConf(sessionConf))
+        try {
+          KyuubiAuthenticationFactory.verifyProxyAccess(
+            realUser,
+            proxyUser,
+            ipAddress,
+            hadoopConf(sessionConf))
+        } catch {
+          case e: Throwable =>
+            try {
+              KyuubiAuthenticationFactory.verifyBatchAccountAccess(
+                realUser,
+                proxyUser,
+                conf)
+            } catch {
+              case _: Throwable => throw e
+            }
+        }
         proxyUser
       }.orElse {
         sessionConf.get(KyuubiAuthenticationFactory.KYUUBI_PROXY_BATCH_ACCOUNT).map {
