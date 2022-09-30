@@ -58,7 +58,6 @@ class JdbcSessionImpl(
         TGetInfoValue.stringValue(databaseMetaData.getDatabaseProductName)
       case TGetInfoType.CLI_DBMS_VER =>
         TGetInfoValue.stringValue(databaseMetaData.getDatabaseProductVersion)
-      case TGetInfoType.CLI_ODBC_KEYWORDS => TGetInfoValue.stringValue("Unimplemented")
       case TGetInfoType.CLI_MAX_COLUMN_NAME_LEN =>
         TGetInfoValue.lenValue(databaseMetaData.getMaxColumnNameLength)
       case TGetInfoType.CLI_MAX_SCHEMA_NAME_LEN =>

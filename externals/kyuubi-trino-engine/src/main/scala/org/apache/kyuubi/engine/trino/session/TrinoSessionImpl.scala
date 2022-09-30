@@ -113,7 +113,6 @@ class TrinoSessionImpl(
       case TGetInfoType.CLI_SERVER_NAME | TGetInfoType.CLI_DBMS_NAME =>
         TGetInfoValue.stringValue("Trino")
       case TGetInfoType.CLI_DBMS_VER => TGetInfoValue.stringValue(getTrinoServerVersion)
-      case TGetInfoType.CLI_ODBC_KEYWORDS => TGetInfoValue.stringValue("Unimplemented")
       case TGetInfoType.CLI_MAX_COLUMN_NAME_LEN |
           TGetInfoType.CLI_MAX_SCHEMA_NAME_LEN |
           TGetInfoType.CLI_MAX_TABLE_NAME_LEN => TGetInfoValue.lenValue(0)
