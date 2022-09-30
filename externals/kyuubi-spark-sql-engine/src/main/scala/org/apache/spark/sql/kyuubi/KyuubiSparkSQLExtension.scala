@@ -18,8 +18,8 @@
 package org.apache.spark.sql.kyuubi
 
 import org.apache.spark.sql.SparkSessionExtensions
+import org.apache.spark.sql.catalyst.data.UploadDataResolver
 import org.apache.spark.sql.catalyst.parser.SparkKyuubiSparkSQLParser
-import org.apache.spark.sql.catalyst.upload.UploadDataResolver
 
 class KyuubiSparkSQLExtension extends (SparkSessionExtensions => Unit) {
   override def apply(extensions: SparkSessionExtensions): Unit = {

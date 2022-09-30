@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.spark.sql.catalyst.upload
+package org.apache.spark.sql.catalyst.data
 
 import java.io.FileInputStream
 import java.util.Locale

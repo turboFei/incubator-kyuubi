@@ -358,9 +358,7 @@ class BatchCliSuite extends RestClientTestHelper with TestPrematureExit with Bat
       "true")
     val result = testPrematureExitForControlCli(submitArgs, "")
     assert(result.contains(s"/bin/spark-submit"))
-    assert(!result.contains("ShutdownHookManager: Shutdown hook called"))
-    val numberOfRows = result.split("\n").length
-    assert(numberOfRows <= 100)
+    assert(result.contains("ShutdownHookManager: Shutdown hook called"))
   }
 
   test("test batch yaml without request field") {

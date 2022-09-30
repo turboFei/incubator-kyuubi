@@ -1881,6 +1881,82 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
 
   public final Integer TRANSFROM_DATA_BATCH_BYTE_SIZE = 5 * 1024 * 1024;
 
+  public String uploadFile(String localPath, String remoteDir, Boolean isOverwrite)
+      throws SQLException {
+    return uploadFile(localPath, remoteDir, null, isOverwrite);
+  }
+
+  /**
+   * Update local file to remote with specified dir and filename.
+   *
+   * @param localPath the local file path
+   * @param remoteDir the remote dir
+   * @param remoteFilename the remote file name
+   * @param isOverwrite whether to overwrite the remote file
+   * @return the uploaded remote file path
+   * @throws SQLException
+   */
+  public String uploadFile(
+      String localPath, String remoteDir, String remoteFilename, Boolean isOverwrite)
+      throws SQLException {
+    if (StringUtils.isBlank(localPath) || StringUtils.isBlank(remoteDir)) {
+      throw new SQLException("Empty local file path or remote dir path is not allowed");
+    } else {
+      localPath = localPath.trim();
+      remoteDir = remoteDir.trim();
+    }
+
+    // Transfer data
+    String path = transferData(localPath);
+
+    if (StringUtils.isBlank(remoteFilename)) {
+      remoteFilename = new File(localPath).getName();
+    }
+
+    // Move data
+    LOG.info(
+        String.format(
+            "Start to move data from temporary folder to %s/%s", remoteDir, remoteFilename));
+    String sql =
+        String.format(
+            "MOVE DATA INPATH '%s' %s INTO '%s' '%s'",
+            path,
+            (isOverwrite != null && isOverwrite) ? "OVERWRITE" : "",
+            remoteDir,
+            remoteFilename);
+    PreparedStatement preparedStatement = null;
+    ResultSet resultSet = null;
+    try {
+      preparedStatement = prepareStatement(sql);
+      resultSet = preparedStatement.executeQuery();
+      if (resultSet.next()) {
+        // Remote file path
+        return resultSet.getString(2);
+      } else {
+        throw new SQLException(
+            String.format(
+                "Failed to upload & move %s to %s/%s", localPath, remoteDir, remoteFilename));
+      }
+    } finally {
+      if (resultSet != null) {
+        try {
+          resultSet.close();
+        } catch (Exception e) {
+          LOG.warn("Failed to close ResultSet, details: " + e.getMessage());
+          throw e;
+        }
+      }
+      if (preparedStatement != null) {
+        try {
+          preparedStatement.close();
+        } catch (Exception e) {
+          LOG.warn("Failed to close Statement, details: " + e.getMessage());
+          throw e;
+        }
+      }
+    }
+  }
+
   public String uploadData(
       String localPath, String table, Map<String, String> partitions, Boolean isOverwrite)
       throws SQLException {

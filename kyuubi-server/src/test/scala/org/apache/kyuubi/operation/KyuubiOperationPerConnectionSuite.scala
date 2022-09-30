@@ -19,6 +19,7 @@ package org.apache.kyuubi.operation
 
 import java.io.File
 import java.net.URI
+import java.nio.file.Files
 import java.sql.SQLException
 import java.util
 import java.util.{Collections, Properties}
@@ -27,6 +28,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 
 import org.apache.commons.io.FileUtils
+import org.apache.hadoop.shaded.com.nimbusds.jose.util.StandardCharset
 import org.apache.hive.service.rpc.thrift._
 import org.scalatest.time.SpanSugar.convertIntToGrainOfTime
 
@@ -376,6 +378,60 @@ class KyuubiOperationPerConnectionSuite extends WithKyuubiServer with HiveJDBCTe
       val resultSet = fetchResultResp.getResults.getColumns.asScala
       assert(resultSet.size == 1)
       assert(resultSet.head.getStringVal.getValues.get(0) === "test")
+    }
+  }
+
+  test("move data command") {
+    withSessionHandle { (client, handle) =>
+      val tempDir = Utils.createTempDir()
+
+      val transferDataReq = new TTransferDataReq()
+      transferDataReq.setSessionHandle(handle)
+      transferDataReq.setValues("test".getBytes("UTF-8"))
+      transferDataReq.setPath("test")
+      client.TransferData(transferDataReq)
+
+      val executeStmtReq = new TExecuteStatementReq()
+      executeStmtReq.setSessionHandle(handle)
+      // upload data
+      executeStmtReq.setStatement(
+        s"MOVE DATA INPATH 'test' OVERWRITE INTO '${tempDir.toFile.getAbsolutePath}' 'dest.csv'")
+      client.ExecuteStatement(executeStmtReq)
+
+      val destFile = new File(tempDir.toFile, "dest.csv")
+      assert(destFile.isFile)
+      assert(FileUtils.readFileToString(destFile, "UTF-8") === "test")
+      Utils.deleteDirectoryRecursively(tempDir.toFile)
+    }
+  }
+
+  test("kyuubi connection upload file") {
+    withJdbcStatement() { statement =>
+      val connection = statement.getConnection.asInstanceOf[KyuubiConnection]
+      val tempDir = Utils.createTempDir()
+      val remoteDir = Utils.createTempDir()
+      val localFile = new File(tempDir.toFile, "local.txt")
+      Files.write(localFile.toPath, "test".getBytes(StandardCharset.UTF_8))
+      val remoteFile = new File(remoteDir.toFile, "local.txt")
+      assert(!remoteFile.exists())
+      var result =
+        connection.uploadFile(localFile.getAbsolutePath, remoteDir.toFile.getAbsolutePath, true)
+      assert(remoteFile.isFile)
+      assert(result === remoteFile.getAbsolutePath)
+      connection.uploadFile(localFile.getAbsolutePath, remoteDir.toFile.getAbsolutePath, true)
+      val e = intercept[SQLException] {
+        connection.uploadFile(localFile.getAbsolutePath, remoteDir.toFile.getAbsolutePath, false)
+      }
+      assert(e.getMessage.contains("Dest path already exists"))
+      val remoteFile2 = new File(remoteDir.toFile, "local2.txt")
+      assert(!remoteFile2.exists())
+      result = connection.uploadFile(
+        localFile.getAbsolutePath,
+        remoteDir.toFile.getAbsolutePath,
+        "local2.txt",
+        false)
+      assert(remoteFile2.isFile)
+      assert(result === remoteFile2.getAbsolutePath)
     }
   }
 }

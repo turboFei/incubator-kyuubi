@@ -28,10 +28,10 @@ import org.antlr.v4.runtime.tree.{ParseTree, TerminalNode}
 import org.apache.commons.codec.binary.Hex
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
+import org.apache.spark.sql.catalyst.data.{MoveDataCommand, UploadDataStatement}
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.parser.ParserUtils.{checkDuplicateKeys, string, stringWithoutUnescape, withOrigin}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.apache.spark.sql.catalyst.upload.UploadDataStatement
 import org.apache.spark.sql.catalyst.util.DateTimeUtils.{getZoneId, localDateToDays, stringToTimestamp}
 import org.apache.spark.sql.catalyst.util.IntervalUtils
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits._
@@ -353,6 +353,22 @@ class KyuubiSparkSQLAstBuilder extends KyuubiSparkSQLBaseVisitor[AnyRef] {
       isOverwrite = ctx.OVERWRITE() != null,
       partitionSpec = Option(ctx.partitionSpec()).map(visitNonOptionalPartitionSpec),
       optionSpec = Option(ctx.optionSpec()).map(visitNonOptionalOptionSpec))
+  }
+
+  /**
+   * Create a [[MoveDataCommand]].
+   *
+   * For example:
+   * {{{
+   *   MOVE DATA INPATH 'filepath' [OVERWRITE] INTO 'destDir' ['destFileName']
+   * }}}
+   */
+  override def visitMoveData(ctx: MoveDataContext): LogicalPlan = withOrigin(ctx) {
+    MoveDataCommand(
+      fromPath = string(ctx.path),
+      toDir = string(ctx.destDir),
+      toFileName = Option(ctx.destFileName).map(string),
+      isOverwrite = ctx.OVERWRITE() != null)
   }
 
   /**

@@ -52,6 +52,8 @@ singleStatement
 statement
     : UPLOAD DATA INPATH path=STRING OVERWRITE? INTO TABLE
         multipartIdentifier partitionSpec? optionSpec?              #uploadData
+    | MOVE DATA INPATH path=STRING OVERWRITE? INTO
+        destDir=STRING (destFileName=STRING)?                       #moveData
     | .*?                                                           #passThrough
     ;
 
@@ -126,6 +128,7 @@ nonReserved
     | INPATH
     | INTERVAL
     | INTO
+    | MOVE
     | OPTIMIZE
     | OPTION
     | OR
@@ -143,6 +146,7 @@ FALSE: 'FALSE';
 INPATH: 'INPATH';
 INTERVAL: 'INTERVAL';
 INTO: 'INTO';
+MOVE: 'MOVE';
 NULL: 'NULL';
 OPTIMIZE: 'OPTIMIZE';
 OPTION: 'OPTION';
