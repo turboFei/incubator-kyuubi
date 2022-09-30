@@ -241,6 +241,11 @@ class KyuubiSessionImpl(
       case "SERVER" => super.getInfo(infoType)
       case "ENGINE" => withAcquireRelease() {
           waitForEngineLaunched()
+          sessionManager.credentialsManager.sendCredentialsIfNeeded(
+            handle.identifier.toString,
+            engine.appUser,
+            sessionCluster,
+            client.sendCredentials)
           client.getInfo(infoType).getInfoValue
         }
       case unknown => throw new IllegalArgumentException(s"Unknown server info provider $unknown")
