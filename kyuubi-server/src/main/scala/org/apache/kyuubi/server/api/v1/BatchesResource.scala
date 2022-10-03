@@ -36,6 +36,7 @@ import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiReservedKeys.KYUUBI_CLIENT_IP_KEY
 import org.apache.kyuubi.engine.ApplicationInfo
 import org.apache.kyuubi.operation.{BatchJobSubmission, FetchOrientation, OperationState}
+import org.apache.kyuubi.server.LogAggManager
 import org.apache.kyuubi.server.api.ApiRequestContext
 import org.apache.kyuubi.server.api.v1.BatchesResource._
 import org.apache.kyuubi.server.metadata.MetadataManager
@@ -271,6 +272,11 @@ private[v1] class BatchesResource extends ApiRequestContext with Logging {
       @PathParam("batchId") batchId: String,
       @QueryParam("from") @DefaultValue("-1") from: Int,
       @QueryParam("size") size: Int): OperationLog = {
+    def getAggOperationLog(batchId: String): Option[OperationLog] = {
+      LogAggManager.get.map(_.getAggregatedLog(batchId)).getOrElse(None).map { aggLog =>
+        new OperationLog(Seq(aggLog).asJava, 1)
+      }
+    }
     val userName = fe.getUserName(Map.empty)
     val sessionHandle = formatSessionHandle(batchId)
     Option(sessionManager.getBatchSessionImpl(sessionHandle)).map { batchSession =>
@@ -284,9 +290,11 @@ private[v1] class BatchesResource extends ApiRequestContext with Logging {
         new OperationLog(logRowSet.asJava, logRowSet.size)
       } catch {
         case NonFatal(e) =>
-          val errorMsg = s"Error getting operation log for batchId: $batchId"
-          error(errorMsg, e)
-          throw new NotFoundException(errorMsg)
+          getAggOperationLog(batchId).getOrElse {
+            val errorMsg = s"Error getting operation log for batchId: $batchId"
+            error(errorMsg, e)
+            throw new NotFoundException(errorMsg)
+          }
       }
     }.getOrElse {
       Option(sessionManager.getBatchMetadata(batchId)).map { metadata =>
@@ -294,7 +302,8 @@ private[v1] class BatchesResource extends ApiRequestContext with Logging {
           val internalRestClient = getInternalRestClient(metadata.kyuubiInstance)
           internalRestClient.getBatchLocalLog(userName, batchId, from, size)
         } else {
-          throw new NotFoundException(s"No local log found for batch: $batchId")
+          getAggOperationLog(batchId).getOrElse(
+            throw new NotFoundException(s"No local log found for batch: $batchId"))
         }
       }.getOrElse {
         error(s"Invalid batchId: $batchId")

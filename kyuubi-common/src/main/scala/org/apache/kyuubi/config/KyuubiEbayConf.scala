@@ -193,4 +193,34 @@ object KyuubiEbayConf {
       .internal
       .longConf
       .createWithDefault(100L * 1024 * 1024 * 1024) // 100G
+
+  val LOG_AGG_ENABLED: ConfigEntry[Boolean] =
+    buildConf("kyuubi.log.agg.enabled")
+      .internal
+      .booleanConf
+      .createWithDefault(false)
+
+  val LOG_AGG_THREADS_NUM: ConfigEntry[Int] =
+    buildConf("kyuubi.log.agg.threads.num")
+      .internal
+      .intConf
+      .createWithDefault(10)
+
+  val LOG_AGG_CLUSTER_DIR: ConfigEntry[String] =
+    buildConf("kyuubi.log.agg.cluster.dir")
+      .internal
+      .stringConf
+      .createWithDefault("/kyuubi-logs")
+
+  val LOG_AGG_FETCH_SIZE_LIMIT: ConfigEntry[Int] =
+    buildConf("kyuubi.log.agg.fetch.size.limit")
+      .internal
+      .intConf
+      .createWithDefault(10 * 1024 * 1024) // 10M
+
+  val LOG_AGG_FETCH_TIMEOUT: ConfigEntry[Long] =
+    buildConf("kyuubi.log.agg.fetch.timeout")
+      .internal
+      .longConf
+      .createWithDefault(60000)
 }
