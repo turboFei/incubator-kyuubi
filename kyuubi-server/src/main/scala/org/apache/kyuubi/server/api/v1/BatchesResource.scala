@@ -273,9 +273,7 @@ private[v1] class BatchesResource extends ApiRequestContext with Logging {
       @QueryParam("from") @DefaultValue("-1") from: Int,
       @QueryParam("size") size: Int): OperationLog = {
     def getAggOperationLog(batchId: String): Option[OperationLog] = {
-      LogAggManager.get.map(_.getAggregatedLog(batchId)).getOrElse(None).map { aggLog =>
-        new OperationLog(Seq(aggLog).asJava, 1)
-      }
+      LogAggManager.get.map(_.getAggregatedLog(batchId, from, size)).getOrElse(None)
     }
     val userName = fe.getUserName(Map.empty)
     val sessionHandle = formatSessionHandle(batchId)

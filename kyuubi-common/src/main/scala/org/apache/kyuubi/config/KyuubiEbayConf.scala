@@ -212,15 +212,9 @@ object KyuubiEbayConf {
       .stringConf
       .createWithDefault("/kyuubi-logs")
 
-  val LOG_AGG_FETCH_SIZE_LIMIT: ConfigEntry[Int] =
-    buildConf("kyuubi.log.agg.fetch.size.limit")
-      .internal
-      .intConf
-      .createWithDefault(10 * 1024 * 1024) // 10M
-
   val LOG_AGG_FETCH_TIMEOUT: ConfigEntry[Long] =
     buildConf("kyuubi.log.agg.fetch.timeout")
       .internal
       .longConf
-      .createWithDefault(60000)
+      .createWithDefault(120000)
 }

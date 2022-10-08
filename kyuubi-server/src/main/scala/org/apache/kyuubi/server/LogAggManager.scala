@@ -17,11 +17,12 @@
 
 package org.apache.kyuubi.server
 
-import java.io.File
-import java.nio.charset.StandardCharsets
+import java.io.{BufferedReader, File, InputStreamReader}
 import java.nio.file.Files
 import java.util.concurrent.{ThreadPoolExecutor, TimeUnit}
 
+import scala.collection.JavaConverters._
+import scala.collection.mutable.ListBuffer
 import scala.concurrent.Promise
 import scala.concurrent.duration.Duration
 
@@ -29,6 +30,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, FileUtil, Path}
 
 import org.apache.kyuubi.KyuubiException
+import org.apache.kyuubi.client.api.v1.dto.OperationLog
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.service.AbstractService
 import org.apache.kyuubi.util.{KyuubiHadoopUtils, ThreadUtils}
@@ -39,7 +41,6 @@ class LogAggManager() extends AbstractService("LogAggManager") {
   private var remoteFs: FileSystem = _
   private var remoteLogDir: Path = _
   private var hadoopConf: Configuration = _
-  private var logFetchSizeLimit: Int = _
   private var logFetchTimeout: Long = _
 
   override def initialize(conf: KyuubiConf): Unit = {
@@ -57,7 +58,6 @@ class LogAggManager() extends AbstractService("LogAggManager") {
       localFs = FileSystem.getLocal(hadoopConf)
       remoteFs = FileSystem.get(hadoopConf)
       remoteLogDir = remoteFs.makeQualified(new Path(logAggDir))
-      logFetchSizeLimit = conf.get(KyuubiEbayConf.LOG_AGG_FETCH_SIZE_LIMIT)
       logFetchTimeout = conf.get(KyuubiEbayConf.LOG_AGG_FETCH_TIMEOUT)
     }
   }
@@ -97,28 +97,33 @@ class LogAggManager() extends AbstractService("LogAggManager") {
     }
   }
 
-  def getAggregatedLog(identifier: String): Option[String] = {
+  def getAggregatedLog(identifier: String, from: Int, size: Int): Option[OperationLog] = {
     Option(executor).map { _ =>
-      val promise = Promise[String]()
+      val promise = Promise[OperationLog]()
       val task = new Runnable {
         override def run(): Unit = {
+          val logRows = ListBuffer[String]()
           try {
             val remoteLogFile = new Path(remoteLogDir, identifier)
             if (!remoteFs.exists(remoteLogFile)) {
-              throw new KyuubiException(s"Log file $remoteLogFile does not exist")
+              throw new KyuubiException(s"Aggregated log file $remoteLogFile does not exist")
             }
-            val dStream = remoteFs.open(remoteLogFile)
+            val br = new BufferedReader(new InputStreamReader(remoteFs.open(remoteLogFile)))
             try {
-              val logLength = remoteFs.getFileStatus(remoteLogFile).getLen
-              val buffer = new Array[Byte](Math.min(logFetchSizeLimit, logLength).toInt)
-              dStream.readFully(buffer)
-              var log = new String(buffer, StandardCharsets.UTF_8)
-              if (logLength > logFetchSizeLimit) {
-                log += s"\nThe log length exceeds the limit, see all the log in $remoteLogFile"
+              var line: String = br.readLine()
+              var lineOffset = 0
+              var logCount = 0
+              while (line != null && logCount < size) {
+                if (lineOffset >= from) {
+                  logRows += line
+                  logCount += 1
+                }
+                lineOffset += 1
+                line = br.readLine()
               }
-              promise.trySuccess(log)
+              promise.trySuccess(new OperationLog(logRows.asJava, logCount))
             } finally {
-              dStream.close()
+              br.close()
             }
           } catch {
             case e: Throwable => promise.tryFailure(e)
