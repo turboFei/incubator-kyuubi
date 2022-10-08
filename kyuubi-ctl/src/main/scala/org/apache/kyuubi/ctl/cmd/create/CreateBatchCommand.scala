@@ -56,7 +56,6 @@ class CreateBatchCommand(cliConfig: CliConfig) extends Command[Batch](cliConfig)
         val sparkEtlStatements = BatchUtils.getStatementsFromFiles(sparkEtlFiles.toSeq.asJava)
         val newConfig = new JHashMap[String, String]()
         newConfig.putAll(config)
-        newConfig.remove(CreateBatchCommand.SPARK_BATCH_ETL_SQL_FILES)
         newConfig.put(BatchUtils.SPARK_BATCH_ETL_SQL_STATEMENTS_KEY, sparkEtlStatements)
         config = newConfig
       }
