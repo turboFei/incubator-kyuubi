@@ -272,7 +272,7 @@ private[v1] class BatchesResource extends ApiRequestContext with Logging {
       @PathParam("batchId") batchId: String,
       @QueryParam("from") @DefaultValue("-1") from: Int,
       @QueryParam("size") size: Int): OperationLog = {
-    def getAggOperationLog(batchId: String): Option[OperationLog] = {
+    def getAggOperationLog: Option[OperationLog] = {
       LogAggManager.get.map(_.getAggregatedLog(batchId, from, size)).getOrElse(None)
     }
     val userName = fe.getUserName(Map.empty)
@@ -288,7 +288,7 @@ private[v1] class BatchesResource extends ApiRequestContext with Logging {
         new OperationLog(logRowSet.asJava, logRowSet.size)
       } catch {
         case NonFatal(e) =>
-          getAggOperationLog(batchId).getOrElse {
+          getAggOperationLog.getOrElse {
             val errorMsg = s"Error getting operation log for batchId: $batchId"
             error(errorMsg, e)
             throw new NotFoundException(errorMsg)
@@ -297,10 +297,19 @@ private[v1] class BatchesResource extends ApiRequestContext with Logging {
     }.getOrElse {
       Option(sessionManager.getBatchMetadata(batchId)).map { metadata =>
         if (fe.connectionUrl != metadata.kyuubiInstance) {
-          val internalRestClient = getInternalRestClient(metadata.kyuubiInstance)
-          internalRestClient.getBatchLocalLog(userName, batchId, from, size)
+          try {
+            val internalRestClient = getInternalRestClient(metadata.kyuubiInstance)
+            internalRestClient.getBatchLocalLog(userName, batchId, from, size)
+          } catch {
+            case NonFatal(e) =>
+              getAggOperationLog.getOrElse {
+                val errorMsg = s"Error getting operation log for batchId: $batchId"
+                error(errorMsg, e)
+                throw e
+              }
+          }
         } else {
-          getAggOperationLog(batchId).getOrElse(
+          getAggOperationLog.getOrElse(
             throw new NotFoundException(s"No local log found for batch: $batchId"))
         }
       }.getOrElse {
