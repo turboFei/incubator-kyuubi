@@ -44,6 +44,7 @@ class SparkBatchProcessBuilder(
   import SparkProcessBuilder._
 
   private var batchSqlFileDir: File = _
+  private var logAggregated: Boolean = false
 
   override protected val commands: Array[String] = {
     val buffer = new ArrayBuffer[String]()
@@ -104,6 +105,9 @@ class SparkBatchProcessBuilder(
     Option(batchSqlFileDir).foreach { dir =>
       Utils.tryLogNonFatalError(Utils.deleteDirectoryRecursively(dir))
     }
-    LogAggManager.get.foreach(_.aggLog(engineLog, batchId))
+    if (!logAggregated) {
+      LogAggManager.get.foreach(_.aggLog(engineLog, batchId))
+      logAggregated = true
+    }
   }
 }
