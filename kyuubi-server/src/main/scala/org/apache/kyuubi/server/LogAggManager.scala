@@ -29,7 +29,6 @@ import scala.concurrent.duration.Duration
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, FileUtil, Path}
 
-import org.apache.kyuubi.KyuubiException
 import org.apache.kyuubi.client.api.v1.dto.OperationLog
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.service.AbstractService
@@ -98,40 +97,45 @@ class LogAggManager() extends AbstractService("LogAggManager") {
   }
 
   def getAggregatedLog(identifier: String, from: Int, size: Int): Option[OperationLog] = {
-    Option(executor).map { _ =>
-      val promise = Promise[OperationLog]()
-      val task = new Runnable {
-        override def run(): Unit = {
-          val logRows = ListBuffer[String]()
-          try {
-            val remoteLogFile = new Path(remoteLogDir, identifier)
-            if (!remoteFs.exists(remoteLogFile)) {
-              throw new KyuubiException(s"Aggregated log file $remoteLogFile does not exist")
-            }
-            val br = new BufferedReader(new InputStreamReader(remoteFs.open(remoteLogFile)))
+    Option(executor) match {
+      case Some(_) =>
+        val promise = Promise[OperationLog]()
+        val task = new Runnable {
+          override def run(): Unit = {
+            val logRows = ListBuffer[String]()
             try {
-              var line: String = br.readLine()
-              var lineOffset = 0
-              var logCount = 0
-              while (line != null && logCount < size) {
-                if (lineOffset >= from) {
-                  logRows += line
-                  logCount += 1
+              val remoteLogFile = new Path(remoteLogDir, identifier)
+              if (!remoteFs.exists(remoteLogFile)) {
+                promise.trySuccess(null)
+              } else {
+                val br = new BufferedReader(new InputStreamReader(remoteFs.open(remoteLogFile)))
+                try {
+                  var line: String = br.readLine()
+                  var lineOffset = 0
+                  var logCount = 0
+                  while (line != null && logCount < size) {
+                    if (lineOffset >= from) {
+                      logRows += line
+                      logCount += 1
+                    }
+                    lineOffset += 1
+                    line = br.readLine()
+                  }
+                  promise.trySuccess(new OperationLog(logRows.asJava, logCount))
+                } finally {
+                  br.close()
                 }
-                lineOffset += 1
-                line = br.readLine()
               }
-              promise.trySuccess(new OperationLog(logRows.asJava, logCount))
-            } finally {
-              br.close()
+            } catch {
+              case e: Throwable => promise.tryFailure(e)
             }
-          } catch {
-            case e: Throwable => promise.tryFailure(e)
           }
         }
-      }
-      executor.submit(task)
-      ThreadUtils.awaitResult(promise.future, Duration(logFetchTimeout, TimeUnit.MILLISECONDS))
+        executor.submit(task)
+        Option(ThreadUtils.awaitResult(
+          promise.future,
+          Duration(logFetchTimeout, TimeUnit.MILLISECONDS)))
+      case None => None
     }
   }
 
