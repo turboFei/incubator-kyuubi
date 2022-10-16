@@ -49,7 +49,7 @@ case class KyuubiSessionEvent(
     serverIP: String,
     conf: Map[String, String],
     startTime: Long,
-    var sessionCluster: String = "",
+    sessionCluster: String,
     var remoteSessionId: String = "",
     var engineId: String = "",
     var openedTime: Long = -1L,
@@ -74,6 +74,7 @@ object KyuubiSessionEvent {
       session.ipAddress,
       serverIP,
       session.conf,
-      session.createTime)
+      session.createTime,
+      session.sessionCluster.getOrElse(""))
   }
 }

@@ -29,7 +29,6 @@ import org.apache.kyuubi._
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiConf.{FRONTEND_PROTOCOLS, FrontendProtocols}
 import org.apache.kyuubi.config.KyuubiConf.FrontendProtocols._
-import org.apache.kyuubi.config.KyuubiEbayConf.SESSION_CLUSTER
 import org.apache.kyuubi.events.{EventBus, KyuubiServerInfoEvent, ServerEventHandlerRegister}
 import org.apache.kyuubi.ha.HighAvailabilityConf._
 import org.apache.kyuubi.ha.client.{AuthTypes, KyuubiServiceDiscovery}
@@ -43,7 +42,6 @@ object KyuubiServer extends Logging {
   private[kyuubi] var kyuubiServer: KyuubiServer = _
 
   private var clusterModeEnabled: Boolean = _
-  private var clusterList: Seq[String] = Seq.empty
   private val clusterHadoopConf = new ConcurrentHashMap[Option[String], Configuration]().asScala
 
   def startServer(conf: KyuubiConf): KyuubiServer = {
@@ -107,14 +105,8 @@ object KyuubiServer extends Logging {
   def loadHadoopConf(conf: Option[KyuubiConf] = None): Unit = synchronized {
     val kyuubiConf = conf.getOrElse(new KyuubiConf().loadFileDefaults())
     if (clusterModeEnabled) {
-      clusterList = Utils.getDefinedPropertiesClusterList()
-      clusterList.foreach { cluster =>
-        val clusterKyuubiConf = kyuubiConf.clone
-        Utils.getDefaultPropertiesFileForCluster(Option(cluster)).foreach { clusterPropertiesFile =>
-          Utils.getPropertiesFromFile(Option(clusterPropertiesFile)).foreach {
-            case (key, value) => clusterKyuubiConf.set(key, value)
-          }
-        }
+      KyuubiEbayConf.getClusterList(kyuubiConf).foreach { cluster =>
+        val clusterKyuubiConf = KyuubiEbayConf.loadClusterConf(kyuubiConf, Option(cluster))
         clusterHadoopConf.put(
           Option(cluster),
           KyuubiHadoopUtils.newHadoopConf(
@@ -127,16 +119,7 @@ object KyuubiServer extends Logging {
   }
 
   def getHadoopConf(clusterOpt: Option[String]): Configuration = {
-    if (clusterModeEnabled) {
-      clusterHadoopConf.get(clusterOpt).getOrElse {
-        throw KyuubiSQLException(
-          s"Please specify the cluster to access with session conf[${SESSION_CLUSTER.key}]," +
-            s" which should be one of ${clusterList.mkString("[", ",", "]")}," +
-            s" current value is $clusterOpt")
-      }
-    } else {
-      clusterHadoopConf.get(None).get
-    }
+    clusterHadoopConf.get(clusterOpt).get
   }
 }
 

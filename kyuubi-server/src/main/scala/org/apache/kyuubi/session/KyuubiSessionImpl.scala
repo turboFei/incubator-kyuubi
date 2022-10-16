@@ -22,11 +22,10 @@ import scala.collection.JavaConverters._
 import com.codahale.metrics.MetricRegistry
 import org.apache.hive.service.rpc.thrift._
 
-import org.apache.kyuubi.{KyuubiSQLException, Utils}
+import org.apache.kyuubi.KyuubiSQLException
 import org.apache.kyuubi.client.KyuubiSyncThriftClient
-import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiConf._
-import org.apache.kyuubi.config.KyuubiEbayConf._
 import org.apache.kyuubi.config.KyuubiReservedKeys.KYUUBI_ENGINE_CREDENTIALS_KEY
 import org.apache.kyuubi.engine.{EngineRef, KyuubiApplicationManager}
 import org.apache.kyuubi.events.{EventBus, KyuubiSessionEvent}
@@ -50,35 +49,7 @@ class KyuubiSessionImpl(
 
   override val sessionType: SessionType = SessionType.SQL
 
-  val sessionCluster =
-    if (sessionManager.sessionClusterModeEnabled) {
-      normalizedConf.get(SESSION_CLUSTER.key).orElse(sessionConf.get(SESSION_CLUSTER))
-    } else {
-      None
-    }
-
-  if (sessionManager.sessionClusterModeEnabled) {
-    var gotClusterPropertiesFile = false
-
-    val sessionClusterConf = KyuubiConf(false)
-    Utils.getDefaultPropertiesFileForCluster(sessionCluster).foreach { clusterPropertiesFile =>
-      gotClusterPropertiesFile = true
-      Utils.getPropertiesFromFile(Option(clusterPropertiesFile)).foreach {
-        case (key, value) => sessionClusterConf.set(key, value)
-      }
-    }
-
-    if (!gotClusterPropertiesFile) {
-      val clusterList = Utils.getDefinedPropertiesClusterList()
-      throw KyuubiSQLException(
-        s"Please specify the cluster to access with session conf[${SESSION_CLUSTER.key}]," +
-          s" which should be one of ${clusterList.mkString("[", ",", "]")}")
-    }
-
-    sessionClusterConf.getUserDefaults(user).getAll.foreach { case (key, value) =>
-      sessionConf.set(key, value)
-    }
-  }
+  val sessionCluster = KyuubiEbayConf.getSessionCluster(sessionConf, normalizedConf)
 
   private[kyuubi] val optimizedConf: Map[String, String] = {
     val confOverlay = sessionManager.sessionConfAdvisor.getConfOverlay(
@@ -96,7 +67,6 @@ class KyuubiSessionImpl(
   optimizedConf.foreach {
     case ("use:database", _) =>
     case ("kyuubi.engine.pool.size.threshold", _) =>
-    case (key, _) if !sessionManager.sessionClusterModeEnabled && key.equals(SESSION_CLUSTER.key) =>
     case (key, value) => sessionConf.set(key, value)
   }
 
@@ -175,7 +145,6 @@ class KyuubiSessionImpl(
         s" with ${_engineSessionHandle}]")
       sessionEvent.openedTime = System.currentTimeMillis()
       sessionEvent.remoteSessionId = _engineSessionHandle.identifier.toString
-      sessionCluster.foreach(sessionEvent.sessionCluster = _)
       _client.engineId.foreach(e => sessionEvent.engineId = e)
       EventBus.post(sessionEvent)
     }

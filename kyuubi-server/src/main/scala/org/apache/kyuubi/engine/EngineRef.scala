@@ -28,7 +28,6 @@ import org.apache.hadoop.security.UserGroupInformation
 import org.apache.kyuubi.{KYUUBI_VERSION, KyuubiSQLException, Logging, Utils}
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf._
-import org.apache.kyuubi.config.KyuubiEbayConf.SESSION_CLUSTER
 import org.apache.kyuubi.config.KyuubiReservedKeys.KYUUBI_ENGINE_SUBMIT_TIME_KEY
 import org.apache.kyuubi.engine.EngineType.{EngineType, FLINK_SQL, HIVE_SQL, JDBC, SPARK_SQL, TRINO}
 import org.apache.kyuubi.engine.ShareLevel.{CONNECTION, GROUP, SERVER, ShareLevel}
@@ -55,7 +54,7 @@ private[kyuubi] class EngineRef(
     user: String,
     engineRefId: String,
     engineManager: KyuubiApplicationManager,
-    cluster: Option[String] = None)
+    clusterOpt: Option[String] = None)
   extends Logging {
   // The corresponding ServerSpace where the engine belongs to
   private val serverSpace: String = conf.get(HA_NAMESPACE)
@@ -116,7 +115,7 @@ private[kyuubi] class EngineRef(
    */
   @VisibleForTesting
   private[kyuubi] val defaultEngineName: String = {
-    val clusterPlaceHolder = conf.get(SESSION_CLUSTER).map(_ + "_").getOrElse("")
+    val clusterPlaceHolder = clusterOpt.map(_ + "_").getOrElse("")
     val commonNamePrefix = s"kyuubi_${clusterPlaceHolder}${shareLevel}_${engineType}_${appUser}"
     shareLevel match {
       case CONNECTION => s"${commonNamePrefix}_$engineRefId"
@@ -213,7 +212,10 @@ private[kyuubi] class EngineRef(
         // check the engine application state from engine manager and fast fail on engine terminate
         if (exitValue == Some(0)) {
           Option(engineManager).foreach { engineMgr =>
-            engineMgr.getApplicationInfo(builder.clusterManager(), engineRefId, cluster).foreach {
+            engineMgr.getApplicationInfo(
+              builder.clusterManager(),
+              engineRefId,
+              clusterOpt).foreach {
               appInfo =>
                 if (ApplicationState.isTerminated(appInfo.state)) {
                   MetricsSystem.tracing { ms =>
@@ -235,7 +237,7 @@ private[kyuubi] class EngineRef(
           val killMessage = engineManager.killApplication(
             builder.clusterManager(),
             engineRefId,
-            conf.get(SESSION_CLUSTER))
+            clusterOpt)
           process.destroyForcibly()
           MetricsSystem.tracing(_.incCount(MetricRegistry.name(ENGINE_TIMEOUT, appUser)))
           throw KyuubiSQLException(
@@ -273,7 +275,7 @@ private[kyuubi] class EngineRef(
       try {
         val clusterManager = builder.clusterManager()
         builder.close(true)
-        engineManager.killApplication(clusterManager, engineRefId, conf.get(SESSION_CLUSTER))
+        engineManager.killApplication(clusterManager, engineRefId, clusterOpt)
       } catch {
         case e: Exception =>
           warn(s"Error closing engine builder, engineRefId: $engineRefId", e)

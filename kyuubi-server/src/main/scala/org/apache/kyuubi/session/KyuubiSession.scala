@@ -32,6 +32,8 @@ abstract class KyuubiSession(
 
   val sessionType: SessionType
 
+  val sessionCluster: Option[String]
+
   def getSessionEvent: Option[KyuubiSessionEvent]
 
   def checkSessionAccessPathURIs(): Unit

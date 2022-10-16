@@ -26,8 +26,7 @@ import org.apache.thrift.server.ServerContext
 
 import org.apache.kyuubi.KyuubiSQLException
 import org.apache.kyuubi.cli.Handle
-import org.apache.kyuubi.config.KyuubiConf
-import org.apache.kyuubi.config.KyuubiEbayConf.SESSION_CLUSTER
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiReservedKeys._
 import org.apache.kyuubi.ha.client.KyuubiServiceDiscovery
 import org.apache.kyuubi.metrics.MetricsConstants._
@@ -50,8 +49,7 @@ final class KyuubiTBinaryFrontendService(
 
   override protected def hadoopConf(sessionConf: Map[String, String]): Configuration = {
     if (KyuubiServer.isClusterModeEnabled) {
-      val normalizedConf = be.sessionManager.validateAndNormalizeConf(sessionConf)
-      val clusterOpt = normalizedConf.get(SESSION_CLUSTER.key).orElse(conf.get(SESSION_CLUSTER))
+      val clusterOpt = KyuubiEbayConf.getSessionCluster(be.sessionManager, sessionConf)
       KyuubiServer.getHadoopConf(clusterOpt)
     } else {
       KyuubiServer.getHadoopConf(None)

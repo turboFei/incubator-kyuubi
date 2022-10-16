@@ -48,8 +48,7 @@ class KyuubiOperationWithClusterModeSuite extends WithKyuubiServer with HiveJDBC
         withJdbcStatement() { _ =>
         }
       }
-      assert(sqlException.getMessage.contains(
-        "Failed to get properties file for cluster [invalid-cluster]"))
+      assert(sqlException.getMessage.contains("Please specify the cluster to access"))
       assert(sqlException.getMessage.contains("should be one of [test,yarn]"))
     }
   }

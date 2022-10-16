@@ -17,9 +17,16 @@
 
 package org.apache.kyuubi.config
 
+import java.io.File
 import java.time.Duration
 
-object KyuubiEbayConf {
+import scala.collection.JavaConverters._
+
+import org.apache.kyuubi.{KyuubiException, KyuubiSQLException, Logging, Utils}
+import org.apache.kyuubi.config.KyuubiConf.{KYUUBI_CONF_DIR, KYUUBI_CONF_FILE_NAME, KYUUBI_HOME, OPERATION_INCREMENTAL_COLLECT}
+import org.apache.kyuubi.session.SessionManager
+
+object KyuubiEbayConf extends Logging {
   private def buildConf(key: String): ConfigBuilder = KyuubiConf.buildConf(key)
 
   val SESSION_CLUSTER_MODE_ENABLED: ConfigEntry[Boolean] =
@@ -29,6 +36,21 @@ object KyuubiEbayConf {
       .version("1.4.0")
       .booleanConf
       .createWithDefault(false)
+
+  val SESSION_CLUSTER_CONF_REFRESH_INTERVAL: ConfigEntry[Long] =
+    buildConf("kyuubi.session.cluster.conf.refresh.interval")
+      .doc("The session cluster conf refresh interval.")
+      .internal
+      .timeConf
+      .createWithDefaultString("PT10M")
+
+  val SESSION_CLUSTER_LIST: OptionalConfigEntry[Seq[String]] =
+    buildConf("kyuubi.session.cluster.list")
+      .doc("The session cluster list.")
+      .internal
+      .stringConf
+      .toSequence()
+      .createOptional
 
   val SESSION_CLUSTER: OptionalConfigEntry[String] =
     buildConf("kyuubi.session.cluster")
@@ -217,4 +239,142 @@ object KyuubiEbayConf {
       .internal
       .longConf
       .createWithDefault(120000)
+
+  val OPERATION_TEMP_TABLE_DATABASE: ConfigEntry[String] =
+    buildConf("kyuubi.operation.temp.table.database")
+      .internal
+      .doc("The database used for the temp tables.")
+      .version("1.7.0")
+      .stringConf
+      .createWithDefault("default")
+
+  val OPERATION_TEMP_TABLE_COLLECT: ConfigEntry[Boolean] =
+    buildConf("kyuubi.operation.temp.table.collect")
+      .internal
+      .doc(s"When true and ${OPERATION_INCREMENTAL_COLLECT.key} is true," +
+        s" engine will try to save the result into a temp table first.")
+      .version("1.7.0")
+      .booleanConf
+      .createWithDefault(false)
+
+  val SESSION_PROGRESS_PLAN_ENABLE: ConfigEntry[Boolean] =
+    buildConf("kyuubi.operation.progress.plan.enabled")
+      .doc("Whether to enable the operation progress plan. When true," +
+        " the operation progress plan will be returned in `GetOperationStatus`.")
+      .internal
+      .version("1.7.0")
+      .booleanConf
+      .createWithDefault(false)
+
+  KyuubiConf.serverOnlyConfEntries ++= Set(
+    SESSION_CLUSTER_MODE_ENABLED,
+    SESSION_CLUSTER_CONF_REFRESH_INTERVAL,
+    SESSION_CLUSTER_LIST,
+    AUTHENTICATION_BATCH_ACCOUNT_CLASS,
+    AUTHENTICATION_BATCH_ACCOUNT_ENDPOINT,
+    AUTHENTICATION_BATCH_ACCOUNT_LOAD_ALL_ENABLED,
+    AUTHENTICATION_BATCH_ACCOUNT_LOAD_ALL_ENDPOINT,
+    AUTHENTICATION_BATCH_ACCOUNT_LOAD_ALL_INTERVAL,
+    AUTHENTICATION_KEYSTONE_ENDPOINT,
+    METADATA_STORE_JDBC_TABLE,
+    BATCH_SPARK_HBASE_CONFIG_TAG,
+    LOG_AGG_ENABLED,
+    LOG_AGG_THREADS_NUM,
+    LOG_AGG_CLUSTER_DIR,
+    LOG_AGG_FETCH_TIMEOUT)
+
+  def getDefaultPropertiesFileForCluster(
+      clusterOpt: Option[String],
+      conf: KyuubiConf = KyuubiConf().loadFileDefaults(),
+      env: Map[String, String] = sys.env): Option[File] = {
+    clusterOpt.map { cluster =>
+      val clusterPropertiesFileName = KYUUBI_CLUSTER_CONF_FILE_NAME_PREFIX + cluster
+      env.get(KYUUBI_CONF_DIR)
+        .orElse(env.get(KYUUBI_HOME).map(_ + File.separator + "conf"))
+        .map(d => new File(d + File.separator + clusterPropertiesFileName))
+        .filter(_.exists())
+        .orElse {
+          Option(getClass.getClassLoader.getResource(clusterPropertiesFileName)).map { url =>
+            new File(url.getFile)
+          }.filter(_.exists())
+        }.orElse(throw KyuubiSQLException(
+          s"""
+             |Failed to get properties file for cluster [$cluster].
+             |It should be one of ${KyuubiEbayConf.getClusterList(conf).mkString("[", ",", "]")}.
+        """.stripMargin))
+    }.getOrElse(None)
+  }
+
+  def loadClusterConf(conf: KyuubiConf, clusterOpt: Option[String]): KyuubiConf = {
+    val clusterConf = conf.clone
+    getDefaultPropertiesFileForCluster(clusterOpt, conf).foreach { clusterPropertiesFile =>
+      Utils.getPropertiesFromFile(Option(clusterPropertiesFile)).foreach {
+        case (key, value) => clusterConf.set(key, value)
+      }
+    }
+    clusterConf
+  }
+
+  /** the cluster default file name prefix */
+  final val KYUUBI_CLUSTER_CONF_FILE_NAME_PREFIX = KYUUBI_CONF_FILE_NAME + "."
+
+  private def getDefaultPropertiesClusterList(confDir: File): Seq[String] = {
+    confDir.listFiles().map(_.getName).filter(_.startsWith(KYUUBI_CLUSTER_CONF_FILE_NAME_PREFIX))
+      .map(_.stripPrefix(KYUUBI_CLUSTER_CONF_FILE_NAME_PREFIX))
+  }
+
+  private def getDefinedPropertiesClusterList(env: Map[String, String] = sys.env): Seq[String] = {
+    env.get(KYUUBI_CONF_DIR)
+      .orElse(env.get(KYUUBI_HOME).map(_ + File.separator + "conf"))
+      .map(d => new File(d))
+      .filter(_.isDirectory())
+      .map(getDefaultPropertiesClusterList)
+      .getOrElse {
+        var clusterList: Seq[String] = Seq.empty[String]
+        val classPathUrls = getClass.getClassLoader.getResources(".").asScala
+        for (classPathUrl <- classPathUrls if clusterList.isEmpty) {
+          val classPathDir = new File(classPathUrl.getFile)
+          if (classPathDir.isDirectory) {
+            clusterList = getDefaultPropertiesClusterList(classPathDir)
+          }
+        }
+        clusterList
+      }
+  }
+
+  def getClusterList(conf: KyuubiConf = KyuubiConf().loadFileDefaults()): Seq[String] = {
+    conf.get(SESSION_CLUSTER_LIST).getOrElse(getDefinedPropertiesClusterList())
+  }
+
+  private def checkClusterOpt(conf: KyuubiConf, clusterOpt: Option[String]): Unit = {
+    if (conf.get(SESSION_CLUSTER_MODE_ENABLED)) {
+      if (clusterOpt.isEmpty || !getClusterList(conf).contains(clusterOpt.get)) {
+        throw new KyuubiException(
+          s"Please specify the cluster to access with session conf[${SESSION_CLUSTER.key}]," +
+            s" which should be one of ${getClusterList(conf).mkString("[", ",", "]")}," +
+            s" current value is $clusterOpt")
+      }
+    }
+  }
+
+  def getSessionCluster(sessionMgr: SessionManager, conf: Map[String, String]): Option[String] = {
+    if (sessionMgr.getConf.get(SESSION_CLUSTER_MODE_ENABLED)) {
+      val clusterOpt = sessionMgr.validateAndNormalizeConf(conf).get(SESSION_CLUSTER.key).orElse(
+        sessionMgr.getConf.get(SESSION_CLUSTER))
+      checkClusterOpt(sessionMgr.getConf, clusterOpt)
+      clusterOpt
+    } else {
+      None
+    }
+  }
+
+  def getSessionCluster(sessionConf: KyuubiConf, conf: Map[String, String]): Option[String] = {
+    if (sessionConf.get(SESSION_CLUSTER_MODE_ENABLED)) {
+      val clusterOpt = conf.get(SESSION_CLUSTER.key).orElse(sessionConf.get(SESSION_CLUSTER))
+      checkClusterOpt(sessionConf, clusterOpt)
+      clusterOpt
+    } else {
+      None
+    }
+  }
 }

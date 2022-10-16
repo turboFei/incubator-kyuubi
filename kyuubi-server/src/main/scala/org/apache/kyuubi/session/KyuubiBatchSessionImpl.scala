@@ -24,10 +24,8 @@ import scala.collection.JavaConverters._
 import com.codahale.metrics.MetricRegistry
 import org.apache.hive.service.rpc.thrift.TProtocolVersion
 
-import org.apache.kyuubi.{KyuubiSQLException, Utils}
 import org.apache.kyuubi.client.api.v1.dto.BatchRequest
-import org.apache.kyuubi.config.KyuubiConf
-import org.apache.kyuubi.config.KyuubiEbayConf._
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.engine.KyuubiApplicationManager
 import org.apache.kyuubi.events.{EventBus, KyuubiSessionEvent}
 import org.apache.kyuubi.metrics.MetricsConstants.{CONN_OPEN, CONN_TOTAL}
@@ -62,41 +60,7 @@ class KyuubiBatchSessionImpl(
   override def createTime: Long = recoveryMetadata.map(_.createTime).getOrElse(super.createTime)
 
   val sessionCluster =
-    if (sessionManager.sessionClusterModeEnabled) {
-      batchRequest.getConf.asScala.get(SESSION_CLUSTER.key).orElse(sessionConf.get(SESSION_CLUSTER))
-    } else {
-      None
-    }
-
-  if (sessionManager.sessionClusterModeEnabled) {
-    var gotClusterPropertiesFile = false
-
-    val sessionClusterConf = KyuubiConf(false)
-    Utils.getDefaultPropertiesFileForCluster(sessionCluster).foreach { clusterPropertiesFile =>
-      gotClusterPropertiesFile = true
-      Utils.getPropertiesFromFile(Option(clusterPropertiesFile)).foreach {
-        case (key, value) => sessionClusterConf.set(key, value)
-      }
-    }
-
-    if (!gotClusterPropertiesFile) {
-      val clusterList = Utils.getDefinedPropertiesClusterList()
-      throw KyuubiSQLException(
-        s"Please specify the cluster to access with session conf[${SESSION_CLUSTER.key}]," +
-          s" which should be one of ${clusterList.mkString("[", ",", "]")}")
-    }
-
-    sessionClusterConf.getUserDefaults(user).getAll.foreach { case (key, value) =>
-      sessionConf.set(key, value)
-    }
-
-    if (sessionConf.get(BATCH_SPARK_HBASE_ENABLED)) {
-      val hbaseConfigTag = sessionConf.get(BATCH_SPARK_HBASE_CONFIG_TAG)
-      sessionClusterConf.getTagConfOnly(hbaseConfigTag).foreach { case (key, value) =>
-        sessionConf.set(key, value)
-      }
-    }
-  }
+    KyuubiEbayConf.getSessionCluster(sessionConf, batchRequest.getConf.asScala.toMap)
 
   // TODO: Support batch conf advisor
   override val normalizedConf: Map[String, String] = {
@@ -128,7 +92,6 @@ class KyuubiBatchSessionImpl(
   }
 
   private val sessionEvent = KyuubiSessionEvent(this)
-  sessionCluster.foreach(sessionEvent.sessionCluster = _)
   EventBus.post(sessionEvent)
 
   override def getSessionEvent: Option[KyuubiSessionEvent] = {

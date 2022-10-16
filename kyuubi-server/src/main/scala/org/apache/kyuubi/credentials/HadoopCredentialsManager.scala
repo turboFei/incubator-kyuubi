@@ -100,7 +100,7 @@ class HadoopCredentialsManager private (name: String) extends AbstractService(na
   override def initialize(conf: KyuubiConf): Unit = {
     val clusterOptList =
       if (conf.get(KyuubiEbayConf.SESSION_CLUSTER_MODE_ENABLED)) {
-        Utils.getDefinedPropertiesClusterList().map(Option(_))
+        KyuubiEbayConf.getClusterList(conf).map(Option(_))
       } else {
         Seq(None)
       }
@@ -134,11 +134,7 @@ class HadoopCredentialsManager private (name: String) extends AbstractService(na
   private def getClusterProviders(
       conf: KyuubiConf,
       clusterOpt: Option[String]): Map[String, HadoopDelegationTokenProvider] = {
-    val clusterConf = conf.clone
-    Utils.getPropertiesFromFile(
-      Utils.getDefaultPropertiesFileForCluster(clusterOpt)).foreach { case (key, value) =>
-      clusterConf.set(key, value)
-    }
+    val clusterConf = KyuubiEbayConf.loadClusterConf(conf, clusterOpt)
 
     HadoopCredentialsManager.loadProviders(clusterConf)
       .filter { case (_, provider) =>

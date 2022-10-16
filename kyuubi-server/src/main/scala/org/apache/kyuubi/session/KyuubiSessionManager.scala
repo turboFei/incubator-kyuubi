@@ -17,10 +17,13 @@
 
 package org.apache.kyuubi.session
 
+import java.util.concurrent.TimeUnit
+
 import scala.collection.JavaConverters._
 
 import com.codahale.metrics.MetricRegistry
 import com.google.common.annotations.VisibleForTesting
+import com.google.common.cache.{CacheBuilder, CacheLoader, LoadingCache}
 import org.apache.hive.service.rpc.thrift.TProtocolVersion
 
 import org.apache.kyuubi.KyuubiSQLException
@@ -47,7 +50,6 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
   val credentialsManager = new HadoopCredentialsManager()
   // this lazy is must be specified since the conf is null when the class initialization
   lazy val sessionConfAdvisor: SessionConfAdvisor = PluginLoader.loadSessionConfAdvisor(conf)
-  lazy val sessionClusterModeEnabled: Boolean = conf.get(SESSION_CLUSTER_MODE_ENABLED)
   val applicationManager = new KyuubiApplicationManager()
   private lazy val metadataManager: Option[MetadataManager] = {
     // Currently, the metadata manager is used by the REST frontend which provides batch job APIs,
@@ -81,6 +83,7 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
       password: String,
       ipAddress: String,
       conf: Map[String, String]): Session = {
+    val sessionConf = getSessionConf(conf)
     new KyuubiSessionImpl(
       protocol,
       user,
@@ -88,7 +91,7 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
       ipAddress,
       conf,
       this,
-      this.getConf.getUserDefaults(user))
+      sessionConf.getUserDefaults(user))
   }
 
   override def openSession(
@@ -130,11 +133,12 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
       batchRequest: BatchRequest,
       recoveryMetadata: Option[Metadata] = None): KyuubiBatchSessionImpl = {
     val username = Option(user).filter(_.nonEmpty).getOrElse("anonymous")
-    var userDefaultConf = this.getConf.getUserDefaults(user)
+    val sessionConf = getSessionConf(conf)
+    val userDefaultConf = sessionConf.getUserDefaults(user)
     if (conf.get(BATCH_SPARK_HBASE_ENABLED.key).map(_.toBoolean)
         .getOrElse(userDefaultConf.get(BATCH_SPARK_HBASE_ENABLED))) {
-      val hbaseConfigTag = this.getConf.get(BATCH_SPARK_HBASE_CONFIG_TAG)
-      this.getConf.getTagConfOnly(hbaseConfigTag).foreach { case (key, value) =>
+      val hbaseConfigTag = sessionConf.get(BATCH_SPARK_HBASE_CONFIG_TAG)
+      sessionConf.getTagConfOnly(hbaseConfigTag).foreach { case (key, value) =>
         userDefaultConf.set(key, value)
       }
       userDefaultConf.set(BATCH_SPARK_HBASE_ENABLED, true)
@@ -289,6 +293,32 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
     val userIpAddressLimit = conf.get(SERVER_LIMIT_CONNECTIONS_PER_USER_IPADDRESS).getOrElse(0)
     if (userLimit > 0 || ipAddressLimit > 0 || userIpAddressLimit > 0) {
       limiter = Some(SessionLimiter(userLimit, ipAddressLimit, userIpAddressLimit))
+    }
+  }
+
+  /**
+   * Session conf for cluster mode.
+   */
+  private lazy val SESSION_CLUSTER_CONF_CACHE: LoadingCache[String, KyuubiConf] =
+    CacheBuilder.newBuilder()
+      .expireAfterWrite(conf.get(SESSION_CLUSTER_CONF_REFRESH_INTERVAL), TimeUnit.MILLISECONDS)
+      .build(new CacheLoader[String, KyuubiConf] {
+        override def load(cluster: String): KyuubiConf = {
+          KyuubiEbayConf.loadClusterConf(conf, Option(cluster))
+        }
+      })
+
+  private def getSessionConf(sessionConf: Map[String, String]): KyuubiConf = {
+    val clusterOpt = KyuubiEbayConf.getSessionCluster(this, sessionConf)
+    try {
+      clusterOpt.map { c =>
+        info(s"Getting session conf for cluster $c")
+        SESSION_CLUSTER_CONF_CACHE.get(c)
+      }.getOrElse(conf)
+    } catch {
+      case e: Throwable =>
+        error(s"Error getting session conf for cluster ${clusterOpt.getOrElse("")}", e)
+        KyuubiEbayConf.loadClusterConf(conf, clusterOpt)
     }
   }
 }

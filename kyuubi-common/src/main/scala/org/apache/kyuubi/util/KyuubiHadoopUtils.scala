@@ -32,17 +32,11 @@ import org.apache.hadoop.security.token.delegation.AbstractDelegationTokenIdenti
 import org.apache.hadoop.yarn.api.records.ApplicationId
 import org.apache.hadoop.yarn.conf.YarnConfiguration
 
-import org.apache.kyuubi.{Logging, Utils}
-import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.Logging
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 
 object KyuubiHadoopUtils extends Logging {
   val HADOOP_CONF_DIR = "HADOOP_CONF_DIR"
-  val HADOOP_CONF_FILES =
-    Seq("core-site.xml", "hdfs-site.xml", "mapred-site.xml", "yarn-site.xml", "hive-site.xml")
-
-  private def isHadoopConfFile(file: File): Boolean = {
-    HADOOP_CONF_FILES.contains(file.getName)
-  }
 
   private val subjectField =
     classOf[UserGroupInformation].getDeclaredField("subject")
@@ -63,11 +57,7 @@ object KyuubiHadoopUtils extends Logging {
       loadDefaults: Boolean = true,
       clusterOpt: Option[String] = None): Configuration = {
     clusterOpt.map { _ =>
-      val clusterPropertiesFile = Utils.getDefaultPropertiesFileForCluster(clusterOpt)
-      val clusterConf = conf.clone
-      Utils.getPropertiesFromFile(clusterPropertiesFile).foreach { case (key, value) =>
-        clusterConf.set(key, value)
-      }
+      val clusterConf = KyuubiEbayConf.loadClusterConf(conf, clusterOpt)
       val clusterEnvs = clusterConf.getEnvs
       val hadoopConf = new Configuration(false)
       clusterEnvs.get(HADOOP_CONF_DIR)

@@ -135,15 +135,6 @@ class UtilsSuite extends KyuubiFunSuite {
     assert(Utils.getAbsolutePathFromWork(path2).toString === path2)
   }
 
-  test("getDefinedPropertiesClusterList") {
-    val clusterList = Utils.getDefinedPropertiesClusterList()
-    assert(clusterList == Seq("test"))
-  }
-
-  test("getDefaultPropertiesFileForCluster") {
-    assert(Utils.getDefaultPropertiesFileForCluster(Option("test")).nonEmpty)
-  }
-
   test("test args parser") {
     val args = Array[String]("--conf", "k1=v1", "--conf", " k2 = v2")
     val conf = new KyuubiConf()

@@ -1,0 +1,70 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.kyuubi.config
+
+import org.apache.kyuubi.{KyuubiException, KyuubiFunSuite}
+import org.apache.kyuubi.session.NoopSessionManager
+
+class KyuubiEbayConfSuite extends KyuubiFunSuite {
+  test("get cluster list") {
+    assert(KyuubiEbayConf.getClusterList() == Seq("test"))
+
+    val conf = KyuubiConf()
+    conf.set(KyuubiEbayConf.SESSION_CLUSTER_LIST, Seq("test1", "test2"))
+    assert(KyuubiEbayConf.getClusterList(conf) === Seq("test1", "test2"))
+  }
+
+  test("getDefaultPropertiesFileForCluster") {
+    assert(KyuubiEbayConf.getDefaultPropertiesFileForCluster(Option("test")).nonEmpty)
+  }
+
+  test("get session cluster") {
+    val conf = KyuubiConf()
+    conf.set(KyuubiEbayConf.SESSION_CLUSTER_MODE_ENABLED, true)
+    intercept[KyuubiException] {
+      KyuubiEbayConf.getSessionCluster(conf, Map.empty[String, String])
+    }
+    assert(KyuubiEbayConf.getSessionCluster(
+      conf,
+      Map(KyuubiEbayConf.SESSION_CLUSTER.key -> "test"))
+      === Some("test"))
+    val sessionManager = new NoopSessionManager()
+    sessionManager.initialize(conf)
+    assert(KyuubiEbayConf.getSessionCluster(
+      sessionManager,
+      Map("set:" + KyuubiEbayConf.SESSION_CLUSTER.key -> "test"))
+      === Some("test"))
+    assert(KyuubiEbayConf.getSessionCluster(
+      sessionManager,
+      Map("set:hiveconf:" + KyuubiEbayConf.SESSION_CLUSTER.key -> "test"))
+      === Some("test"))
+    assert(KyuubiEbayConf.getSessionCluster(
+      sessionManager,
+      Map("set:hivevar:" + KyuubiEbayConf.SESSION_CLUSTER.key -> "test"))
+      === Some("test"))
+  }
+
+  test("test get conf") {
+    val conf = KyuubiConf().loadFileDefaults()
+    assert(KyuubiEbayConf.loadClusterConf(conf, None).getOption(
+      "spark.sql.kyuubi.session.cluster.test").isEmpty)
+    assert(KyuubiEbayConf.loadClusterConf(conf, Some("test")).getOption(
+      "spark.sql.kyuubi.session.cluster.test")
+      === Some("yes"))
+  }
+}

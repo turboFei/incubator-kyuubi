@@ -24,6 +24,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.regex.Pattern
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 import scala.util.matching.Regex
 
 import org.apache.kyuubi.{Logging, Utils}
@@ -36,7 +37,6 @@ case class KyuubiConf(loadSysDefault: Boolean = true) extends Logging {
 
   private val settings = new ConcurrentHashMap[String, String]()
   private lazy val reader: ConfigProvider = new ConfigProvider(settings)
-
   private def loadFromMap(props: Map[String, String]): Unit = {
     settings.putAll(props.asJava)
   }
@@ -131,8 +131,7 @@ case class KyuubiConf(loadSysDefault: Boolean = true) extends Logging {
   /**
    * Retrieve key-value pairs from [[KyuubiConf]] starting with `dropped.remainder`, and put them to
    * the result map with the `dropped` of key being dropped.
-   *
-   * @param dropped   first part of prefix which will dropped for the new key
+   * @param dropped first part of prefix which will dropped for the new key
    * @param remainder second part of the prefix which will be remained in the key
    */
   def getAllWithPrefix(dropped: String, remainder: String): Map[String, String] = {
@@ -196,9 +195,6 @@ object KyuubiConf {
   final val KYUUBI_HOME = "KYUUBI_HOME"
   final val KYUUBI_ENGINE_ENV_PREFIX = "kyuubi.engineEnv"
   final val KYUUBI_BATCH_CONF_PREFIX = "kyuubi.batchConf"
-
-  /** the cluster default file name prefix */
-  final val KYUUBI_CLUSTER_CONF_FILE_NAME_PREFIX = KYUUBI_CONF_FILE_NAME + "."
 
   private[this] val kyuubiConfEntriesUpdateLock = new Object
 
@@ -1275,23 +1271,6 @@ object KyuubiConf {
       .booleanConf
       .createWithDefault(false)
 
-  val OPERATION_TEMP_TABLE_DATABASE: ConfigEntry[String] =
-    buildConf("kyuubi.operation.temp.table.database")
-      .internal
-      .doc("The database used for the temp tables.")
-      .version("1.7.0")
-      .stringConf
-      .createWithDefault("default")
-
-  val OPERATION_TEMP_TABLE_COLLECT: ConfigEntry[Boolean] =
-    buildConf("kyuubi.operation.temp.table.collect")
-      .internal
-      .doc(s"When true and ${OPERATION_INCREMENTAL_COLLECT.key} is true," +
-        s" engine will try to save the result into a temp table first.")
-      .version("1.7.0")
-      .booleanConf
-      .createWithDefault(false)
-
   val OPERATION_RESULT_MAX_ROWS: ConfigEntry[Int] =
     buildConf("kyuubi.operation.result.max.rows")
       .doc("Max rows of Spark query results. Rows that exceeds the limit would be ignored. " +
@@ -1900,15 +1879,6 @@ object KyuubiConf {
       .booleanConf
       .createWithDefault(false)
 
-  val SESSION_PROGRESS_PLAN_ENABLE: ConfigEntry[Boolean] =
-    buildConf("kyuubi.operation.progress.plan.enabled")
-      .doc("Whether to enable the operation progress plan. When true," +
-        " the operation progress plan will be returned in `GetOperationStatus`.")
-      .internal
-      .version("1.7.0")
-      .booleanConf
-      .createWithDefault(false)
-
   val SERVER_SECRET_REDACTION_PATTERN: OptionalConfigEntry[Regex] =
     buildConf("kyuubi.server.redaction.regex")
       .doc("Regex to decide which Kyuubi contain sensitive information. When this regex matches " +
@@ -1991,7 +1961,7 @@ object KyuubiConf {
       .stringConf
       .createOptional
 
-  private val serverOnlyConfEntries: Set[ConfigEntry[_]] = Set(
+  private[config] val serverOnlyConfEntries: mutable.Set[ConfigEntry[_]] = mutable.Set(
     FRONTEND_BIND_HOST,
     FRONTEND_BIND_PORT,
     FRONTEND_THRIFT_BINARY_BIND_HOST,
@@ -2015,11 +1985,7 @@ object KyuubiConf {
     SERVER_LIMIT_CONNECTIONS_PER_IPADDRESS,
     SERVER_LIMIT_CONNECTIONS_PER_USER_IPADDRESS,
     SERVER_LIMIT_CONNECTIONS_PER_USER,
-    SESSION_LOCAL_DIR_ALLOW_LIST,
-    KyuubiEbayConf.SESSION_CLUSTER_MODE_ENABLED,
-    KyuubiEbayConf.AUTHENTICATION_BATCH_ACCOUNT_CLASS,
-    KyuubiEbayConf.AUTHENTICATION_BATCH_ACCOUNT_ENDPOINT,
-    KyuubiEbayConf.AUTHENTICATION_KEYSTONE_ENDPOINT)
+    SESSION_LOCAL_DIR_ALLOW_LIST)
 
   /**
    * Holds information about keys that have been deprecated.

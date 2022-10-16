@@ -36,9 +36,8 @@ import org.eclipse.jetty.util.ssl.SslContextFactory
 import org.eclipse.jetty.util.thread.ExecutorThreadPool
 
 import org.apache.kyuubi.KyuubiException
-import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiConf._
-import org.apache.kyuubi.config.KyuubiEbayConf._
 import org.apache.kyuubi.metrics.MetricsConstants.{THRIFT_HTTP_CONN_FAIL, THRIFT_HTTP_CONN_OPEN, THRIFT_HTTP_CONN_TOTAL}
 import org.apache.kyuubi.metrics.MetricsSystem
 import org.apache.kyuubi.server.http.ThriftHttpServlet
@@ -235,8 +234,7 @@ final class KyuubiTHttpFrontendService(
 
   override protected def hadoopConf(sessionConf: Map[String, String]): Configuration = {
     if (KyuubiServer.isClusterModeEnabled) {
-      val normalizedConf = be.sessionManager.validateAndNormalizeConf(sessionConf)
-      val clusterOpt = normalizedConf.get(SESSION_CLUSTER.key).orElse(conf.get(SESSION_CLUSTER))
+      val clusterOpt = KyuubiEbayConf.getSessionCluster(be.sessionManager, sessionConf)
       KyuubiServer.getHadoopConf(clusterOpt)
     } else {
       KyuubiServer.getHadoopConf(None)

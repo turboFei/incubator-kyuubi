@@ -264,8 +264,8 @@ class KyuubiOperationPerUserSuite
   test("HADP-46611: support to save the result into temp table") {
     withDatabases("kyuubi") { _ =>
       withSessionConf(Map.empty)(Map(
-        KyuubiConf.OPERATION_TEMP_TABLE_DATABASE.key -> "kyuubi",
-        KyuubiConf.OPERATION_TEMP_TABLE_COLLECT.key -> "true",
+        KyuubiEbayConf.OPERATION_TEMP_TABLE_DATABASE.key -> "kyuubi",
+        KyuubiEbayConf.OPERATION_TEMP_TABLE_COLLECT.key -> "true",
         KyuubiConf.OPERATION_INCREMENTAL_COLLECT.key -> "true"))(Map.empty) {
         withJdbcStatement() { statement =>
           statement.executeQuery("create database if not exists kyuubi")
