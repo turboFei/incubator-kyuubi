@@ -17,7 +17,7 @@
 
 package org.apache.kyuubi.session
 
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
 
 import scala.collection.JavaConverters._
 
@@ -62,7 +62,7 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
     }
   }
 
-  private var limiter: Option[SessionLimiter] = None
+  private val limiters = new ConcurrentHashMap[Option[String], SessionLimiter]().asScala
 
   override def initialize(conf: KyuubiConf): Unit = {
     this.conf = conf
@@ -101,7 +101,8 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
       ipAddress: String,
       conf: Map[String, String]): SessionHandle = {
     val username = Option(user).filter(_.nonEmpty).getOrElse("anonymous")
-    limiter.foreach(_.increment(UserIpAddress(username, ipAddress)))
+    val sessionCluster = getSessionCluster(conf)
+    limiters.get(sessionCluster).foreach(_.increment(UserIpAddress(username, ipAddress)))
     try {
       super.openSession(protocol, username, password, ipAddress, conf)
     } catch {
@@ -117,11 +118,13 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
   }
 
   override def closeSession(sessionHandle: SessionHandle): Unit = {
-    val session = getSession(sessionHandle)
+    val session = getSession(sessionHandle).asInstanceOf[KyuubiSession]
     try {
       super.closeSession(sessionHandle)
     } finally {
-      limiter.foreach(_.decrement(UserIpAddress(session.user, session.ipAddress)))
+      limiters.get(session.sessionCluster).foreach(_.decrement(UserIpAddress(
+        session.user,
+        session.ipAddress)))
     }
   }
 
@@ -288,11 +291,21 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
   override protected def isServer: Boolean = true
 
   private def initSessionLimiter(conf: KyuubiConf): Unit = {
-    val userLimit = conf.get(SERVER_LIMIT_CONNECTIONS_PER_USER).getOrElse(0)
-    val ipAddressLimit = conf.get(SERVER_LIMIT_CONNECTIONS_PER_IPADDRESS).getOrElse(0)
-    val userIpAddressLimit = conf.get(SERVER_LIMIT_CONNECTIONS_PER_USER_IPADDRESS).getOrElse(0)
-    if (userLimit > 0 || ipAddressLimit > 0 || userIpAddressLimit > 0) {
-      limiter = Some(SessionLimiter(userLimit, ipAddressLimit, userIpAddressLimit))
+    if (conf.get(KyuubiEbayConf.SESSION_CLUSTER_MODE_ENABLED)) {
+      KyuubiEbayConf.getClusterList(conf).map(Option(_))
+    } else {
+      Seq(None)
+    }.foreach { clusterOpt =>
+      val clusterConf = KyuubiEbayConf.loadClusterConf(conf, clusterOpt)
+      val userLimit = clusterConf.get(SERVER_LIMIT_CONNECTIONS_PER_USER).getOrElse(0)
+      val ipAddressLimit = clusterConf.get(SERVER_LIMIT_CONNECTIONS_PER_IPADDRESS).getOrElse(0)
+      val userIpAddressLimit =
+        clusterConf.get(SERVER_LIMIT_CONNECTIONS_PER_USER_IPADDRESS).getOrElse(0)
+      if (userLimit > 0 || ipAddressLimit > 0 || userIpAddressLimit > 0) {
+        val whitelist = clusterConf.get(KyuubiEbayConf.SERVER_LIMIT_CONNECTIONS_USER_WHITE_LIST)
+        val limiter = SessionLimiter(userLimit, ipAddressLimit, userIpAddressLimit, whitelist)
+        limiters.put(clusterOpt, limiter)
+      }
     }
   }
 
@@ -308,8 +321,12 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
         }
       })
 
+  private def getSessionCluster(sessionConf: Map[String, String]): Option[String] = {
+    KyuubiEbayConf.getSessionCluster(this, sessionConf)
+  }
+
   private def getSessionConf(sessionConf: Map[String, String]): KyuubiConf = {
-    val clusterOpt = KyuubiEbayConf.getSessionCluster(this, sessionConf)
+    val clusterOpt = getSessionCluster(sessionConf)
     try {
       clusterOpt.map { c =>
         info(s"Getting session conf for cluster $c")

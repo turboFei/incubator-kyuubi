@@ -266,6 +266,13 @@ object KyuubiEbayConf extends Logging {
       .booleanConf
       .createWithDefault(false)
 
+  val SERVER_LIMIT_CONNECTIONS_USER_WHITE_LIST: ConfigEntry[Seq[String]] =
+    buildConf("kyuubi.server.limit.connections.user.white.list")
+      .internal
+      .stringConf
+      .toSequence()
+      .createWithDefault(Seq("b_carmel"))
+
   KyuubiConf.serverOnlyConfEntries ++= Set(
     SESSION_CLUSTER_MODE_ENABLED,
     SESSION_CLUSTER_CONF_REFRESH_INTERVAL,
