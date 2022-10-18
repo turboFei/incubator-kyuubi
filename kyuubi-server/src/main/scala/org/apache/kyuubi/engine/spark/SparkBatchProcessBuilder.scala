@@ -59,7 +59,7 @@ class SparkBatchProcessBuilder(
 
     // for spark batch etl sql jobs
     batchConf.get(BatchUtils.SPARK_BATCH_ETL_SQL_STATEMENTS_KEY).foreach { etlStatements =>
-      batchSqlFileDir = Utils.createTempDir(namePrefix = "kyuubi-batch").toFile
+      batchSqlFileDir = Utils.createTempDir("kyuubi-batch").toFile
       val etlSqlFile = new File(batchSqlFileDir, s"kyuubi-batch-$batchId.sql")
       Files.write(etlSqlFile.toPath(), etlStatements.getBytes(StandardCharsets.UTF_8))
       batchKyuubiConf.unset(BatchUtils.SPARK_BATCH_ETL_SQL_STATEMENTS_KEY)

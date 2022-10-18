@@ -25,7 +25,7 @@ import org.apache.kyuubi.tags.HiveTest
 class HiveOperationSuite extends HiveEngineTests {
 
   override def beforeAll(): Unit = {
-    val metastore = Utils.createTempDir(namePrefix = getClass.getSimpleName)
+    val metastore = Utils.createTempDir(prefix = getClass.getSimpleName)
     metastore.toFile.delete()
     val args = Array(
       "--conf",
