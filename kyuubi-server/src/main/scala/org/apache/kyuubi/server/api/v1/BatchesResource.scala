@@ -41,7 +41,6 @@ import org.apache.kyuubi.server.api.ApiRequestContext
 import org.apache.kyuubi.server.api.v1.BatchesResource._
 import org.apache.kyuubi.server.metadata.MetadataManager
 import org.apache.kyuubi.server.metadata.api.Metadata
-import org.apache.kyuubi.service.authentication.KyuubiAuthenticationFactory
 import org.apache.kyuubi.session.{KyuubiBatchSessionImpl, KyuubiSessionManager, SessionHandle}
 
 @Tag(name = "Batch")
@@ -192,7 +191,7 @@ private[v1] class BatchesResource extends ApiRequestContext with Logging {
   @GET
   @Path("{batchId}")
   def batchInfo(@PathParam("batchId") batchId: String): Batch = {
-    val userName = fe.getUserName(Map.empty)
+    val userName = fe.getUserName(Map.empty[String, String])
     val sessionHandle = formatSessionHandle(batchId)
     Option(sessionManager.getBatchSessionImpl(sessionHandle)).map { batchSession =>
       buildBatch(batchSession)
@@ -275,7 +274,7 @@ private[v1] class BatchesResource extends ApiRequestContext with Logging {
     def getAggOperationLog: Option[OperationLog] = {
       LogAggManager.get.map(_.getAggregatedLog(batchId, from, size)).getOrElse(None)
     }
-    val userName = fe.getUserName(Map.empty)
+    val userName = fe.getUserName(Map.empty[String, String])
     val sessionHandle = formatSessionHandle(batchId)
     Option(sessionManager.getBatchSessionImpl(sessionHandle)).map { batchSession =>
       try {
@@ -334,16 +333,7 @@ private[v1] class BatchesResource extends ApiRequestContext with Logging {
       @QueryParam("kyuubi.proxy.batchAccount") proxyBatchAccount: String): CloseBatchResponse = {
     val sessionHandle = formatSessionHandle(batchId)
     val finalProxyUser = Option(hs2ProxyUser).getOrElse(proxyBatchAccount)
-    val sessionConf = Option(finalProxyUser).filter(_.nonEmpty).map(proxyUser =>
-      Map(KyuubiAuthenticationFactory.HS2_PROXY_USER -> proxyUser)).getOrElse(Map())
-
-    var userName: String = null
-    try {
-      userName = fe.getUserName(sessionConf)
-    } catch {
-      case t: Throwable =>
-        throw new NotAllowedException(t.getMessage)
-    }
+    val userName = fe.getUserName(finalProxyUser)
 
     Option(sessionManager.getBatchSessionImpl(sessionHandle)).map { batchSession =>
       if (userName != batchSession.user) {
