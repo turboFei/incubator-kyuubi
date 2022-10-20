@@ -76,15 +76,10 @@ class TagBasedSessionConfAdvisor extends SessionConfAdvisor with Logging {
   override def getConfOverlay(
       user: String,
       sessionConf: JMap[String, String]): JMap[String, String] = {
-    Option(sessionConf.get(SESSION_TAG_KEY)) match {
-      case Some(tag) => tagConf.getTagConfOnly(tag).asJava
-
-      // TODO: revert it after zeta enabled session tag
-      case _ if Option(sessionConf.get("spark.app.name")).exists(_.startsWith("zeta")) =>
-        tagConf.getTagConfOnly("zeta").asJava
-
-      case _ => Map.empty[String, String].asJava
-    }
+    val sessionTag = sessionConf.asScala.get(SESSION_TAG_KEY).getOrElse(KYUUBI_DEFAULT_TAG)
+    val tagLevelConfOverlay = tagConf.getTagConfOnly(sessionTag)
+    val serviceOverwriteConfOverlay = tagConf.getTagConfOnly(KYUUBI_OVERWRITE_TAG)
+    (tagLevelConfOverlay ++ serviceOverwriteConfOverlay).asJava
   }
 }
 
@@ -94,4 +89,8 @@ object TagBasedSessionConfAdvisor {
   val SESSION_TAG_REFRESH_INTERVAL_KEY = "kyuubi.session.tag.refresh.interval"
   val DEFAULT_SESSION_TAG_CONF_FILE = KyuubiConf.KYUUBI_CONF_FILE_NAME + ".tag"
   val DEFAULT_SESSION_TAG_REFRESH_INTERVAL = 600 * 1000L
+
+  // for kyuubi service side conf
+  val KYUUBI_DEFAULT_TAG = "kyuubi_default"
+  val KYUUBI_OVERWRITE_TAG = "kyuubi_overwrite"
 }

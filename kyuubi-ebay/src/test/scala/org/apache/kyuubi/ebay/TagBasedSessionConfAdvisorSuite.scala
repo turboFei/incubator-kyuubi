@@ -24,24 +24,24 @@ import org.apache.kyuubi.KyuubiFunSuite
 class TagBasedSessionConfAdvisorSuite extends KyuubiFunSuite {
   test("test tag based session conf advisor") {
     val sessionConfAdvisor = new TagBasedSessionConfAdvisor()
-    val zetaConf = Map("spark.dynamicAllocation.minExecutors" -> "0").asJava
+    val zetaConf = Map("spark.dynamicAllocation.minExecutors" -> "0")
     val bigResultConf = Map(
       "kyuubi.operation.incremental.collect" -> "true",
-      "kyuubi.operation.temp.table.collect" -> "true").asJava
+      "kyuubi.operation.temp.table.collect" -> "true")
+    val defaultConf = Map("kyuubi.session.tag" -> TagBasedSessionConfAdvisor.KYUUBI_DEFAULT_TAG)
+    val downGradeConf = Map("kyuubi.session.engine.launch.moveQueue.enabled" -> "false")
 
     assert(sessionConfAdvisor.getConfOverlay("b_stf", Map("kyuubi.session.tag" -> "zeta").asJava)
-      === zetaConf)
+      === (zetaConf ++ downGradeConf).asJava)
     assert(sessionConfAdvisor.getConfOverlay("kyuubi", Map("kyuubi.session.tag" -> "zeta").asJava)
-      === zetaConf)
-    assert(sessionConfAdvisor.getConfOverlay(
-      "kyuubi",
-      Map("spark.app.name" -> "zeta-kyuubi").asJava)
-      === zetaConf)
+      === (zetaConf ++ downGradeConf).asJava)
     assert(sessionConfAdvisor.getConfOverlay(
       "b_stf",
       Map("kyuubi.session.tag" -> "big_result").asJava)
-      === bigResultConf)
+      === (bigResultConf ++ downGradeConf).asJava)
     assert(sessionConfAdvisor.getConfOverlay("b_stf", Map("kyuubi.session.tag" -> "other").asJava)
-      === Map.empty.asJava)
+      === downGradeConf.asJava)
+    assert(sessionConfAdvisor.getConfOverlay("b_stf", Map.empty[String, String].asJava)
+      === (defaultConf ++ downGradeConf).asJava)
   }
 }

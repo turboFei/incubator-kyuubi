@@ -18,3 +18,5 @@
 ___zeta___.spark.dynamicAllocation.minExecutors=0
 ___big_result___.kyuubi.operation.incremental.collect=true
 ___big_result___.kyuubi.operation.temp.table.collect=true
+___kyuubi_default___.kyuubi.session.tag=kyuubi_default
+___kyuubi_overwrite___.kyuubi.session.engine.launch.moveQueue.enabled=false
