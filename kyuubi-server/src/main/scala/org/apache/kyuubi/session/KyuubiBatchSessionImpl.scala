@@ -60,7 +60,7 @@ class KyuubiBatchSessionImpl(
   override def createTime: Long = recoveryMetadata.map(_.createTime).getOrElse(super.createTime)
 
   val sessionCluster =
-    KyuubiEbayConf.getSessionCluster(sessionConf, batchRequest.getConf.asScala.toMap)
+    KyuubiEbayConf.getSessionCluster(sessionManager, batchRequest.getConf.asScala.toMap)
 
   // TODO: Support batch conf advisor
   override val normalizedConf: Map[String, String] = {

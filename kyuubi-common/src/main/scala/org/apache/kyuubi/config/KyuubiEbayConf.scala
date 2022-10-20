@@ -374,14 +374,4 @@ object KyuubiEbayConf extends Logging {
       None
     }
   }
-
-  def getSessionCluster(sessionConf: KyuubiConf, conf: Map[String, String]): Option[String] = {
-    if (sessionConf.get(SESSION_CLUSTER_MODE_ENABLED)) {
-      val clusterOpt = conf.get(SESSION_CLUSTER.key).orElse(sessionConf.get(SESSION_CLUSTER))
-      checkClusterOpt(sessionConf, clusterOpt)
-      clusterOpt
-    } else {
-      None
-    }
-  }
 }

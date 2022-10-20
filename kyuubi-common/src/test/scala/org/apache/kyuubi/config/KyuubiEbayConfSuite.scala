@@ -35,16 +35,16 @@ class KyuubiEbayConfSuite extends KyuubiFunSuite {
 
   test("get session cluster") {
     val conf = KyuubiConf()
-    conf.set(KyuubiEbayConf.SESSION_CLUSTER_MODE_ENABLED, true)
-    intercept[KyuubiException] {
-      KyuubiEbayConf.getSessionCluster(conf, Map.empty[String, String])
-    }
-    assert(KyuubiEbayConf.getSessionCluster(
-      conf,
-      Map(KyuubiEbayConf.SESSION_CLUSTER.key -> "test"))
-      === Some("test"))
     val sessionManager = new NoopSessionManager()
     sessionManager.initialize(conf)
+    conf.set(KyuubiEbayConf.SESSION_CLUSTER_MODE_ENABLED, true)
+    intercept[KyuubiException] {
+      KyuubiEbayConf.getSessionCluster(sessionManager, Map.empty[String, String])
+    }
+    assert(KyuubiEbayConf.getSessionCluster(
+      sessionManager,
+      Map(KyuubiEbayConf.SESSION_CLUSTER.key -> "test"))
+      === Some("test"))
     assert(KyuubiEbayConf.getSessionCluster(
       sessionManager,
       Map("set:" + KyuubiEbayConf.SESSION_CLUSTER.key -> "test"))
@@ -57,6 +57,7 @@ class KyuubiEbayConfSuite extends KyuubiFunSuite {
       sessionManager,
       Map("set:hivevar:" + KyuubiEbayConf.SESSION_CLUSTER.key -> "test"))
       === Some("test"))
+    sessionManager.stop()
   }
 
   test("test get conf") {

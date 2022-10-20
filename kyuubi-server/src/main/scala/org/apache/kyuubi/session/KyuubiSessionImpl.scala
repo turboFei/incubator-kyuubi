@@ -49,7 +49,7 @@ class KyuubiSessionImpl(
 
   override val sessionType: SessionType = SessionType.SQL
 
-  val sessionCluster = KyuubiEbayConf.getSessionCluster(sessionConf, normalizedConf)
+  val sessionCluster = KyuubiEbayConf.getSessionCluster(sessionManager, normalizedConf)
 
   private[kyuubi] val optimizedConf: Map[String, String] = {
     val confOverlay = sessionManager.sessionConfAdvisor.getConfOverlay(
