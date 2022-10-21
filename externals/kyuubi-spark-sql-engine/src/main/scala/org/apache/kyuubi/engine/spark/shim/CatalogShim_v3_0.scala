@@ -130,12 +130,14 @@ class CatalogShim_v3_0 extends CatalogShim_v2_4 {
       catalogName: String,
       schemaPattern: String): Seq[Row] = {
     val catalog = getCatalog(spark, catalogName)
-    var schemas = getSchemasWithPattern(catalog, schemaPattern)
-    if (catalogName == SparkCatalogShim.SESSION_CATALOG) {
-      val viewMgr = getGlobalTempViewManager(spark, schemaPattern)
-      schemas = schemas ++ viewMgr
-    }
-    schemas.map(Row(_, catalog.name))
+    val schemas =
+      if (catalog.name() == SparkCatalogShim.SESSION_CATALOG) {
+        spark.sessionState.catalog.listDatabases(schemaPattern) ++
+          getGlobalTempViewManager(spark, schemaPattern)
+      } else {
+        getSchemasWithPattern(catalog, schemaPattern)
+      }
+    schemas.map(Row(_, catalog.name()))
   }
 
   override def setCurrentDatabase(spark: SparkSession, databaseName: String): Unit = {
