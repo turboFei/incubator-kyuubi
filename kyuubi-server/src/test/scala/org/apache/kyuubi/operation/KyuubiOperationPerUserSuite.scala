@@ -291,6 +291,16 @@ class KyuubiOperationPerUserSuite
           statement.close()
           rs = statement2.executeQuery("show tables in kyuubi")
           assert(!rs.next())
+          statement2.executeQuery("create table ta(id int) using parquet")
+          statement2.executeQuery("insert into ta(id) values(1),(2)")
+          rs = statement2.executeQuery("SELECT * from ta order by id")
+          assert(rs.next())
+          assert(rs.getInt(1) === 1)
+          assert(rs.next())
+          assert(rs.getInt(1) === 2)
+          assert(!rs.next())
+          statement2.executeQuery("drop table ta")
+          statement2.executeQuery("drop database kyuubi")
         }
       }
     }

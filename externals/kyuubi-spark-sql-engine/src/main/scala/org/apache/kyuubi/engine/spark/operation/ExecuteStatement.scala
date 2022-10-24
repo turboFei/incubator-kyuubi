@@ -32,6 +32,7 @@ import org.apache.spark.sql.execution.command.{DataWritingCommandExec, ExecutedC
 import org.apache.spark.sql.execution.datasources.InsertIntoDataSourceCommand
 import org.apache.spark.sql.execution.datasources.v2.{AppendDataExecV1, OverwriteByExpressionExecV1, V2TableWriteExec}
 import org.apache.spark.sql.execution.metric.SQLMetric
+import org.apache.spark.sql.kyuubi.operation.KyuubiOperationHelper
 import org.apache.spark.sql.types._
 
 import org.apache.kyuubi.{KyuubiSQLException, Logging, Utils}
@@ -150,6 +151,8 @@ class ExecuteStatement(
     }
   private val tempTableName: String = s"$tempTableDb.kyuubi_temp_$statementId".replaceAll("-", "_")
   private var tempTableEnabled: Boolean = false
+  private val tempViewName = s"kyuubi_cache_$statementId".replaceAll("-", "_")
+  private var tempViewEnabled: Boolean = false
   private def withStatement[T](statement: String)(f: => T): T = {
     spark.sparkContext.setJobDescription(redact(
       spark.sessionState.conf.stringRedactionPattern,
@@ -160,11 +163,12 @@ class ExecuteStatement(
       spark.sparkContext.setJobDescription(redactedStatement)
     }
   }
-  private def clearTempTableIfNeeded(): Unit = {
-    if (tempTableEnabled) {
+  private def clearTempTableOrViewIfNeeded(): Unit = {
+    if (tempTableEnabled || tempViewEnabled) {
       Utils.tryLogNonFatalError {
         withLocalProperties[Unit] {
-          val dropTempTable = s"DROP TABLE IF EXISTS $tempTableName"
+          val toDrop = if (tempTableEnabled) tempTableName else tempViewName
+          val dropTempTable = s"DROP TABLE IF EXISTS $toDrop"
           withStatement(dropTempTable)(spark.sql(dropTempTable))
         }
       }
@@ -181,29 +185,45 @@ class ExecuteStatement(
       schema = result.schema
       // only save to temp table for incremental collect mode
       if (tempTableCollect && incrementalCollect && isDQLStatement(statement)) {
-        tempTableEnabled = true
-        val tempTableSchema = result.schema.zipWithIndex.map { case (dt, index) =>
-          val colType = dt.dataType match {
-            case NullType => StringType.simpleString
-            case _ => dt.dataType.simpleString
+
+        /**
+         * If the query is sortable, we shall use temporary view instead of temporary table.
+         */
+        if (KyuubiOperationHelper.sortable(result.queryExecution.sparkPlan)) {
+          info(s"Using $tempViewName to cache the query result")
+          tempViewEnabled = true
+          val createViewDDL = s"CREATE TEMPORARY VIEW $tempViewName AS $statement"
+          val cacheViewDDL = s"CACHE TABLE $tempViewName"
+          withStatement(createViewDDL)(spark.sql(createViewDDL))
+          withStatement(cacheViewDDL)(spark.sql(cacheViewDDL))
+          result = spark.sql(s"SELECT * FROM $tempViewName")
+        } else {
+          info(s"Using $tempTableName to save the query result")
+          tempTableEnabled = true
+          val tempTableSchema = result.schema.zipWithIndex.map { case (dt, index) =>
+            val colType = dt.dataType match {
+              case NullType => StringType.simpleString
+              case _ => dt.dataType.simpleString
+            }
+            s"c$index $colType"
+          }.mkString(",")
+          val saveToTempTable =
+            try {
+              val tempTableDDL = s"CREATE TEMPORARY TABLE $tempTableName ($tempTableSchema)"
+              val insertTempTable = s"INSERT OVERWRITE $tempTableName $statement"
+              withStatement(tempTableDDL)(spark.sql(tempTableDDL))
+              withStatement(insertTempTable)(spark.sql(insertTempTable))
+              true
+            } catch {
+              case e: Throwable =>
+                error(
+                  s"Error creating temp table $tempTableName to save the result of $statement",
+                  e)
+                false
+            }
+          if (saveToTempTable) {
+            result = spark.sql(s"SELECT * FROM $tempTableName")
           }
-          s"c$index $colType"
-        }.mkString(",")
-        val saveToTempTable =
-          try {
-            val tempTableDDL = s"CREATE TEMPORARY TABLE $tempTableName ($tempTableSchema)"
-            val insertTempTable = s"INSERT OVERWRITE $tempTableName $statement"
-            withStatement(tempTableDDL)(spark.sql(tempTableDDL))
-            withStatement(insertTempTable)(spark.sql(insertTempTable))
-            true
-          } catch {
-            case e: Throwable =>
-              error(s"Error creating temp table $tempTableName to save the result of $statement", e)
-              false
-          }
-        if (saveToTempTable) {
-          val selectFromTempTable = s"SELECT * FROM $tempTableName"
-          result = withStatement(selectFromTempTable)(spark.sql(selectFromTempTable))
         }
       }
       withMetrics(result.queryExecution)
@@ -308,7 +328,7 @@ class ExecuteStatement(
   }
 
   override def close(): Unit = {
-    clearTempTableIfNeeded()
+    clearTempTableOrViewIfNeeded()
     super.close()
   }
 }
