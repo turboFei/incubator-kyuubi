@@ -273,6 +273,12 @@ object KyuubiEbayConf extends Logging {
       .toSequence()
       .createWithDefault(Seq("b_carmel"))
 
+  val OPERATION_INTERCEPT_ENABLED: ConfigEntry[Boolean] =
+    buildConf("kyuubi.operation.intercept.enabled")
+      .internal
+      .booleanConf
+      .createWithDefault(false)
+
   KyuubiConf.serverOnlyConfEntries ++= Set(
     SESSION_CLUSTER_MODE_ENABLED,
     SESSION_CLUSTER_CONF_REFRESH_INTERVAL,

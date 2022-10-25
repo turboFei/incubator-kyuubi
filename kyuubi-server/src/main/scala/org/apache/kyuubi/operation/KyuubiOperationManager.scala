@@ -23,7 +23,7 @@ import java.util.concurrent.TimeUnit
 import org.apache.hive.service.rpc.thrift.TRowSet
 
 import org.apache.kyuubi.KyuubiSQLException
-import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiConf.OPERATION_QUERY_TIMEOUT
 import org.apache.kyuubi.metrics.MetricsConstants.OPERATION_OPEN
 import org.apache.kyuubi.metrics.MetricsSystem
@@ -61,7 +61,16 @@ class KyuubiOperationManager private (name: String) extends OperationManager(nam
       runAsync: Boolean,
       queryTimeout: Long): Operation = {
     val operation =
-      new ExecuteStatement(session, statement, confOverlay, runAsync, getQueryTimeout(queryTimeout))
+      if (conf.get(KyuubiEbayConf.OPERATION_INTERCEPT_ENABLED) && "select 1" == statement) {
+        new Select1Operation(session)
+      } else {
+        new ExecuteStatement(
+          session,
+          statement,
+          confOverlay,
+          runAsync,
+          getQueryTimeout(queryTimeout))
+      }
     addOperation(operation)
   }
 
