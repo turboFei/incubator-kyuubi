@@ -166,12 +166,14 @@ class KyuubiOperationPerUserSuite
     assert(r1 !== r2)
   }
 
-  ignore("HADP-44628: Enable the timeout for KyuubiConnection::isValid") {
-    withJdbcStatement() { statement =>
-      val conn = statement.getConnection
-      assert(conn.isInstanceOf[KyuubiConnection])
-      assert(!conn.isValid(1))
-      assert(conn.isValid(3000))
+  test("HADP-44628: Enable the timeout for KyuubiConnection::isValid") {
+    withSessionConf(Map.empty)(Map.empty)(
+      Map(KyuubiConf.SESSION_ENGINE_LAUNCH_ASYNC.key -> "false")) {
+      withJdbcStatement() { statement =>
+        val conn = statement.getConnection
+        assert(conn.isInstanceOf[KyuubiConnection])
+        assert(conn.isValid(3))
+      }
     }
   }
 

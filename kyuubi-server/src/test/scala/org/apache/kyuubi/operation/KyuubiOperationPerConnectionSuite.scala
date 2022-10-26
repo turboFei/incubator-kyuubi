@@ -286,7 +286,7 @@ class KyuubiOperationPerConnectionSuite extends WithKyuubiServer with HiveJDBCTe
       KyuubiConf.SESSION_ENGINE_LAUNCH_ASYNC.key -> "false"))() {
       withJdbcStatement() { statement =>
         val conn = statement.getConnection.asInstanceOf[KyuubiConnection]
-        assert(conn.isValid(3000))
+        assert(conn.isValid(3))
         val sessionManager = server.backendService.sessionManager.asInstanceOf[KyuubiSessionManager]
         eventually(timeout(10.seconds)) {
           assert(sessionManager.allSessions().size === 1)
@@ -298,7 +298,7 @@ class KyuubiOperationPerConnectionSuite extends WithKyuubiServer with HiveJDBCTe
           assert(sessionManager.applicationManager.getApplicationInfo(None, engineId, None)
             .exists(_.state == ApplicationState.NOT_FOUND))
         }
-        assert(!conn.isValid(3000))
+        assert(!conn.isValid(3))
       }
     }
   }

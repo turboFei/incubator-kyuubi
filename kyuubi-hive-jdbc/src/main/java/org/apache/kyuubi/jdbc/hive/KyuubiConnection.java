@@ -1383,7 +1383,7 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
                       .getDatabaseProductName();
                 }
               });
-      future.get(timeout, TimeUnit.MILLISECONDS);
+      future.get(timeout, TimeUnit.SECONDS);
       rc = true;
     } catch (Exception e) {
       // IGNORE
