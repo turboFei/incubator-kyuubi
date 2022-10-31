@@ -264,19 +264,19 @@ public class BatchRestClientTest {
   public void deleteBatchTest() {
     // test spnego auth
     BatchTestServlet.setAuthSchema(NEGOTIATE_AUTH);
-    CloseBatchResponse response = spnegoBatchRestApi.deleteBatch("71535", "b_test", null);
+    CloseBatchResponse response = spnegoBatchRestApi.deleteBatch("71535", null);
     assertEquals(response.isSuccess(), true);
 
-    response = spnegoBatchRestApi.deleteBatch("71535", null, "b_test");
+    response = spnegoBatchRestApi.deleteBatch("71535", null);
     assertEquals(response.isSuccess(), true);
 
     // test basic auth
     BatchTestServlet.setAuthSchema(BASIC_AUTH);
     BatchTestServlet.allowAnonymous(false);
-    response = basicBatchRestApi.deleteBatch("71535", "b_test", null);
+    response = basicBatchRestApi.deleteBatch("71535", null);
     assertEquals(response.isSuccess(), true);
 
-    response = basicBatchRestApi.deleteBatch("71535", null, "b_test");
+    response = basicBatchRestApi.deleteBatch("71535", null);
     assertEquals(response.isSuccess(), true);
   }
 }

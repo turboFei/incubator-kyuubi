@@ -147,6 +147,7 @@ class KyuubiAuthenticationFactory(conf: KyuubiConf, isServer: Boolean = true) ex
 }
 object KyuubiAuthenticationFactory {
   val HS2_PROXY_USER = "hive.server2.proxy.user"
+  @deprecated("using hive.server2.proxy.user instead", "1.7.0")
   val KYUUBI_PROXY_BATCH_ACCOUNT = "kyuubi.proxy.batchAccount"
 
   @throws[KyuubiSQLException]

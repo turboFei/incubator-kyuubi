@@ -35,10 +35,7 @@ class DeleteBatchCommand(cliConfig: CliConfig) extends Command[Batch](cliConfig)
       val batchRestApi: BatchRestApi = new BatchRestApi(kyuubiRestClient)
       val batchId = normalizedCliConfig.batchOpts.batchId
 
-      val result = batchRestApi.deleteBatch(
-        batchId,
-        normalizedCliConfig.batchOpts.hs2ProxyUser,
-        normalizedCliConfig.batchOpts.proxyBatchAccount)
+      val result = batchRestApi.deleteBatch(batchId, normalizedCliConfig.batchOpts.hs2ProxyUser)
 
       info(JsonUtils.toJson(result))
 

@@ -71,7 +71,6 @@ case class BatchOpts(
     from: Int = -1,
     size: Int = 100,
     hs2ProxyUser: String = null,
-    proxyBatchAccount: String = null,
     waitCompletion: Boolean = true)
 
 case class EngineOpts(

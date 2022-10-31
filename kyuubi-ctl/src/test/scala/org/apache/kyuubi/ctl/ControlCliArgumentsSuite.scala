@@ -402,8 +402,6 @@ class ControlCliArgumentsSuite extends KyuubiFunSuite with TestPrematureExit {
          |${"\t"}Close batch session.
          |  <batchId>                Batch id.
          |  --hs2ProxyUser <value>   The value of hive.server2.proxy.user config.
-         |  --proxyBatchAccount <value>
-         |                           The value of kyuubi.proxy.batchAccount config.
          |Command: delete server
          |${"\t"}Delete the specified service node for a domain
          |Command: delete engine [options]

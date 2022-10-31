@@ -54,7 +54,7 @@ class InternalRestClient(kyuubiInstance: String, socketTimeout: Int, connectTime
 
   def deleteBatch(user: String, batchId: String): CloseBatchResponse = {
     withAuthUser(user) {
-      internalBatchRestApi.deleteBatch(batchId, null, null)
+      internalBatchRestApi.deleteBatch(batchId, null)
     }
   }
 

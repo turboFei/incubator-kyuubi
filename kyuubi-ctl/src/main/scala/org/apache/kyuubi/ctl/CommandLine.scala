@@ -262,10 +262,7 @@ object CommandLine {
           .text("Batch id."),
         opt[String]("hs2ProxyUser")
           .action((v, c) => c.copy(createOpts = c.createOpts.copy(filename = v)))
-          .text("The value of hive.server2.proxy.user config."),
-        opt[String]("proxyBatchAccount")
-          .action((v, c) => c.copy(createOpts = c.createOpts.copy(filename = v)))
-          .text("The value of kyuubi.proxy.batchAccount config."))
+          .text("The value of hive.server2.proxy.user config."))
   }
 
   private def listBatchCmd(builder: OParserBuilder[CliConfig]): OParser[_, CliConfig] = {
