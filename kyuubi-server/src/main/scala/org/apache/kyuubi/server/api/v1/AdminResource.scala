@@ -79,7 +79,7 @@ private[v1] class AdminResource extends ApiRequestContext with Logging {
       @QueryParam("hive.server2.proxy.user") hs2ProxyUser: String,
       @QueryParam("cluster") cluster: String): Response = {
     val userName = fe.getUserName(hs2ProxyUser)
-    val clusterConf = getClusterConf(cluster)
+    val clusterConf = getClusterConf(Option(cluster))
     val engine = getEngine(userName, engineType, shareLevel, subdomain, "default", clusterConf)
     val engineSpace = getEngineSpace(engine, clusterConf)
 
@@ -116,35 +116,44 @@ private[v1] class AdminResource extends ApiRequestContext with Logging {
       @QueryParam("hive.server2.proxy.user") hs2ProxyUser: String,
       @QueryParam("cluster") cluster: String): Seq[Engine] = {
     val userName = fe.getUserName(hs2ProxyUser)
-    val clusterConf = getClusterConf(cluster)
-    val engine = getEngine(userName, engineType, shareLevel, subdomain, "", clusterConf)
-    val engineSpace = getEngineSpace(engine, clusterConf)
-
-    var engineNodes = ListBuffer[ServiceNodeInfo]()
-    Option(subdomain).filter(_.nonEmpty) match {
-      case Some(_) =>
-        withDiscoveryClient(clusterConf) { discoveryClient =>
-          info(s"Listing engine nodes for $engineSpace")
-          engineNodes ++= discoveryClient.getServiceNodesInfo(engineSpace)
-        }
-      case None =>
-        withDiscoveryClient(clusterConf) { discoveryClient =>
-          discoveryClient.getChildren(engineSpace).map { child =>
-            info(s"Listing engine nodes for $engineSpace/$child")
-            engineNodes ++= discoveryClient.getServiceNodesInfo(s"$engineSpace/$child")
-          }
-        }
+    val clusterOptList = Option(cluster).map(c => Seq(Option(c))).getOrElse {
+      val clusterList = KyuubiEbayConf.getClusterList(fe.getConf)
+      if (clusterList.isEmpty) Seq(None) else clusterList.map(Option(_))
     }
-    engineNodes.map(node =>
-      new Engine(
-        engine.getVersion,
-        engine.getUser,
-        engine.getEngineType,
-        engine.getSharelevel,
-        node.namespace.split("/").last,
-        node.instance,
-        node.namespace,
-        node.attributes.asJava))
+
+    clusterOptList.flatMap { clusterOpt =>
+      val clusterConf = getClusterConf(clusterOpt)
+      val engine = getEngine(userName, engineType, shareLevel, subdomain, "", clusterConf)
+      val engineSpace = getEngineSpace(engine, clusterConf)
+
+      var engineNodes = ListBuffer[ServiceNodeInfo]()
+      Option(subdomain).filter(_.nonEmpty) match {
+        case Some(_) =>
+          withDiscoveryClient(clusterConf) { discoveryClient =>
+            info(s"Listing engine nodes for $engineSpace")
+            engineNodes ++= discoveryClient.getServiceNodesInfo(engineSpace)
+          }
+        case None =>
+          withDiscoveryClient(clusterConf) { discoveryClient =>
+            if (discoveryClient.pathExists(engineSpace)) {
+              discoveryClient.getChildren(engineSpace).map { child =>
+                info(s"Listing engine nodes for $engineSpace/$child")
+                engineNodes ++= discoveryClient.getServiceNodesInfo(s"$engineSpace/$child")
+              }
+            }
+          }
+      }
+      engineNodes.map(node =>
+        new Engine(
+          engine.getVersion,
+          engine.getUser,
+          engine.getEngineType,
+          engine.getSharelevel,
+          node.namespace.split("/").last,
+          node.instance,
+          node.namespace,
+          node.attributes.asJava))
+    }
   }
 
   private def getEngine(
@@ -184,13 +193,13 @@ private[v1] class AdminResource extends ApiRequestContext with Logging {
       Array(engine.getSubdomain))
   }
 
-  private def getClusterConf(cluster: String): KyuubiConf = {
+  private def getClusterConf(clusterOpt: Option[String]): KyuubiConf = {
     try {
       fe.be.sessionManager.asInstanceOf[KyuubiSessionManager].getSessionConf(
-        Option(cluster).map(c => Map(KyuubiEbayConf.SESSION_CLUSTER.key -> c)).getOrElse(Map.empty))
+        clusterOpt.map(c => Map(KyuubiEbayConf.SESSION_CLUSTER.key -> c)).getOrElse(Map.empty))
     } catch {
-      case e: Throwable =>
-        throw new NotFoundException(s"Please specify the correct cluster to access:${e.getMessage}")
+      case _: Throwable =>
+        throw new NotFoundException(s"Please specify the correct cluster to access.")
     }
   }
 }
