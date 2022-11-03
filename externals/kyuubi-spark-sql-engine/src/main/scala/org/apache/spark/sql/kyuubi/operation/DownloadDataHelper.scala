@@ -122,7 +122,15 @@ object DownloadDataHelper extends Logging {
     }
 
     val schemaStr = result.schema.map(_.name).mkString(writeOptions("delimiter"))
-    val isSortable = KyuubiOperationHelper.sortable(result.queryExecution.sparkPlan)
+    val isSortable = result.queryExecution.sparkPlan match {
+      case _: SortExec => true
+      case _: TakeOrderedAndProjectExec => true
+      case ProjectExec(_, _: SortExec) => true
+      case AdaptiveSparkPlanExec(_: SortExec, _, _, _) => true
+      case AdaptiveSparkPlanExec(_: TakeOrderedAndProjectExec, _, _, _) => true
+      case AdaptiveSparkPlanExec(ProjectExec(_, _: SortExec), _, _, _) => true
+      case _ => false
+    }
     // Background: according to the official Hadoop FileSystem API spec,
     // rename op's destination path must have a parent that exists,
     // otherwise we may get unexpected result on the rename API.
