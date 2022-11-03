@@ -262,6 +262,7 @@ if [[ "$CLIENT_ONLY" == "true" ]]; then
 
   cp "${KYUUBI_HOME}/bin/beeline" "${DISTDIR}/bin/beeline"
   cp "${KYUUBI_HOME}/bin/kyuubi-ctl" "${DISTDIR}/bin/kyuubi-ctl"
+  cp "${KYUUBI_HOME}/bin/kyuubi-admin" "${DISTDIR}/bin/kyuubi-admin"
   cp "${KYUUBI_HOME}/bin/load-kyuubi-env.sh" "${DISTDIR}/bin/load-kyuubi-env.sh"
 
   cp "${KYUUBI_HOME}/conf/kyuubi-defaults.conf.template" "${DISTDIR}/conf/kyuubi-defaults.conf"
