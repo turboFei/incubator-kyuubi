@@ -77,6 +77,7 @@ case class EngineOpts(
     user: String = null,
     engineType: String = null,
     engineSubdomain: String = null,
-    engineShareLevel: String = null)
+    engineShareLevel: String = null,
+    cluster: String = null)
 
 case class AdminConfigOpts(configType: String = null)

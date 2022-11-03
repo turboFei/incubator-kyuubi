@@ -121,6 +121,7 @@ class AdminControlCliArgumentsSuite extends KyuubiFunSuite with TestPrematureExi
          |                           The engine subdomain this engine belong to.
          |  -esl, --engine-share-level <value>
          |                           The engine share level this engine belong to.
+         |  --cluster <value>        The engine cluster.
          |
          |Command: delete [engine]
          |	Delete resources.
@@ -132,6 +133,7 @@ class AdminControlCliArgumentsSuite extends KyuubiFunSuite with TestPrematureExi
          |                           The engine subdomain this engine belong to.
          |  -esl, --engine-share-level <value>
          |                           The engine share level this engine belong to.
+         |  --cluster <value>        The engine cluster.
          |
          |Command: refresh [config] <args>...
          |	Refresh the resource.

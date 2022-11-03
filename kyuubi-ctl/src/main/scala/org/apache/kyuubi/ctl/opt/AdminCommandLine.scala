@@ -90,7 +90,10 @@ object AdminCommandLine extends CommonCommandLine {
           .text("The engine subdomain this engine belong to."),
         opt[String]("engine-share-level").abbr("esl")
           .action((v, c) => c.copy(engineOpts = c.engineOpts.copy(engineShareLevel = v)))
-          .text("The engine share level this engine belong to."))
+          .text("The engine share level this engine belong to."),
+        opt[String]("cluster")
+          .action((v, c) => c.copy(engineOpts = c.engineOpts.copy(cluster = v)))
+          .text("The engine cluster."))
   }
 
   private def refreshConfigCmd(builder: OParserBuilder[CliConfig]): OParser[_, CliConfig] = {

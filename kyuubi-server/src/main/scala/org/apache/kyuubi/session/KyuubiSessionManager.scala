@@ -325,7 +325,7 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
     KyuubiEbayConf.getSessionCluster(this, sessionConf)
   }
 
-  private def getSessionConf(sessionConf: Map[String, String]): KyuubiConf = {
+  private[kyuubi] def getSessionConf(sessionConf: Map[String, String]): KyuubiConf = {
     val clusterOpt = getSessionCluster(sessionConf)
     try {
       clusterOpt.map { c =>

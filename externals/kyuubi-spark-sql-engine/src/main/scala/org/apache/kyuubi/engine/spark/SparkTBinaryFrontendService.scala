@@ -27,6 +27,7 @@ import org.apache.spark.SparkContext
 import org.apache.spark.kyuubi.SparkContextHelper
 
 import org.apache.kyuubi.{KyuubiSQLException, Logging}
+import org.apache.kyuubi.config.KyuubiEbayConf
 import org.apache.kyuubi.config.KyuubiReservedKeys._
 import org.apache.kyuubi.ha.client.{EngineServiceDiscovery, ServiceDiscovery}
 import org.apache.kyuubi.service.{Serverable, Service, TBinaryFrontendService}
@@ -94,7 +95,9 @@ class SparkTBinaryFrontendService(
   }
 
   override def attributes: Map[String, String] = {
-    Map(KYUUBI_ENGINE_ID -> KyuubiSparkUtil.engineId)
+    Map(KYUUBI_ENGINE_ID -> KyuubiSparkUtil.engineId) ++
+      conf.get(KyuubiEbayConf.SESSION_CLUSTER).map(c =>
+        Map("kyuubi.engine.cluster" -> c)).getOrElse(Map.empty)
   }
 }
 

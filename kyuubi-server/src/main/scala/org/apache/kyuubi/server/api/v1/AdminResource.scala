@@ -30,13 +30,14 @@ import io.swagger.v3.oas.annotations.tags.Tag
 
 import org.apache.kyuubi.{KYUUBI_VERSION, Logging, Utils}
 import org.apache.kyuubi.client.api.v1.dto.Engine
-import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiConf._
 import org.apache.kyuubi.ha.HighAvailabilityConf.HA_NAMESPACE
 import org.apache.kyuubi.ha.client.{DiscoveryPaths, ServiceNodeInfo}
 import org.apache.kyuubi.ha.client.DiscoveryClientProvider.withDiscoveryClient
 import org.apache.kyuubi.server.KyuubiServer
 import org.apache.kyuubi.server.api.ApiRequestContext
+import org.apache.kyuubi.session.KyuubiSessionManager
 
 @Tag(name = "Admin")
 @Produces(Array(MediaType.APPLICATION_JSON))
@@ -75,12 +76,14 @@ private[v1] class AdminResource extends ApiRequestContext with Logging {
       @QueryParam("type") engineType: String,
       @QueryParam("sharelevel") shareLevel: String,
       @QueryParam("subdomain") subdomain: String,
-      @QueryParam("hive.server2.proxy.user") hs2ProxyUser: String): Response = {
+      @QueryParam("hive.server2.proxy.user") hs2ProxyUser: String,
+      @QueryParam("cluster") cluster: String): Response = {
     val userName = fe.getUserName(hs2ProxyUser)
-    val engine = getEngine(userName, engineType, shareLevel, subdomain, "default")
-    val engineSpace = getEngineSpace(engine)
+    val clusterConf = getClusterConf(cluster)
+    val engine = getEngine(userName, engineType, shareLevel, subdomain, "default", clusterConf)
+    val engineSpace = getEngineSpace(engine, clusterConf)
 
-    withDiscoveryClient(fe.getConf) { discoveryClient =>
+    withDiscoveryClient(clusterConf) { discoveryClient =>
       val engineNodes = discoveryClient.getChildren(engineSpace)
       engineNodes.foreach { node =>
         val nodePath = s"$engineSpace/$node"
@@ -110,20 +113,22 @@ private[v1] class AdminResource extends ApiRequestContext with Logging {
       @QueryParam("type") engineType: String,
       @QueryParam("sharelevel") shareLevel: String,
       @QueryParam("subdomain") subdomain: String,
-      @QueryParam("hive.server2.proxy.user") hs2ProxyUser: String): Seq[Engine] = {
+      @QueryParam("hive.server2.proxy.user") hs2ProxyUser: String,
+      @QueryParam("cluster") cluster: String): Seq[Engine] = {
     val userName = fe.getUserName(hs2ProxyUser)
-    val engine = getEngine(userName, engineType, shareLevel, subdomain, "")
-    val engineSpace = getEngineSpace(engine)
+    val clusterConf = getClusterConf(cluster)
+    val engine = getEngine(userName, engineType, shareLevel, subdomain, "", clusterConf)
+    val engineSpace = getEngineSpace(engine, clusterConf)
 
     var engineNodes = ListBuffer[ServiceNodeInfo]()
     Option(subdomain).filter(_.nonEmpty) match {
       case Some(_) =>
-        withDiscoveryClient(fe.getConf) { discoveryClient =>
+        withDiscoveryClient(clusterConf) { discoveryClient =>
           info(s"Listing engine nodes for $engineSpace")
           engineNodes ++= discoveryClient.getServiceNodesInfo(engineSpace)
         }
       case None =>
-        withDiscoveryClient(fe.getConf) { discoveryClient =>
+        withDiscoveryClient(clusterConf) { discoveryClient =>
           discoveryClient.getChildren(engineSpace).map { child =>
             info(s"Listing engine nodes for $engineSpace/$child")
             engineNodes ++= discoveryClient.getServiceNodesInfo(s"$engineSpace/$child")
@@ -147,9 +152,10 @@ private[v1] class AdminResource extends ApiRequestContext with Logging {
       engineType: String,
       shareLevel: String,
       subdomain: String,
-      subdomainDefault: String): Engine = {
+      subdomainDefault: String,
+      conf: KyuubiConf): Engine = {
     // use default value from kyuubi conf when param is not provided
-    val clonedConf: KyuubiConf = fe.getConf.clone
+    val clonedConf: KyuubiConf = conf.clone
     Option(engineType).foreach(clonedConf.set(ENGINE_TYPE, _))
     Option(subdomain).filter(_.nonEmpty)
       .foreach(_ => clonedConf.set(ENGINE_SHARE_LEVEL_SUBDOMAIN, Option(subdomain)))
@@ -170,11 +176,21 @@ private[v1] class AdminResource extends ApiRequestContext with Logging {
       Collections.emptyMap())
   }
 
-  private def getEngineSpace(engine: Engine): String = {
-    val serverSpace = fe.getConf.get(HA_NAMESPACE)
+  private def getEngineSpace(engine: Engine, conf: KyuubiConf): String = {
+    val serverSpace = conf.get(HA_NAMESPACE)
     DiscoveryPaths.makePath(
       s"${serverSpace}_${engine.getVersion}_${engine.getSharelevel}_${engine.getEngineType}",
       engine.getUser,
       Array(engine.getSubdomain))
+  }
+
+  private def getClusterConf(cluster: String): KyuubiConf = {
+    try {
+      fe.be.sessionManager.asInstanceOf[KyuubiSessionManager].getSessionConf(
+        Option(cluster).map(c => Map(KyuubiEbayConf.SESSION_CLUSTER.key -> c)).getOrElse(Map.empty))
+    } catch {
+      case e: Throwable =>
+        throw new NotFoundException(s"Please specify the correct cluster to access:${e.getMessage}")
+    }
   }
 }

@@ -351,7 +351,7 @@ object KyuubiEbayConf extends Logging {
     conf.get(SESSION_CLUSTER_LIST).getOrElse(getDefinedPropertiesClusterList())
   }
 
-  private def checkClusterOpt(conf: KyuubiConf, clusterOpt: Option[String]): Unit = {
+  private[kyuubi] def checkClusterOpt(conf: KyuubiConf, clusterOpt: Option[String]): Unit = {
     if (conf.get(SESSION_CLUSTER_MODE_ENABLED)) {
       if (clusterOpt.isEmpty || !getClusterList(conf).contains(clusterOpt.get)) {
         throw new KyuubiException(
