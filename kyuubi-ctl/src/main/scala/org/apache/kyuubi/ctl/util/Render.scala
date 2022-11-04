@@ -35,15 +35,21 @@ private[ctl] object Render {
 
   def renderEngineNodesInfo(engineNodesInfo: Seq[Engine]): String = {
     val title = s"Engine Node List (total ${engineNodesInfo.size})"
-    val header = Array("Namespace", "Instance", "Version", "Attributes")
+    val header = Array("Namespace", "Instance", "Attributes")
     val rows = engineNodesInfo.map { engine =>
       Array(
-        engine.getNamespace,
+        engine.getNamespace + "\n" + renderEngineNamespaceDetails(engine),
         engine.getInstance,
-        engine.getVersion,
         engine.getAttributes.asScala.map(kv => kv._1 + "=" + kv._2).mkString("\n"))
     }.toArray
     Tabulator.format(title, header, rows)
+  }
+
+  def renderEngineNamespaceDetails(engine: Engine): String = {
+    val header = Array("EngineType", "ShareLevel", "Subdomain")
+    Tabulator.formatTextTable(
+      header,
+      Array(Array(engine.getEngineType, engine.getSharelevel, engine.getSubdomain)))
   }
 
   def renderSessionDataListInfo(sessions: Seq[SessionData]): String = {
