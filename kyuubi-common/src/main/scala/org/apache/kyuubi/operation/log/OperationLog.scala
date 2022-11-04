@@ -240,4 +240,6 @@ class OperationLog(path: Path) {
       }
     }
   }
+
+  private[kyuubi] def getPaths: Seq[Path] = Seq(path) ++ extraPaths
 }

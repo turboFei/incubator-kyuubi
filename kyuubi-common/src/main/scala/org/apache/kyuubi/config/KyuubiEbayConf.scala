@@ -271,6 +271,24 @@ object KyuubiEbayConf extends Logging {
       .booleanConf
       .createWithDefault(false)
 
+  val LOG_AGG_CLEANER_ENABLED: ConfigEntry[Boolean] =
+    buildConf("kyuubi.log.agg.cleaner.enabled")
+      .internal
+      .booleanConf
+      .createWithDefault(false)
+
+  val LOG_AGG_CLEANER_INTERVAL: ConfigEntry[Long] =
+    buildConf("kyuubi.log.agg.cleaner.interval")
+      .internal
+      .timeConf
+      .createWithDefaultString("PT6H")
+
+  val LOG_AGG_CLEANER_MAX_LOG_AGE: ConfigEntry[Long] =
+    buildConf("kyuubi.log.agg.cleaner.maxAge")
+      .internal
+      .timeConf
+      .createWithDefaultString("PT336H")
+
   KyuubiConf.serverOnlyConfEntries ++= Set(
     SESSION_CLUSTER_MODE_ENABLED,
     SESSION_CLUSTER_CONF_REFRESH_INTERVAL,
@@ -348,7 +366,11 @@ object KyuubiEbayConf extends Logging {
   }
 
   def getClusterList(conf: KyuubiConf = KyuubiConf().loadFileDefaults()): Seq[String] = {
-    conf.get(SESSION_CLUSTER_LIST).getOrElse(getDefinedPropertiesClusterList())
+    if (conf.get(SESSION_CLUSTER_MODE_ENABLED)) {
+      conf.get(SESSION_CLUSTER_LIST).getOrElse(getDefinedPropertiesClusterList())
+    } else {
+      Seq.empty
+    }
   }
 
   private[kyuubi] def checkClusterOpt(conf: KyuubiConf, clusterOpt: Option[String]): Unit = {

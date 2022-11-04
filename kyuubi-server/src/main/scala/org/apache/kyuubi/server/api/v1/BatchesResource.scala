@@ -37,7 +37,7 @@ import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiReservedKeys.KYUUBI_CLIENT_IP_KEY
 import org.apache.kyuubi.engine.ApplicationInfo
 import org.apache.kyuubi.operation.{BatchJobSubmission, FetchOrientation, OperationState}
-import org.apache.kyuubi.server.LogAggManager
+import org.apache.kyuubi.server.BatchLogAggManager
 import org.apache.kyuubi.server.api.ApiRequestContext
 import org.apache.kyuubi.server.api.v1.BatchesResource._
 import org.apache.kyuubi.server.metadata.MetadataManager
@@ -272,8 +272,9 @@ private[v1] class BatchesResource extends ApiRequestContext with Logging {
       @PathParam("batchId") batchId: String,
       @QueryParam("from") @DefaultValue("-1") from: Int,
       @QueryParam("size") @DefaultValue("100") size: Int): OperationLog = {
-    def getAggOperationLog: Option[OperationLog] = {
-      LogAggManager.get.map(_.getAggregatedLog(batchId, from, size)).getOrElse(None)
+    def getAggOperationLog(createTime: Long, identifier: String): Option[OperationLog] = {
+      BatchLogAggManager.get.map(_.getAggregatedLog(createTime, identifier, from, size)).getOrElse(
+        None)
     }
     val userName = fe.getUserName(Map.empty[String, String])
     val sessionHandle = formatSessionHandle(batchId)
@@ -288,7 +289,7 @@ private[v1] class BatchesResource extends ApiRequestContext with Logging {
         new OperationLog(logRowSet.asJava, logRowSet.size)
       } catch {
         case NonFatal(e) =>
-          getAggOperationLog.getOrElse {
+          getAggOperationLog(batchSession.createTime, batchId).getOrElse {
             val errorMsg = s"Error getting operation log for batchId: $batchId"
             error(errorMsg, e)
             throw new NotFoundException(errorMsg)
@@ -302,14 +303,14 @@ private[v1] class BatchesResource extends ApiRequestContext with Logging {
             internalRestClient.getBatchLocalLog(userName, batchId, from, size)
           } catch {
             case NonFatal(e) =>
-              getAggOperationLog.getOrElse {
+              getAggOperationLog(metadata.createTime, batchId).getOrElse {
                 val errorMsg = s"Error getting operation log for batchId: $batchId"
                 error(errorMsg, e)
                 throw e
               }
           }
         } else {
-          getAggOperationLog.getOrElse(
+          getAggOperationLog(metadata.createTime, batchId).getOrElse(
             throw new NotFoundException(s"No local log found for batch: $batchId"))
         }
       }.getOrElse {

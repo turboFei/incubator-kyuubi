@@ -28,7 +28,6 @@ import org.apache.kyuubi.client.util.BatchUtils
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.engine.KyuubiApplicationManager
 import org.apache.kyuubi.operation.log.OperationLog
-import org.apache.kyuubi.server.LogAggManager
 
 class SparkBatchProcessBuilder(
     override val proxyUser: String,
@@ -44,7 +43,6 @@ class SparkBatchProcessBuilder(
   import SparkProcessBuilder._
 
   private var batchSqlFileDir: File = _
-  private var logAggregated: Boolean = false
 
   override protected val commands: Array[String] = {
     val buffer = new ArrayBuffer[String]()
@@ -105,10 +103,6 @@ class SparkBatchProcessBuilder(
     super.close(destroyProcess)
     Option(batchSqlFileDir).foreach { dir =>
       Utils.tryLogNonFatalError(Utils.deleteDirectoryRecursively(dir))
-    }
-    if (!logAggregated) {
-      LogAggManager.get.foreach(_.aggLog(engineLog, batchId))
-      logAggregated = true
     }
   }
 }

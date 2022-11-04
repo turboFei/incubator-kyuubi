@@ -34,6 +34,7 @@ import org.apache.kyuubi.metrics.MetricsSystem
 import org.apache.kyuubi.operation.FetchOrientation.FetchOrientation
 import org.apache.kyuubi.operation.OperationState.{CANCELED, OperationState}
 import org.apache.kyuubi.operation.log.OperationLog
+import org.apache.kyuubi.server.BatchLogAggManager
 import org.apache.kyuubi.server.metadata.api.Metadata
 import org.apache.kyuubi.session.KyuubiBatchSessionImpl
 
@@ -136,6 +137,19 @@ class BatchJobSubmission(
   private def setStateIfNotCanceled(newState: OperationState): Unit = state.synchronized {
     if (state != CANCELED) {
       setState(newState)
+    }
+  }
+
+  // batch log aggregation
+  @volatile private var logAggregated: Boolean = false
+  override def setState(newState: OperationState): Unit = {
+    super.setState(newState)
+
+    if (!logAggregated && OperationState.isTerminal(newState)) {
+      getOperationLog.foreach { opLog =>
+        BatchLogAggManager.get.foreach(_.aggLog(opLog.getPaths.map(_.toFile), createTime, batchId))
+      }
+      logAggregated = true
     }
   }
 
