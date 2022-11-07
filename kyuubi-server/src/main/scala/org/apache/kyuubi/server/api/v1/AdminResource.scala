@@ -53,7 +53,7 @@ private[v1] class AdminResource extends ApiRequestContext with Logging {
   @POST
   @Path("refresh/hadoop_conf")
   def refreshFrontendHadoopConf(): Response = {
-    val userName = fe.getUserName(Map.empty[String, String])
+    val userName = fe.getSessionUser(Map.empty[String, String])
     val ipAddress = fe.getIpAddress
     info(s"Receive refresh Kyuubi server hadoop conf request from $userName/$ipAddress")
     if (!userName.equals(administrator)) {
@@ -78,7 +78,7 @@ private[v1] class AdminResource extends ApiRequestContext with Logging {
       @QueryParam("subdomain") subdomain: String,
       @QueryParam("hive.server2.proxy.user") hs2ProxyUser: String,
       @QueryParam("cluster") cluster: String): Response = {
-    val userName = fe.getUserName(hs2ProxyUser)
+    val userName = fe.getSessionUser(hs2ProxyUser)
     val clusterConf = getClusterConf(Option(cluster))
     val engine = getEngine(userName, engineType, shareLevel, subdomain, "default", clusterConf)
     val engineSpace = getEngineSpace(engine, clusterConf)
@@ -115,7 +115,7 @@ private[v1] class AdminResource extends ApiRequestContext with Logging {
       @QueryParam("subdomain") subdomain: String,
       @QueryParam("hive.server2.proxy.user") hs2ProxyUser: String,
       @QueryParam("cluster") cluster: String): Seq[Engine] = {
-    val userName = fe.getUserName(hs2ProxyUser)
+    val userName = fe.getSessionUser(hs2ProxyUser)
     val clusterOptList = Option(cluster).map(c => Seq(Option(c))).getOrElse {
       val clusterList = KyuubiEbayConf.getClusterList(fe.getConf)
       if (clusterList.isEmpty) Seq(None) else clusterList.map(Option(_))
