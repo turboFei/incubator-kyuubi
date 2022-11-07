@@ -45,13 +45,6 @@ private[ctl] object Render {
     Tabulator.format(title, header, rows)
   }
 
-  def renderEngineNamespaceDetails(engine: Engine): String = {
-    val header = Array("EngineType", "ShareLevel", "Subdomain")
-    Tabulator.formatTextTable(
-      header,
-      Array(Array(engine.getEngineType, engine.getSharelevel, engine.getSubdomain)))
-  }
-
   def renderSessionDataListInfo(sessions: Seq[SessionData]): String = {
     val title = s"Live Session List (total ${sessions.size})"
     val header = Array(
@@ -133,5 +126,12 @@ private[ctl] object Render {
       batchAppInfo += s"App Diagnostic: ${batch.getAppDiagnostic}"
     }
     batchAppInfo.toList
+  }
+
+  private def renderEngineNamespaceDetails(engine: Engine): String = {
+    val header = Array("EngineType", "ShareLevel", "Subdomain")
+    Tabulator.formatTextTable(
+      header,
+      Array(Array(engine.getEngineType, engine.getSharelevel, engine.getSubdomain)))
   }
 }
