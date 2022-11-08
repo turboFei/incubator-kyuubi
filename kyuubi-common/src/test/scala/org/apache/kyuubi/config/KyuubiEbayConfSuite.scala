@@ -22,9 +22,10 @@ import org.apache.kyuubi.session.NoopSessionManager
 
 class KyuubiEbayConfSuite extends KyuubiFunSuite {
   test("get cluster list") {
-    assert(KyuubiEbayConf.getClusterList() == Seq("test"))
+    assert(KyuubiEbayConf.getClusterList() == Seq.empty)
 
     val conf = KyuubiConf()
+    conf.set(KyuubiEbayConf.SESSION_CLUSTER_MODE_ENABLED, true)
     conf.set(KyuubiEbayConf.SESSION_CLUSTER_LIST, Seq("test1", "test2"))
     assert(KyuubiEbayConf.getClusterList(conf) === Seq("test1", "test2"))
   }
