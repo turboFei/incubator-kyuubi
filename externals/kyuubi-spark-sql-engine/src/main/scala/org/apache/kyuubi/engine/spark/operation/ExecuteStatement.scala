@@ -17,7 +17,6 @@
 
 package org.apache.kyuubi.engine.spark.operation
 
-import java.util.Locale
 import java.util.concurrent.RejectedExecutionException
 
 import scala.collection.JavaConverters._
@@ -32,6 +31,7 @@ import org.apache.spark.sql.execution.command.{DataWritingCommandExec, ExecutedC
 import org.apache.spark.sql.execution.datasources.InsertIntoDataSourceCommand
 import org.apache.spark.sql.execution.datasources.v2.{AppendDataExecV1, OverwriteByExpressionExecV1, V2TableWriteExec}
 import org.apache.spark.sql.execution.metric.SQLMetric
+import org.apache.spark.sql.kyuubi.operation.ExecuteStatementHelper
 import org.apache.spark.sql.types._
 
 import org.apache.kyuubi.{KyuubiSQLException, Logging, Utils}
@@ -134,10 +134,6 @@ class ExecuteStatement(
   }
 
   // temp table collect
-  private def isDQLStatement(statement: String): Boolean = {
-    val normalizedStatement = statement.toUpperCase(Locale.ROOT).trim
-    normalizedStatement.startsWith("WITH") || normalizedStatement.startsWith("SELECT")
-  }
   private val tempTableCollect =
     spark.conf.getOption(OPERATION_TEMP_TABLE_COLLECT.key) match {
       case Some(s) => s.toBoolean
@@ -175,7 +171,7 @@ class ExecuteStatement(
       result = spark.sql(statement)
       schema = result.schema
       // only save to temp table for incremental collect mode
-      if (tempTableCollect && incrementalCollect && isDQLStatement(statement)) {
+      if (tempTableCollect && incrementalCollect && ExecuteStatementHelper.isDQL(statement)) {
         tempTableEnabled = true
 
         /**
