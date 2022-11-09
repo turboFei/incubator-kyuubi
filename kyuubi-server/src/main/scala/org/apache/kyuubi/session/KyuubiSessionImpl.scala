@@ -52,14 +52,16 @@ class KyuubiSessionImpl(
   val sessionCluster = KyuubiEbayConf.getSessionCluster(sessionManager, normalizedConf)
 
   private[kyuubi] val optimizedConf: Map[String, String] = {
+    val queueConf =
+      normalizedConf.get(QUEUE).map(queue => Map("spark.yarn.queue" -> queue)).getOrElse(Map.empty)
     val confOverlay = sessionManager.sessionConfAdvisor.getConfOverlay(
       user,
       normalizedConf.asJava)
     if (confOverlay != null) {
-      normalizedConf ++ confOverlay.asScala
+      queueConf ++ normalizedConf ++ confOverlay.asScala
     } else {
       warn(s"the server plugin return null value for user: $user, ignore it")
-      normalizedConf
+      queueConf ++ normalizedConf
     }
   }
 

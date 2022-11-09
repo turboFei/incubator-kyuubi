@@ -27,4 +27,5 @@ package object session {
   val METACONF_PREFIX = "metaconf:"
 
   val SPARK_PREFIX = "spark."
+  val QUEUE = "queue"
 }

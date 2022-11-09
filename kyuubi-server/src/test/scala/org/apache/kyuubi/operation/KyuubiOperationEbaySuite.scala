@@ -134,4 +134,27 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper 
       }
     }
   }
+
+  test("support queue variable in jdbc url") {
+    withSessionConf(Map.empty)(Map.empty)(Map(
+      "queue" -> "yarn_queue",
+      KyuubiEbayConf.SESSION_CLUSTER.key -> "test")) {
+      withJdbcStatement() { statement =>
+        val rs = statement.executeQuery("set spark.yarn.queue")
+        assert(rs.next())
+        assert(rs.getString(2) === "yarn_queue")
+      }
+    }
+
+    withSessionConf(Map.empty)(Map.empty)(Map(
+      "queue" -> "yarn_queue",
+      "spark.yarn.queue" -> "queue_2",
+      KyuubiEbayConf.SESSION_CLUSTER.key -> "test")) {
+      withJdbcStatement() { statement =>
+        val rs = statement.executeQuery("set spark.yarn.queue")
+        assert(rs.next())
+        assert(rs.getString(2) === "queue_2")
+      }
+    }
+  }
 }
