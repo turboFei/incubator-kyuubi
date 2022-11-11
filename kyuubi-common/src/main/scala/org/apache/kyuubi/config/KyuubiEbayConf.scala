@@ -257,6 +257,12 @@ object KyuubiEbayConf extends Logging {
       .booleanConf
       .createWithDefault(false)
 
+  val OPERATION_TEMP_TABLE_COLLECT_FILES_OPEN_COST: ConfigEntry[Long] =
+    buildConf("kyuubi.operation.temp.table.collect.files.openCostInBytes")
+      .internal
+      .longConf
+      .createWithDefault(1 * 1024 * 1024)
+
   val SESSION_PROGRESS_PLAN_ENABLE: ConfigEntry[Boolean] =
     buildConf("kyuubi.operation.progress.plan.enabled")
       .doc("Whether to enable the operation progress plan. When true," +

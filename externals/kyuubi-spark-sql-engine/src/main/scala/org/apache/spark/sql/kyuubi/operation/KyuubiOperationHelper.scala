@@ -19,6 +19,7 @@ package org.apache.spark.sql.kyuubi.operation
 
 import org.apache.spark.sql.execution.{ProjectExec, SortExec, SparkPlan, TakeOrderedAndProjectExec}
 import org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanExec
+import org.apache.spark.sql.execution.columnar.InMemoryTableScanExec
 
 object KyuubiOperationHelper {
 
@@ -32,6 +33,11 @@ object KyuubiOperationHelper {
     case AdaptiveSparkPlanExec(_: SortExec, _, _, _) => true
     case AdaptiveSparkPlanExec(_: TakeOrderedAndProjectExec, _, _, _) => true
     case AdaptiveSparkPlanExec(ProjectExec(_, _: SortExec), _, _, _) => true
+    case _ => false
+  }
+
+  def isInMemoryTableScan(sparkPlan: SparkPlan): Boolean = sparkPlan match {
+    case _: InMemoryTableScanExec => true
     case _ => false
   }
 }

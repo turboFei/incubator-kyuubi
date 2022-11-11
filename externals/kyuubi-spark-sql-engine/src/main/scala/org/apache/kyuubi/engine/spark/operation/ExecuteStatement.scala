@@ -31,6 +31,7 @@ import org.apache.spark.sql.execution.command.{DataWritingCommandExec, ExecutedC
 import org.apache.spark.sql.execution.datasources.InsertIntoDataSourceCommand
 import org.apache.spark.sql.execution.datasources.v2.{AppendDataExecV1, OverwriteByExpressionExecV1, V2TableWriteExec}
 import org.apache.spark.sql.execution.metric.SQLMetric
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.kyuubi.operation.{ExecuteStatementHelper, KyuubiOperationHelper}
 import org.apache.spark.sql.types._
 
@@ -144,6 +145,16 @@ class ExecuteStatement(
       case Some(s) => s.toBoolean
       case _ => session.sessionManager.getConf.get(OPERATION_TEMP_TABLE_COLLECT)
     }
+  private val originalSqlFileOpenCost =
+    spark.sessionState.conf.getConf(SQLConf.FILES_OPEN_COST_IN_BYTES)
+  private val tempTableCollectFileOpenCost =
+    spark.conf.getOption(OPERATION_TEMP_TABLE_COLLECT_FILES_OPEN_COST.key) match {
+      case Some(s) => s.toLong
+      case _ => session.sessionManager.getConf.get(OPERATION_TEMP_TABLE_COLLECT_FILES_OPEN_COST)
+    }
+  private def setSqlFileOpenCost(openCost: Long): Unit = {
+    spark.sessionState.conf.setConf(SQLConf.FILES_OPEN_COST_IN_BYTES, openCost)
+  }
   private val tempTableName: String = s"$tempTableDb.kyuubi_temp_$statementId".replaceAll("-", "_")
   private var tempTableEnabled: Boolean = false
   private val tempViewName = s"kyuubi_cache_$statementId".replaceAll("-", "_")
@@ -162,6 +173,7 @@ class ExecuteStatement(
     if (tempTableEnabled || tempViewEnabled) {
       Utils.tryLogNonFatalError {
         withLocalProperties[Unit] {
+          setSqlFileOpenCost(originalSqlFileOpenCost)
           val toDrop = if (tempTableEnabled) tempTableName else tempViewName
           val dropTempTable = s"DROP TABLE IF EXISTS $toDrop"
           withStatement(dropTempTable)(spark.sql(dropTempTable))
@@ -180,19 +192,24 @@ class ExecuteStatement(
       schema = result.schema
       // only save to temp table for incremental collect mode
       if (tempTableCollect && incrementalCollect && ExecuteStatementHelper.isDQL(statement)) {
-        tempTableEnabled = true
+        if (KyuubiOperationHelper.isInMemoryTableScan(result.queryExecution.sparkPlan)) {
+          info("The query is already using in memory table, skip to use temp table.")
+        } else if (KyuubiOperationHelper.sortable(result.queryExecution.sparkPlan)) {
 
-        /**
-         * If the query is sortable, we shall use temporary view instead of temporary table.
-         */
-        if (KyuubiOperationHelper.sortable(result.queryExecution.sparkPlan)) {
+          /**
+           * If the query is sortable, we shall use temporary view instead of temporary table.
+           */
           info(s"Using $tempViewName to cache the query result")
           tempViewEnabled = true
           val createViewDDL = s"CREATE TEMPORARY VIEW $tempViewName AS $statement"
           val cacheViewDDL = s"CACHE TABLE $tempViewName"
-          withStatement(createViewDDL)(spark.sql(createViewDDL))
-          withStatement(cacheViewDDL)(spark.sql(cacheViewDDL))
-          result = spark.sql(s"SELECT * FROM $tempViewName")
+          try {
+            withStatement(createViewDDL)(spark.sql(createViewDDL))
+            withStatement(cacheViewDDL)(spark.sql(cacheViewDDL))
+            result = spark.sql(s"SELECT * FROM $tempViewName")
+          } catch {
+            case e: Throwable => error(s"Error creating view with $createViewDDL", e)
+          }
         } else {
           info(s"Using $tempTableName to save the query result")
           tempTableEnabled = true
@@ -218,6 +235,7 @@ class ExecuteStatement(
                 false
             }
           if (saveToTempTable) {
+            setSqlFileOpenCost(tempTableCollectFileOpenCost)
             result = spark.sql(s"SELECT * FROM $tempTableName")
           }
         }
