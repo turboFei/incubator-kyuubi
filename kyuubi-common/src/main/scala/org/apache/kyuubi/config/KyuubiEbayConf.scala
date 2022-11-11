@@ -257,11 +257,17 @@ object KyuubiEbayConf extends Logging {
       .booleanConf
       .createWithDefault(false)
 
-  val OPERATION_TEMP_TABLE_COLLECT_FILES_OPEN_COST: ConfigEntry[Long] =
-    buildConf("kyuubi.operation.temp.table.collect.files.openCostInBytes")
+  val OPERATION_TEMP_TABLE_COLLECT_MIN_FILE_SIZE: ConfigEntry[Long] =
+    buildConf("kyuubi.operation.temp.table.collect.minFileSize")
       .internal
       .longConf
-      .createWithDefault(1 * 1024 * 1024)
+      .createWithDefault(10 * 1024 * 1024)
+
+  val OPERATION_TEMP_TABLE_COLLECT_FILE_COALESCE_SIZE: ConfigEntry[Long] =
+    buildConf("kyuubi.operation.temp.table.collect.fileCoalesceFile")
+      .internal
+      .longConf
+      .createWithDefault(100 * 1024 * 1024)
 
   val SESSION_PROGRESS_PLAN_ENABLE: ConfigEntry[Boolean] =
     buildConf("kyuubi.operation.progress.plan.enabled")

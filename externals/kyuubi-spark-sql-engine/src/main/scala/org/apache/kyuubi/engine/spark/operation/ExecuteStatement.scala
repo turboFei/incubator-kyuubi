@@ -21,17 +21,18 @@ import java.util.concurrent.RejectedExecutionException
 
 import scala.collection.JavaConverters._
 
+import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hive.service.rpc.thrift.TProgressUpdateResp
 import org.apache.spark.kyuubi.{SparkProgressMonitor, SQLOperationListener}
 import org.apache.spark.kyuubi.SparkUtilsHelper.redact
-import org.apache.spark.sql.Row
+import org.apache.spark.sql.{Row, SaveMode}
+import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.execution.QueryExecution
 import org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanExec
 import org.apache.spark.sql.execution.command.{DataWritingCommandExec, ExecutedCommandExec}
 import org.apache.spark.sql.execution.datasources.InsertIntoDataSourceCommand
 import org.apache.spark.sql.execution.datasources.v2.{AppendDataExecV1, OverwriteByExpressionExecV1, V2TableWriteExec}
 import org.apache.spark.sql.execution.metric.SQLMetric
-import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.kyuubi.operation.{ExecuteStatementHelper, KyuubiOperationHelper}
 import org.apache.spark.sql.types._
 
@@ -40,6 +41,7 @@ import org.apache.kyuubi.config.KyuubiConf._
 import org.apache.kyuubi.config.KyuubiEbayConf._
 import org.apache.kyuubi.engine.spark.KyuubiSparkUtil._
 import org.apache.kyuubi.engine.spark.events.SparkOperationEvent
+import org.apache.kyuubi.engine.spark.session.SparkSessionImpl
 import org.apache.kyuubi.events.EventBus
 import org.apache.kyuubi.operation.{ArrayFetchIterator, IterableFetchIterator, OperationState, OperationStatus}
 import org.apache.kyuubi.operation.OperationState.OperationState
@@ -145,18 +147,22 @@ class ExecuteStatement(
       case Some(s) => s.toBoolean
       case _ => session.sessionManager.getConf.get(OPERATION_TEMP_TABLE_COLLECT)
     }
-  private val originalSqlFileOpenCost =
-    spark.sessionState.conf.getConf(SQLConf.FILES_OPEN_COST_IN_BYTES)
-  private val tempTableCollectFileOpenCost =
-    spark.conf.getOption(OPERATION_TEMP_TABLE_COLLECT_FILES_OPEN_COST.key) match {
+  private val tempTableCollectMinFileSize =
+    spark.conf.getOption(OPERATION_TEMP_TABLE_COLLECT_MIN_FILE_SIZE.key) match {
       case Some(s) => s.toLong
-      case _ => session.sessionManager.getConf.get(OPERATION_TEMP_TABLE_COLLECT_FILES_OPEN_COST)
+      case _ => session.sessionManager.getConf.get(OPERATION_TEMP_TABLE_COLLECT_MIN_FILE_SIZE)
     }
-  private def setSqlFileOpenCost(openCost: Long): Unit = {
-    spark.sessionState.conf.setConf(SQLConf.FILES_OPEN_COST_IN_BYTES, openCost)
-  }
-  private val tempTableName: String = s"$tempTableDb.kyuubi_temp_$statementId".replaceAll("-", "_")
+  private val tempTableCollectFileCoalesceSize =
+    spark.conf.getOption(OPERATION_TEMP_TABLE_COLLECT_FILE_COALESCE_SIZE.key) match {
+      case Some(s) => s.toLong
+      case _ => session.sessionManager.getConf.get(OPERATION_TEMP_TABLE_COLLECT_FILE_COALESCE_SIZE)
+    }
+  private val tempTableId =
+    TableIdentifier(s"kyuubi_temp_$statementId".replaceAll("-", "_"), Some(tempTableDb))
+  private val tempTableName: String = tempTableId.unquotedString
   private var tempTableEnabled: Boolean = false
+  private var fileSystem: FileSystem = _
+  private var tempCoalescePath: Path = _
   private val tempViewName = s"kyuubi_cache_$statementId".replaceAll("-", "_")
   private var tempViewEnabled: Boolean = false
   private def withStatement[T](statement: String)(f: => T): T = {
@@ -173,10 +179,13 @@ class ExecuteStatement(
     if (tempTableEnabled || tempViewEnabled) {
       Utils.tryLogNonFatalError {
         withLocalProperties[Unit] {
-          setSqlFileOpenCost(originalSqlFileOpenCost)
           val toDrop = if (tempTableEnabled) tempTableName else tempViewName
           val dropTempTable = s"DROP TABLE IF EXISTS $toDrop"
           withStatement(dropTempTable)(spark.sql(dropTempTable))
+        }
+
+        Option(tempCoalescePath).foreach { _ =>
+          Option(fileSystem).foreach(_.delete(tempCoalescePath, true))
         }
       }
     }
@@ -211,7 +220,7 @@ class ExecuteStatement(
             case e: Throwable => error(s"Error creating view with $createViewDDL", e)
           }
         } else {
-          info(s"Using $tempTableName to save the query result")
+          info(s"Using temp table collect with min file size $tempTableCollectMinFileSize")
           tempTableEnabled = true
           val tempTableSchema = result.schema.zipWithIndex.map { case (dt, index) =>
             val colType = dt.dataType match {
@@ -220,23 +229,46 @@ class ExecuteStatement(
             }
             s"c$index $colType"
           }.mkString(",")
-          val saveToTempTable =
-            try {
-              val tempTableDDL = s"CREATE TEMPORARY TABLE $tempTableName ($tempTableSchema)"
-              val insertTempTable = s"INSERT OVERWRITE $tempTableName $statement"
-              withStatement(tempTableDDL)(spark.sql(tempTableDDL))
-              withStatement(insertTempTable)(spark.sql(insertTempTable))
-              true
-            } catch {
-              case e: Throwable =>
-                error(
-                  s"Error creating temp table $tempTableName to save the result of $statement",
-                  e)
-                false
+          try {
+            val tempTableDDL = s"CREATE TEMPORARY TABLE $tempTableName ($tempTableSchema)"
+            val insertTempTable = s"INSERT OVERWRITE $tempTableName $statement"
+            withStatement(tempTableDDL)(spark.sql(tempTableDDL))
+            withStatement(insertTempTable)(spark.sql(insertTempTable))
+
+            val tempTableMetadata = spark.sessionState.catalog.getTableMetadata(tempTableId)
+            val tempTablePath = new Path(tempTableMetadata.location)
+            fileSystem = tempTablePath.getFileSystem(spark.sparkContext.hadoopConfiguration)
+            val contentSummary = fileSystem.getContentSummary(tempTablePath)
+            val dataSize = contentSummary.getLength
+            val fileCount = contentSummary.getFileCount
+
+            if (dataSize / fileCount > tempTableCollectMinFileSize) {
+              result = spark.sql(s"SELECT * FROM $tempTableName")
+            } else {
+              val coalesceNum = math.max(dataSize / tempTableCollectFileCoalesceSize, 1).toInt
+              val sessionScratchDir = session.asInstanceOf[SparkSessionImpl].sessionScratchDir
+              if (!fileSystem.exists(sessionScratchDir)) {
+                fileSystem.mkdirs(sessionScratchDir)
+              }
+              tempCoalescePath = new Path(sessionScratchDir, "coalesce_" + statementId)
+              withStatement(s"COALESCE $tempTableName WITH NUMBER $coalesceNum") {
+                spark.read
+                  .schema(tempTableMetadata.schema)
+                  .parquet(tempTablePath.toString)
+                  .coalesce(coalesceNum)
+                  .write
+                  .mode(SaveMode.Overwrite)
+                  .parquet(tempCoalescePath.toString)
+              }
+              result = spark.read
+                .schema(tempTableMetadata.schema)
+                .parquet(tempCoalescePath.toString)
             }
-          if (saveToTempTable) {
-            setSqlFileOpenCost(tempTableCollectFileOpenCost)
-            result = spark.sql(s"SELECT * FROM $tempTableName")
+          } catch {
+            case e: Throwable =>
+              error(
+                s"Error creating temp table $tempTableName to save the result of $statement",
+                e)
           }
         }
       }
