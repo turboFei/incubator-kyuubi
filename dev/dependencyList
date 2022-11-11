@@ -160,8 +160,8 @@ okio/1.15.0//okio-1.15.0.jar
 osgi-resource-locator/1.0.3//osgi-resource-locator-1.0.3.jar
 perfmark-api/0.25.0//perfmark-api-0.25.0.jar
 proto-google-common-protos/2.9.0//proto-google-common-protos-2.9.0.jar
-protobuf-java-util/3.21.1//protobuf-java-util-3.21.1.jar
-protobuf-java/3.21.1//protobuf-java-3.21.1.jar
+protobuf-java-util/3.21.7//protobuf-java-util-3.21.7.jar
+protobuf-java/3.21.7//protobuf-java-3.21.7.jar
 raptor-cal-client-api/0.2.0-RELEASE//raptor-cal-client-api-0.2.0-RELEASE.jar
 raptor-component-common/0.3.0-RELEASE//raptor-component-common-0.3.0-RELEASE.jar
 raptor-component-kernel/0.3.0-RELEASE//raptor-component-kernel-0.3.0-RELEASE.jar
