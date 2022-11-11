@@ -240,6 +240,14 @@ object KyuubiEbayConf extends Logging {
       .longConf
       .createWithDefault(120000)
 
+  val OPERATION_TEMP_TABLE_DATABASE: ConfigEntry[String] =
+    buildConf("kyuubi.operation.temp.table.database")
+      .internal
+      .doc("The database used for the temp tables.")
+      .version("1.7.0")
+      .stringConf
+      .createWithDefault("default")
+
   val OPERATION_TEMP_TABLE_COLLECT: ConfigEntry[Boolean] =
     buildConf("kyuubi.operation.temp.table.collect")
       .internal
