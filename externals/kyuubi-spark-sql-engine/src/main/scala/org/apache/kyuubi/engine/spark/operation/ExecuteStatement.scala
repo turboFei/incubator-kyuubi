@@ -163,6 +163,7 @@ class ExecuteStatement(
   private val tempTableName: String = tempTableId.unquotedString
   private var tempTableEnabled: Boolean = false
   private var fileSystem: FileSystem = _
+  private var tempTablePath: Path = _
   private var tempCoalescePath: Path = _
   private val tempViewName = s"kyuubi_cache_$validIdentifier"
   private var tempViewEnabled: Boolean = false
@@ -185,8 +186,8 @@ class ExecuteStatement(
           withStatement(dropTempTable)(spark.sql(dropTempTable))
         }
 
-        Option(tempCoalescePath).foreach { _ =>
-          Option(fileSystem).foreach(_.delete(tempCoalescePath, true))
+        Seq(tempTablePath, tempCoalescePath).filterNot(_ == null).foreach { path =>
+          Option(fileSystem).foreach(_.delete(path, true))
         }
       }
     }
@@ -224,18 +225,30 @@ class ExecuteStatement(
           info(s"Using temp table collect with min file size $tempTableCollectMinFileSize")
           tempTableEnabled = true
           val partitionCol = s"kyuubi_$validIdentifier"
-          val tempTableSchema = result.schema.zipWithIndex.map { case (dt, index) =>
+          val validColsSchema = StructType(result.schema.zipWithIndex.map { case (dt, index) =>
             val colType = dt.dataType match {
-              case NullType => StringType.simpleString
-              case _ => dt.dataType.simpleString
+              case NullType => StringType
+              case _ => dt.dataType
             }
-            s"c$index $colType"
-          }.mkString(",")
+            StructField(s"c$index", colType)
+          })
+          val tempTableSchemaString =
+            (validColsSchema.fields ++ Seq(StructField(partitionCol, StringType))).map { sf =>
+              s"${sf.name} ${sf.dataType.simpleString}"
+            }.mkString(",")
           try {
+            val sessionScratchDir = session.asInstanceOf[SparkSessionImpl].sessionScratchDir
+            fileSystem = sessionScratchDir.getFileSystem(spark.sparkContext.hadoopConfiguration)
+            if (!fileSystem.exists(sessionScratchDir)) {
+              fileSystem.mkdirs(sessionScratchDir)
+            }
+            tempTablePath = new Path(sessionScratchDir, "temp_" + statementId)
             val tempTableDDL =
               s"""
-                 | CREATE TABLE $tempTableName ($tempTableSchema, $partitionCol STRING)
-                 | USING PARQUET PARTITIONED BY ($partitionCol)
+                 | CREATE TABLE $tempTableName ($tempTableSchemaString)
+                 | USING PARQUET
+                 | PARTITIONED BY ($partitionCol)
+                 | LOCATION '$tempTablePath'
                  |""".stripMargin
             val insertTempTable =
               s"""
@@ -245,27 +258,15 @@ class ExecuteStatement(
             withStatement(tempTableDDL)(spark.sql(tempTableDDL))
             withStatement(insertTempTable)(spark.sql(insertTempTable))
 
-            val tempTableMetadata = spark.sessionState.catalog.getTableMetadata(tempTableId)
-            val validTempTableSchema = new StructType(
-              tempTableMetadata.schema.fields.filterNot(_.name == partitionCol))
-            require(
-              validTempTableSchema.fields.size == schema.size,
-              s"temp table schema[$validTempTableSchema] does not match")
-            val tempTablePath = new Path(tempTableMetadata.location)
-            fileSystem = tempTablePath.getFileSystem(spark.sparkContext.hadoopConfiguration)
             val contentSummary = fileSystem.getContentSummary(tempTablePath)
             val dataSize = contentSummary.getLength
             val fileCount = contentSummary.getFileCount
 
-            val selectedColNames = validTempTableSchema.fields.map(_.name)
-            if (dataSize / fileCount > tempTableCollectMinFileSize) {
+            val selectedColNames = validColsSchema.fields.map(_.name)
+            if (fileCount <= 1 || dataSize / fileCount > tempTableCollectMinFileSize) {
               result = spark.sql(s"SELECT ${selectedColNames.mkString(",")} FROM $tempTableName")
             } else {
               val coalesceNum = math.max(dataSize / tempTableCollectFileCoalesceSize, 1).toInt
-              val sessionScratchDir = session.asInstanceOf[SparkSessionImpl].sessionScratchDir
-              if (!fileSystem.exists(sessionScratchDir)) {
-                fileSystem.mkdirs(sessionScratchDir)
-              }
               tempCoalescePath = new Path(sessionScratchDir, "coalesce_" + statementId)
               withStatement(s"COALESCE $tempTableName WITH NUMBER $coalesceNum") {
                 spark.read
@@ -277,7 +278,7 @@ class ExecuteStatement(
                   .parquet(tempCoalescePath.toString)
               }
               result = spark.read
-                .schema(validTempTableSchema)
+                .schema(validColsSchema)
                 .parquet(tempCoalescePath.toString)
             }
           } catch {
