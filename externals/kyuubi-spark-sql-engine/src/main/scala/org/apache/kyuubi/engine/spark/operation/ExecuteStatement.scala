@@ -157,13 +157,14 @@ class ExecuteStatement(
       case Some(s) => s.toLong
       case _ => session.sessionManager.getConf.get(OPERATION_TEMP_TABLE_COLLECT_FILE_COALESCE_SIZE)
     }
+  private val validIdentifier = statementId.replaceAll("-", "_")
   private val tempTableId =
-    TableIdentifier(s"kyuubi_temp_$statementId".replaceAll("-", "_"), Some(tempTableDb))
+    TableIdentifier(s"kyuubi_temp_$validIdentifier", Some(tempTableDb))
   private val tempTableName: String = tempTableId.unquotedString
   private var tempTableEnabled: Boolean = false
   private var fileSystem: FileSystem = _
   private var tempCoalescePath: Path = _
-  private val tempViewName = s"kyuubi_cache_$statementId".replaceAll("-", "_")
+  private val tempViewName = s"kyuubi_cache_$validIdentifier"
   private var tempViewEnabled: Boolean = false
   private def withStatement[T](statement: String)(f: => T): T = {
     spark.sparkContext.setJobDescription(redact(
@@ -222,6 +223,7 @@ class ExecuteStatement(
         } else {
           info(s"Using temp table collect with min file size $tempTableCollectMinFileSize")
           tempTableEnabled = true
+          val partitionCol = s"kyuubi_$validIdentifier"
           val tempTableSchema = result.schema.zipWithIndex.map { case (dt, index) =>
             val colType = dt.dataType match {
               case NullType => StringType.simpleString
@@ -230,20 +232,34 @@ class ExecuteStatement(
             s"c$index $colType"
           }.mkString(",")
           try {
-            val tempTableDDL = s"CREATE TEMPORARY TABLE $tempTableName ($tempTableSchema)"
-            val insertTempTable = s"INSERT OVERWRITE $tempTableName $statement"
+            val tempTableDDL =
+              s"""
+                 | CREATE TABLE $tempTableName ($tempTableSchema, $partitionCol STRING)
+                 | USING PARQUET PARTITIONED BY ($partitionCol)
+                 |""".stripMargin
+            val insertTempTable =
+              s"""
+                 |INSERT OVERWRITE TABLE $tempTableName PARTITION($partitionCol='$statementId')
+                 |($statement)
+                 |""".stripMargin
             withStatement(tempTableDDL)(spark.sql(tempTableDDL))
             withStatement(insertTempTable)(spark.sql(insertTempTable))
 
             val tempTableMetadata = spark.sessionState.catalog.getTableMetadata(tempTableId)
+            val validTempTableSchema = new StructType(
+              tempTableMetadata.schema.fields.filterNot(_.name == partitionCol))
+            require(
+              validTempTableSchema.fields.size == schema.size,
+              s"temp table schema[$validTempTableSchema] does not match")
             val tempTablePath = new Path(tempTableMetadata.location)
             fileSystem = tempTablePath.getFileSystem(spark.sparkContext.hadoopConfiguration)
             val contentSummary = fileSystem.getContentSummary(tempTablePath)
             val dataSize = contentSummary.getLength
             val fileCount = contentSummary.getFileCount
 
+            val selectedColNames = validTempTableSchema.fields.map(_.name)
             if (dataSize / fileCount > tempTableCollectMinFileSize) {
-              result = spark.sql(s"SELECT * FROM $tempTableName")
+              result = spark.sql(s"SELECT ${selectedColNames.mkString(",")} FROM $tempTableName")
             } else {
               val coalesceNum = math.max(dataSize / tempTableCollectFileCoalesceSize, 1).toInt
               val sessionScratchDir = session.asInstanceOf[SparkSessionImpl].sessionScratchDir
@@ -253,15 +269,15 @@ class ExecuteStatement(
               tempCoalescePath = new Path(sessionScratchDir, "coalesce_" + statementId)
               withStatement(s"COALESCE $tempTableName WITH NUMBER $coalesceNum") {
                 spark.read
-                  .schema(tempTableMetadata.schema)
                   .parquet(tempTablePath.toString)
+                  .selectExpr(selectedColNames: _*)
                   .coalesce(coalesceNum)
                   .write
                   .mode(SaveMode.Overwrite)
                   .parquet(tempCoalescePath.toString)
               }
               result = spark.read
-                .schema(tempTableMetadata.schema)
+                .schema(validTempTableSchema)
                 .parquet(tempCoalescePath.toString)
             }
           } catch {

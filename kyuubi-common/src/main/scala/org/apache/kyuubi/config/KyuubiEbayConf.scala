@@ -264,9 +264,10 @@ object KyuubiEbayConf extends Logging {
       .createWithDefault(10 * 1024 * 1024)
 
   val OPERATION_TEMP_TABLE_COLLECT_FILE_COALESCE_SIZE: ConfigEntry[Long] =
-    buildConf("kyuubi.operation.temp.table.collect.fileCoalesceFile")
+    buildConf("kyuubi.operation.temp.table.collect.fileCoalesceSize")
       .internal
       .longConf
+      .checkValue(_ > 0, "must be positive")
       .createWithDefault(100 * 1024 * 1024)
 
   val SESSION_PROGRESS_PLAN_ENABLE: ConfigEntry[Boolean] =

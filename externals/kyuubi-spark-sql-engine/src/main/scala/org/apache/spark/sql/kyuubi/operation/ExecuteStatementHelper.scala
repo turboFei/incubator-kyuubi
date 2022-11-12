@@ -17,15 +17,24 @@
 
 package org.apache.spark.sql.kyuubi.operation
 
-import org.apache.spark.sql.catalyst.parser.SqlBaseParser.StatementDefaultContext
+import org.apache.spark.sql.catalyst.parser.SqlBaseParser
+import org.apache.spark.sql.catalyst.parser.SqlBaseParser.{StatementContext, StatementDefaultContext}
 import org.apache.spark.sql.execution.SparkSqlParser
 
 import org.apache.kyuubi.Logging
 
 object ExecuteStatementHelper extends Logging {
   class DQLParser extends SparkSqlParser {
+    override def parse[T](command: String)(toResult: SqlBaseParser => T): T = {
+      super.parse(command)(toResult)
+    }
+
     def isStatementQuery(statement: String): Boolean = {
       parse(statement)(_.statement()).isInstanceOf[StatementDefaultContext]
+    }
+
+    def getRuleContext(sqlString: String): StatementContext = {
+      parse(sqlString)(_.statement())
     }
   }
 

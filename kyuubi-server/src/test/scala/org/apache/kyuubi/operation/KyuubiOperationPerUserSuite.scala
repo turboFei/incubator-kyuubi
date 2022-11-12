@@ -264,51 +264,6 @@ class KyuubiOperationPerUserSuite
     }
   }
 
-  test("HADP-46611: support to save the result into temp table") {
-    withDatabases("kyuubi") { _ =>
-      withSessionConf(Map.empty)(Map(
-        KyuubiEbayConf.OPERATION_TEMP_TABLE_DATABASE.key -> "kyuubi",
-        KyuubiEbayConf.OPERATION_TEMP_TABLE_COLLECT.key -> "true",
-        KyuubiConf.OPERATION_INCREMENTAL_COLLECT.key -> "true"))(Map.empty) {
-        withJdbcStatement() { statement =>
-          statement.executeQuery("create database if not exists kyuubi")
-          var rs = statement.executeQuery("SELECT system_user(), session_user()")
-          assert(rs.next())
-          assert(rs.getString(1) === Utils.currentUser)
-          assert(rs.getString(2) === Utils.currentUser)
-          assert(!rs.next())
-          // use a new statement to prevent the temp table cleanup
-          val statement2 = statement.getConnection.createStatement()
-          rs = statement2.executeQuery("show tables in kyuubi")
-          assert(rs.next())
-          val db = rs.getString(1)
-          val tempTableName = rs.getString(2)
-          assert(db === "kyuubi")
-          assert(tempTableName.startsWith("kyuubi_temp_"))
-          assert(!rs.next())
-          rs = statement2.executeQuery(s"select * from $db.$tempTableName")
-          assert(rs.next())
-          assert(rs.getString(1) === Utils.currentUser)
-          assert(rs.getString(2) === Utils.currentUser)
-          // cleanup the temp table
-          statement.close()
-          rs = statement2.executeQuery("show tables in kyuubi")
-          assert(!rs.next())
-          statement2.executeQuery("create table ta(id int) using parquet")
-          statement2.executeQuery("insert into ta(id) values(1),(2)")
-          rs = statement2.executeQuery("SELECT * from ta order by id")
-          assert(rs.next())
-          assert(rs.getInt(1) === 1)
-          assert(rs.next())
-          assert(rs.getInt(1) === 2)
-          assert(!rs.next())
-          statement2.executeQuery("drop table ta")
-          statement2.executeQuery("drop database kyuubi")
-        }
-      }
-    }
-  }
-
   test("scala NPE issue with hdfs jar") {
     val jarDir = Utils.createTempDir().toFile
     val udfCode =
