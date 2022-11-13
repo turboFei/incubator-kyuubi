@@ -33,11 +33,7 @@ object KyuubiOperationHelper {
     case AdaptiveSparkPlanExec(_: SortExec, _, _, _) => true
     case AdaptiveSparkPlanExec(_: TakeOrderedAndProjectExec, _, _, _) => true
     case AdaptiveSparkPlanExec(ProjectExec(_, _: SortExec), _, _, _) => true
-    case _ => false
-  }
-
-  def isInMemoryTableScan(sparkPlan: SparkPlan): Boolean = sparkPlan match {
-    case _: InMemoryTableScanExec => true
+    case InMemoryTableScanExec(_, _, relation) => relation.outputOrdering.nonEmpty
     case _ => false
   }
 }

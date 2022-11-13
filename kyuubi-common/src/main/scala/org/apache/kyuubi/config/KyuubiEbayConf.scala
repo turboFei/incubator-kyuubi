@@ -263,12 +263,31 @@ object KyuubiEbayConf extends Logging {
       .longConf
       .createWithDefault(10 * 1024 * 1024)
 
+  val OPERATION_TEMP_TABLE_COLLECT_FILE_COALESCE_NUM_THRESHOLD: ConfigEntry[Long] =
+    buildConf("kyuubi.operation.temp.table.collect.fileCoalesceNumThreshold")
+      .internal
+      .longConf
+      .checkValue(_ > 0, "must be positive")
+      .createWithDefault(10)
+
   val OPERATION_TEMP_TABLE_COLLECT_FILE_COALESCE_SIZE: ConfigEntry[Long] =
     buildConf("kyuubi.operation.temp.table.collect.fileCoalesceSize")
       .internal
       .longConf
       .checkValue(_ > 0, "must be positive")
       .createWithDefault(100 * 1024 * 1024)
+
+  val OPERATION_TEMP_TABLE_COLLECT_SORT_LIMIT_ENABLED: ConfigEntry[Boolean] =
+    buildConf("kyuubi.operation.temp.table.collect.sortLimitEnabled")
+      .internal
+      .booleanConf
+      .createWithDefault(true)
+
+  val OPERATION_TEMP_TABLE_COLLECT_SORT_LIMIT_SIZE: ConfigEntry[Long] =
+    buildConf("kyuubi.operation.temp.table.collect.sortLimitSize")
+      .internal
+      .longConf
+      .createWithDefault(5000000)
 
   val SESSION_PROGRESS_PLAN_ENABLE: ConfigEntry[Boolean] =
     buildConf("kyuubi.operation.progress.plan.enabled")

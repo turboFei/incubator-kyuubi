@@ -159,53 +159,57 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper 
     }
   }
 
-  test("HADP-46611: support to save the result into temp table") {
-    Seq(
-      s"WITH TEMP_WITH_VIEW AS (SELECT system_user(), session_user())" +
-        s" SELECT * FROM TEMP_WITH_VIEW",
-      "SELECT system_user(), session_user()").foreach { stmt =>
-      Seq(0, 10 * 1024 * 1024).foreach { minSize =>
-        withSessionConf(Map.empty)(Map.empty)(Map(
-          KyuubiEbayConf.SESSION_CLUSTER.key -> "test",
-          KyuubiEbayConf.OPERATION_TEMP_TABLE_DATABASE.key -> "kyuubi",
-          KyuubiEbayConf.OPERATION_TEMP_TABLE_COLLECT.key -> "true",
-          KyuubiConf.OPERATION_INCREMENTAL_COLLECT.key -> "true",
-          KyuubiEbayConf.OPERATION_TEMP_TABLE_COLLECT_MIN_FILE_SIZE.key -> minSize.toString)) {
-          withJdbcStatement() { statement =>
-            statement.executeQuery("create database if not exists kyuubi")
-            var rs = statement.executeQuery(stmt)
-            assert(rs.next())
-            assert(rs.getString(1) === Utils.currentUser)
-            assert(rs.getString(2) === Utils.currentUser)
-            assert(!rs.next())
-            // use a new statement to prevent the temp table cleanup
-            val statement2 = statement.getConnection.createStatement()
-            rs = statement2.executeQuery("show tables in kyuubi")
-            assert(rs.next())
-            val db = rs.getString(1)
-            val tempTableName = rs.getString(2)
-            assert(db === "kyuubi")
-            assert(tempTableName.startsWith("kyuubi_temp_"))
-            assert(!rs.next())
-            rs = statement2.executeQuery(s"select * from $db.$tempTableName")
-            assert(rs.next())
-            assert(rs.getString(1) === Utils.currentUser)
-            assert(rs.getString(2) === Utils.currentUser)
-            assert(UUID.fromString(rs.getString(3)).isInstanceOf[UUID])
-            // cleanup the temp table
-            statement.close()
-            rs = statement2.executeQuery("show tables in kyuubi")
-            assert(!rs.next())
-            statement2.executeQuery("create table ta(id int) using parquet")
-            statement2.executeQuery("insert into ta(id) values(1),(2)")
-            rs = statement2.executeQuery("SELECT * from ta order by id")
-            assert(rs.next())
-            assert(rs.getInt(1) === 1)
-            assert(rs.next())
-            assert(rs.getInt(1) === 2)
-            assert(!rs.next())
-            statement2.executeQuery("drop table ta")
-            statement2.executeQuery("drop database kyuubi")
+  Seq(
+    "WITH TEMP_WITH_VIEW AS (SELECT system_user(), session_user()) SELECT * FROM TEMP_WITH_VIEW",
+    "SELECT system_user(), session_user()").foreach { stmt =>
+    Seq(0, 10 * 1024 * 1024).foreach { minSize =>
+      Seq("true", "false").foreach { sortLimitEnabled =>
+        test(s"HADP-46611: support to save the result into temp table-" +
+          s" $stmt/$minSize/$sortLimitEnabled") {
+          withSessionConf(Map.empty)(Map.empty)(Map(
+            KyuubiEbayConf.SESSION_CLUSTER.key -> "test",
+            KyuubiEbayConf.OPERATION_TEMP_TABLE_DATABASE.key -> "kyuubi",
+            KyuubiEbayConf.OPERATION_TEMP_TABLE_COLLECT.key -> "true",
+            KyuubiConf.OPERATION_INCREMENTAL_COLLECT.key -> "true",
+            KyuubiEbayConf.OPERATION_TEMP_TABLE_COLLECT_FILE_COALESCE_NUM_THRESHOLD.key -> "1",
+            KyuubiEbayConf.OPERATION_TEMP_TABLE_COLLECT_SORT_LIMIT_ENABLED.key -> sortLimitEnabled,
+            KyuubiEbayConf.OPERATION_TEMP_TABLE_COLLECT_MIN_FILE_SIZE.key -> minSize.toString)) {
+            withJdbcStatement() { statement =>
+              statement.executeQuery("create database if not exists kyuubi")
+              var rs = statement.executeQuery(stmt)
+              assert(rs.next())
+              assert(rs.getString(1) === Utils.currentUser)
+              assert(rs.getString(2) === Utils.currentUser)
+              assert(!rs.next())
+              // use a new statement to prevent the temp table cleanup
+              val statement2 = statement.getConnection.createStatement()
+              rs = statement2.executeQuery("show tables in kyuubi")
+              assert(rs.next())
+              val db = rs.getString(1)
+              val tempTableName = rs.getString(2)
+              assert(db === "kyuubi")
+              assert(tempTableName.startsWith("kyuubi_temp_"))
+              assert(!rs.next())
+              rs = statement2.executeQuery(s"select * from $db.$tempTableName")
+              assert(rs.next())
+              assert(rs.getString(1) === Utils.currentUser)
+              assert(rs.getString(2) === Utils.currentUser)
+              assert(UUID.fromString(rs.getString(3)).isInstanceOf[UUID])
+              // cleanup the temp table
+              statement.close()
+              rs = statement2.executeQuery("show tables in kyuubi")
+              assert(!rs.next())
+              statement2.executeQuery("create table ta(id int) using parquet")
+              statement2.executeQuery("insert into ta(id) values(1),(2)")
+              rs = statement2.executeQuery("SELECT * from ta order by id")
+              assert(rs.next())
+              assert(rs.getInt(1) === 1)
+              assert(rs.next())
+              assert(rs.getInt(1) === 2)
+              assert(!rs.next())
+              statement2.executeQuery("drop table ta")
+              statement2.executeQuery("drop database kyuubi")
+            }
           }
         }
       }

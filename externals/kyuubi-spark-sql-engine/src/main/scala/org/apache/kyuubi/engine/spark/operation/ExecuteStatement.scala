@@ -26,7 +26,6 @@ import org.apache.hive.service.rpc.thrift.TProgressUpdateResp
 import org.apache.spark.kyuubi.{SparkProgressMonitor, SQLOperationListener}
 import org.apache.spark.kyuubi.SparkUtilsHelper.redact
 import org.apache.spark.sql.{Row, SaveMode}
-import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.execution.QueryExecution
 import org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanExec
 import org.apache.spark.sql.execution.command.{DataWritingCommandExec, ExecutedCommandExec}
@@ -157,16 +156,30 @@ class ExecuteStatement(
       case Some(s) => s.toLong
       case _ => session.sessionManager.getConf.get(OPERATION_TEMP_TABLE_COLLECT_FILE_COALESCE_SIZE)
     }
+  private val tempTableCollectFileCoalesceNumThreshold =
+    spark.conf.getOption(OPERATION_TEMP_TABLE_COLLECT_FILE_COALESCE_NUM_THRESHOLD.key) match {
+      case Some(s) => s.toLong
+      case _ =>
+        session.sessionManager.getConf.get(OPERATION_TEMP_TABLE_COLLECT_FILE_COALESCE_NUM_THRESHOLD)
+    }
+  private val tempTableCollectSortLimitEnabled =
+    spark.conf.getOption(OPERATION_TEMP_TABLE_COLLECT_SORT_LIMIT_ENABLED.key) match {
+      case Some(s) => s.toBoolean
+      case _ => session.sessionManager.getConf.get(OPERATION_TEMP_TABLE_COLLECT_SORT_LIMIT_ENABLED)
+    }
+  private val tempTableCollectSortLimitSize =
+    spark.conf.getOption(OPERATION_TEMP_TABLE_COLLECT_SORT_LIMIT_SIZE.key) match {
+      case Some(s) => s.toLong
+      case _ => session.sessionManager.getConf.get(OPERATION_TEMP_TABLE_COLLECT_SORT_LIMIT_SIZE)
+    }
   private val validIdentifier = statementId.replaceAll("-", "_")
-  private val tempTableId =
-    TableIdentifier(s"kyuubi_temp_$validIdentifier", Some(tempTableDb))
-  private val tempTableName: String = tempTableId.unquotedString
   private var tempTableEnabled: Boolean = false
+  private var tempTableName: String = _
+  private var tempViewEnabled: Boolean = false
+  private var tempViewName: String = _
   private var fileSystem: FileSystem = _
   private var tempTablePath: Path = _
   private var tempCoalescePath: Path = _
-  private val tempViewName = s"kyuubi_cache_$validIdentifier"
-  private var tempViewEnabled: Boolean = false
   private def withStatement[T](statement: String)(f: => T): T = {
     spark.sparkContext.setJobDescription(redact(
       spark.sessionState.conf.stringRedactionPattern,
@@ -177,19 +190,129 @@ class ExecuteStatement(
       spark.sparkContext.setJobDescription(redactedStatement)
     }
   }
+  private def dropTableIfExists(table: String): Unit = {
+    val dropTempTable = s"DROP TABLE IF EXISTS $table"
+    withStatement(dropTempTable)(spark.sql(dropTempTable))
+  }
   private def clearTempTableOrViewIfNeeded(): Unit = {
     if (tempTableEnabled || tempViewEnabled) {
       Utils.tryLogNonFatalError {
         withLocalProperties[Unit] {
-          val toDrop = if (tempTableEnabled) tempTableName else tempViewName
-          val dropTempTable = s"DROP TABLE IF EXISTS $toDrop"
-          withStatement(dropTempTable)(spark.sql(dropTempTable))
+          Seq(tempTableName, tempViewName).filterNot(_ == null).foreach { table =>
+            dropTableIfExists(table)
+          }
         }
 
         Seq(tempTablePath, tempCoalescePath).filterNot(_ == null).foreach { path =>
           Option(fileSystem).foreach(_.delete(path, true))
         }
       }
+    }
+  }
+  private def cacheIntoTempView(statement: String): Unit = {
+    info(s"Using temp view to cache the query result for $statement")
+    tempViewEnabled = true
+    tempViewName = s"kyuubi_cache_$validIdentifier"
+    val createViewDDL = s"CREATE TEMPORARY VIEW $tempViewName AS $statement"
+    val cacheViewDDL = s"CACHE TABLE $tempViewName"
+    try {
+      withStatement(createViewDDL)(spark.sql(createViewDDL))
+      withStatement(cacheViewDDL)(spark.sql(cacheViewDDL))
+      val readViewStatement = s"SELECT * FROM $tempViewName"
+      if (tempTableCollectSortLimitEnabled) {
+        val resultSize = spark.sql(readViewStatement).count()
+        if (resultSize <= tempTableCollectSortLimitSize) {
+          // with limit, we can save the results into single output file
+          val limitStatement = s"SELECT * FROM($readViewStatement) LIMIT $resultSize"
+          try {
+            saveIntoTempTable(limitStatement)
+            // release the cache table in time
+            Utils.tryLogNonFatalError {
+              dropTableIfExists(tempViewName)
+              tempViewName = null
+            }
+          } catch {
+            case e: Throwable =>
+              error(s"Error saving $limitStatement into temp table", e)
+              result = spark.sql(readViewStatement)
+          }
+        } else {
+          result = spark.sql(readViewStatement)
+        }
+      } else {
+        result = spark.sql(readViewStatement)
+      }
+    } catch {
+      case e: Throwable => error(s"Error creating view with $createViewDDL", e)
+    }
+  }
+  private def saveIntoTempTable(statement: String): Unit = {
+    info(s"Using temp table collect for $statement with min file size $tempTableCollectMinFileSize")
+    tempTableEnabled = true
+    tempTableName = s"$tempTableDb.kyuubi_temp_$validIdentifier"
+    val partitionCol = s"kyuubi_$validIdentifier"
+    val validColsSchema = StructType(result.schema.zipWithIndex.map { case (dt, index) =>
+      val colType = dt.dataType match {
+        case NullType => StringType
+        case _ => dt.dataType
+      }
+      StructField(s"c$index", colType)
+    })
+    val tempTableSchemaString =
+      (validColsSchema.fields ++ Seq(StructField(partitionCol, StringType))).map { sf =>
+        s"${sf.name} ${sf.dataType.simpleString}"
+      }.mkString(",")
+    try {
+      val sessionScratchDir = session.asInstanceOf[SparkSessionImpl].sessionScratchDir
+      fileSystem = sessionScratchDir.getFileSystem(spark.sparkContext.hadoopConfiguration)
+      if (!fileSystem.exists(sessionScratchDir)) {
+        fileSystem.mkdirs(sessionScratchDir)
+      }
+      tempTablePath = new Path(sessionScratchDir, "temp_" + statementId)
+      val tempTableDDL =
+        s"""
+           | CREATE TABLE $tempTableName ($tempTableSchemaString)
+           | USING PARQUET
+           | PARTITIONED BY ($partitionCol)
+           | LOCATION '$tempTablePath'
+           |""".stripMargin
+      val insertTempTable =
+        s"""
+           |INSERT OVERWRITE TABLE $tempTableName PARTITION($partitionCol='$statementId')
+           |($statement)
+           |""".stripMargin
+      withStatement(tempTableDDL)(spark.sql(tempTableDDL))
+      withStatement(insertTempTable)(spark.sql(insertTempTable))
+
+      val contentSummary = fileSystem.getContentSummary(tempTablePath)
+      val dataSize = contentSummary.getLength
+      val fileCount = contentSummary.getFileCount
+
+      val selectedColNames = validColsSchema.fields.map(_.name)
+      if (fileCount <= tempTableCollectFileCoalesceNumThreshold ||
+        dataSize / fileCount > tempTableCollectMinFileSize) {
+        result = spark.sql(s"SELECT ${selectedColNames.mkString(",")} FROM $tempTableName")
+      } else {
+        val coalesceNum = math.max(dataSize / tempTableCollectFileCoalesceSize, 1).toInt
+        tempCoalescePath = new Path(sessionScratchDir, "coalesce_" + statementId)
+        withStatement(s"COALESCE $tempTableName WITH NUMBER $coalesceNum") {
+          spark.read
+            .parquet(tempTablePath.toString)
+            .selectExpr(selectedColNames: _*)
+            .coalesce(coalesceNum)
+            .write
+            .mode(SaveMode.Overwrite)
+            .parquet(tempCoalescePath.toString)
+        }
+        result = spark.read
+          .schema(validColsSchema)
+          .parquet(tempCoalescePath.toString)
+      }
+    } catch {
+      case e: Throwable =>
+        error(
+          s"Error creating temp table $tempTableName to save the result of $statement",
+          e)
     }
   }
 
@@ -203,90 +326,10 @@ class ExecuteStatement(
       schema = result.schema
       // only save to temp table for incremental collect mode
       if (tempTableCollect && incrementalCollect && ExecuteStatementHelper.isDQL(statement)) {
-        if (KyuubiOperationHelper.isInMemoryTableScan(result.queryExecution.sparkPlan)) {
-          info("The query is already using in memory table, skip to use temp table.")
-        } else if (KyuubiOperationHelper.sortable(result.queryExecution.sparkPlan)) {
-
-          /**
-           * If the query is sortable, we shall use temporary view instead of temporary table.
-           */
-          info(s"Using $tempViewName to cache the query result")
-          tempViewEnabled = true
-          val createViewDDL = s"CREATE TEMPORARY VIEW $tempViewName AS $statement"
-          val cacheViewDDL = s"CACHE TABLE $tempViewName"
-          try {
-            withStatement(createViewDDL)(spark.sql(createViewDDL))
-            withStatement(cacheViewDDL)(spark.sql(cacheViewDDL))
-            result = spark.sql(s"SELECT * FROM $tempViewName")
-          } catch {
-            case e: Throwable => error(s"Error creating view with $createViewDDL", e)
-          }
+        if (KyuubiOperationHelper.sortable(result.queryExecution.sparkPlan)) {
+          cacheIntoTempView(statement)
         } else {
-          info(s"Using temp table collect with min file size $tempTableCollectMinFileSize")
-          tempTableEnabled = true
-          val partitionCol = s"kyuubi_$validIdentifier"
-          val validColsSchema = StructType(result.schema.zipWithIndex.map { case (dt, index) =>
-            val colType = dt.dataType match {
-              case NullType => StringType
-              case _ => dt.dataType
-            }
-            StructField(s"c$index", colType)
-          })
-          val tempTableSchemaString =
-            (validColsSchema.fields ++ Seq(StructField(partitionCol, StringType))).map { sf =>
-              s"${sf.name} ${sf.dataType.simpleString}"
-            }.mkString(",")
-          try {
-            val sessionScratchDir = session.asInstanceOf[SparkSessionImpl].sessionScratchDir
-            fileSystem = sessionScratchDir.getFileSystem(spark.sparkContext.hadoopConfiguration)
-            if (!fileSystem.exists(sessionScratchDir)) {
-              fileSystem.mkdirs(sessionScratchDir)
-            }
-            tempTablePath = new Path(sessionScratchDir, "temp_" + statementId)
-            val tempTableDDL =
-              s"""
-                 | CREATE TABLE $tempTableName ($tempTableSchemaString)
-                 | USING PARQUET
-                 | PARTITIONED BY ($partitionCol)
-                 | LOCATION '$tempTablePath'
-                 |""".stripMargin
-            val insertTempTable =
-              s"""
-                 |INSERT OVERWRITE TABLE $tempTableName PARTITION($partitionCol='$statementId')
-                 |($statement)
-                 |""".stripMargin
-            withStatement(tempTableDDL)(spark.sql(tempTableDDL))
-            withStatement(insertTempTable)(spark.sql(insertTempTable))
-
-            val contentSummary = fileSystem.getContentSummary(tempTablePath)
-            val dataSize = contentSummary.getLength
-            val fileCount = contentSummary.getFileCount
-
-            val selectedColNames = validColsSchema.fields.map(_.name)
-            if (fileCount <= 1 || dataSize / fileCount > tempTableCollectMinFileSize) {
-              result = spark.sql(s"SELECT ${selectedColNames.mkString(",")} FROM $tempTableName")
-            } else {
-              val coalesceNum = math.max(dataSize / tempTableCollectFileCoalesceSize, 1).toInt
-              tempCoalescePath = new Path(sessionScratchDir, "coalesce_" + statementId)
-              withStatement(s"COALESCE $tempTableName WITH NUMBER $coalesceNum") {
-                spark.read
-                  .parquet(tempTablePath.toString)
-                  .selectExpr(selectedColNames: _*)
-                  .coalesce(coalesceNum)
-                  .write
-                  .mode(SaveMode.Overwrite)
-                  .parquet(tempCoalescePath.toString)
-              }
-              result = spark.read
-                .schema(validColsSchema)
-                .parquet(tempCoalescePath.toString)
-            }
-          } catch {
-            case e: Throwable =>
-              error(
-                s"Error creating temp table $tempTableName to save the result of $statement",
-                e)
-          }
+          saveIntoTempTable(statement)
         }
       }
       withMetrics(result.queryExecution)
