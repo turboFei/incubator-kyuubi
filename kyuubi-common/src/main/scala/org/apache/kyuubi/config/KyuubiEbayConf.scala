@@ -270,8 +270,8 @@ object KyuubiEbayConf extends Logging {
       .checkValue(_ > 0, "must be positive")
       .createWithDefault(10)
 
-  val OPERATION_TEMP_TABLE_COLLECT_FILE_COALESCE_SIZE: ConfigEntry[Long] =
-    buildConf("kyuubi.operation.temp.table.collect.fileCoalesceSize")
+  val OPERATION_TEMP_TABLE_COLLECT_PARTITION_BYTES: ConfigEntry[Long] =
+    buildConf("kyuubi.operation.temp.table.collect.partitionBytes")
       .internal
       .longConf
       .checkValue(_ > 0, "must be positive")

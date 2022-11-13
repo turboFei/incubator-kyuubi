@@ -32,6 +32,7 @@ import org.apache.spark.sql.execution.command.{DataWritingCommandExec, ExecutedC
 import org.apache.spark.sql.execution.datasources.InsertIntoDataSourceCommand
 import org.apache.spark.sql.execution.datasources.v2.{AppendDataExecV1, OverwriteByExpressionExecV1, V2TableWriteExec}
 import org.apache.spark.sql.execution.metric.SQLMetric
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.kyuubi.operation.{ExecuteStatementHelper, KyuubiOperationHelper}
 import org.apache.spark.sql.types._
 
@@ -151,10 +152,10 @@ class ExecuteStatement(
       case Some(s) => s.toLong
       case _ => session.sessionManager.getConf.get(OPERATION_TEMP_TABLE_COLLECT_MIN_FILE_SIZE)
     }
-  private val tempTableCollectFileCoalesceSize =
-    spark.conf.getOption(OPERATION_TEMP_TABLE_COLLECT_FILE_COALESCE_SIZE.key) match {
+  private val tempTableCollectPartitionBytes =
+    spark.conf.getOption(OPERATION_TEMP_TABLE_COLLECT_PARTITION_BYTES.key) match {
       case Some(s) => s.toLong
-      case _ => session.sessionManager.getConf.get(OPERATION_TEMP_TABLE_COLLECT_FILE_COALESCE_SIZE)
+      case _ => session.sessionManager.getConf.get(OPERATION_TEMP_TABLE_COLLECT_PARTITION_BYTES)
     }
   private val tempTableCollectFileCoalesceNumThreshold =
     spark.conf.getOption(OPERATION_TEMP_TABLE_COLLECT_FILE_COALESCE_NUM_THRESHOLD.key) match {
@@ -180,6 +181,10 @@ class ExecuteStatement(
   private var fileSystem: FileSystem = _
   private var tempTablePath: Path = _
   private var tempCoalescePath: Path = _
+  private val filesMiniPartNum = spark.sessionState.conf.getConf(SQLConf.FILES_MIN_PARTITION_NUM)
+  private def setFilesMiniPartitionNum(minPartitionNum: Option[Int]): Unit = {
+    spark.sessionState.conf.setConf(SQLConf.FILES_MIN_PARTITION_NUM, minPartitionNum)
+  }
   private def withStatement[T](statement: String)(f: => T): T = {
     spark.sparkContext.setJobDescription(redact(
       spark.sessionState.conf.stringRedactionPattern,
@@ -206,6 +211,7 @@ class ExecuteStatement(
         Seq(tempTablePath, tempCoalescePath).filterNot(_ == null).foreach { path =>
           Option(fileSystem).foreach(_.delete(path, true))
         }
+        setFilesMiniPartitionNum(filesMiniPartNum)
       }
     }
   }
@@ -288,18 +294,23 @@ class ExecuteStatement(
       val dataSize = contentSummary.getLength
       val fileCount = contentSummary.getFileCount
 
+      /**
+       * The expected partition number to read results, used to prevent splitting many partitions.
+       */
+      val partitionNumber = math.max(dataSize / tempTableCollectPartitionBytes, 1).toInt
+      setFilesMiniPartitionNum(Some(partitionNumber))
+
       val selectedColNames = validColsSchema.fields.map(_.name)
       if (fileCount <= tempTableCollectFileCoalesceNumThreshold ||
         dataSize / fileCount > tempTableCollectMinFileSize) {
         result = spark.sql(s"SELECT ${selectedColNames.mkString(",")} FROM $tempTableName")
       } else {
-        val coalesceNum = math.max(dataSize / tempTableCollectFileCoalesceSize, 1).toInt
         tempCoalescePath = new Path(sessionScratchDir, "coalesce_" + statementId)
-        withStatement(s"COALESCE $tempTableName WITH NUMBER $coalesceNum") {
+        withStatement(s"COALESCE $tempTableName WITH NUMBER $partitionNumber") {
           spark.read
             .parquet(tempTablePath.toString)
             .selectExpr(selectedColNames: _*)
-            .coalesce(coalesceNum)
+            .coalesce(partitionNumber)
             .write
             .mode(SaveMode.Overwrite)
             .parquet(tempCoalescePath.toString)
