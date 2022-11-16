@@ -36,6 +36,7 @@ derby/10.14.2.0//derby-10.14.2.0.jar
 ebaysf-metrics/2.1.0-RELEASE//ebaysf-metrics-2.1.0-RELEASE.jar
 error_prone_annotations/2.14.0//error_prone_annotations-2.14.0.jar
 failsafe/2.4.4//failsafe-2.4.4.jar
+failureaccess/1.0.1//failureaccess-1.0.1.jar
 fliptables/1.0.2//fliptables-1.0.2.jar
 fount-client/0.2.2//fount-client-0.2.2.jar
 fountcsvcClientLib/1.2.6//fountcsvcClientLib-1.2.6.jar
