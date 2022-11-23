@@ -27,6 +27,7 @@ import org.apache.hive.service.rpc.thrift.TProtocolVersion
 import org.apache.kyuubi.client.api.v1.dto.BatchRequest
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.engine.KyuubiApplicationManager
+import org.apache.kyuubi.engine.spark.SparkProcessBuilder
 import org.apache.kyuubi.events.{EventBus, KyuubiSessionEvent}
 import org.apache.kyuubi.metrics.MetricsConstants.{CONN_OPEN, CONN_TOTAL}
 import org.apache.kyuubi.metrics.MetricsSystem
@@ -102,7 +103,7 @@ class KyuubiBatchSessionImpl(
       batchRequest.getBatchType,
       normalizedConf,
       sessionManager.getConf)
-    if (batchRequest.getResource != "spark-internal") {
+    if (batchRequest.getResource != SparkProcessBuilder.INTERNAL_RESOURCE) {
       KyuubiApplicationManager.checkApplicationAccessPath(
         batchRequest.getResource,
         sessionManager.getConf)
