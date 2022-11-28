@@ -117,6 +117,7 @@ public class KyuubiConnection implements SQLConnection, KyuubiLoggable {
   private String engineUrl = "";
 
   private boolean isBeeLineMode;
+  private String resultCodec = "simple";
 
   private List<KyuubiEngineLogListener> engineLogListeners = new LinkedList();
 
@@ -158,6 +159,19 @@ public class KyuubiConnection implements SQLConnection, KyuubiLoggable {
       host = connParams.getHost();
     }
     port = connParams.getPort();
+
+    resultCodec =
+        connParams
+            .getSessionVars()
+            .getOrDefault(
+                "kyuubi.operation.result.codec",
+                connParams
+                    .getHiveVars()
+                    .getOrDefault(
+                        "kyuubi.operation.result.codec",
+                        connParams
+                            .getHiveConfs()
+                            .getOrDefault("kyuubi.operation.result.codec", "simple")));
 
     setupTimeout();
 
@@ -1447,6 +1461,10 @@ public class KyuubiConnection implements SQLConnection, KyuubiLoggable {
 
   public String getEngineUrl() {
     return engineUrl;
+  }
+
+  String getResultCodec() {
+    return resultCodec;
   }
 
   /** Upload and Download data api. */

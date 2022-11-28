@@ -18,6 +18,7 @@
 package org.apache.kyuubi.engine.spark.operation
 
 import java.io.FileNotFoundException
+import java.time.ZoneId
 import java.util.{ArrayList => JArrayList, List => JList, Map => JMap}
 
 import scala.collection.JavaConverters._
@@ -203,7 +204,7 @@ class DownloadDataOperation(
   override def getResultSetSchema: TTableSchema = {
     if (writeOptions.get("useRealSchema").nonEmpty
       && writeOptions("useRealSchema").equalsIgnoreCase("true")) {
-      SchemaHelper.toTTableSchema(realSchema)
+      SchemaHelper.toTTableSchema(realSchema, ZoneId.systemDefault().toString)
     } else {
       super.getResultSetSchema
     }
