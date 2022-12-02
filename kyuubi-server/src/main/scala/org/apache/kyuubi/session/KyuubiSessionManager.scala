@@ -41,6 +41,7 @@ import org.apache.kyuubi.plugin.{PluginLoader, SessionConfAdvisor}
 import org.apache.kyuubi.server.BatchLogAggManager
 import org.apache.kyuubi.server.metadata.{MetadataManager, MetadataRequestsRetryRef}
 import org.apache.kyuubi.server.metadata.api.Metadata
+import org.apache.kyuubi.util.SignUtils
 
 class KyuubiSessionManager private (name: String) extends SessionManager(name) {
 
@@ -63,6 +64,7 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
   }
 
   private val limiters = new ConcurrentHashMap[Option[String], SessionLimiter]().asScala
+  lazy val (signingPrivateKey, signingPublicKey) = SignUtils.generateKeyPair()
 
   override def initialize(conf: KyuubiConf): Unit = {
     this.conf = conf

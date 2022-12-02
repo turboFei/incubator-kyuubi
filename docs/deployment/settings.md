@@ -509,6 +509,7 @@ kyuubi.session.name|&lt;undefined&gt;|A human readable name of session and we us
 kyuubi.session.spark.files||The spark files for kyuubi session, it will be combined with the customer spark.files.|seq|1.6.0
 kyuubi.session.spark.jars||The spark jars for kyuubi session, it will be combined with the customer spark.jars.|seq|1.6.0
 kyuubi.session.timeout|PT6H|(deprecated)session timeout, it will be closed when it's not accessed for this duration|duration|1.0.0
+kyuubi.session.user.sign.enabled|false|Whether to verify the integrity of session user name on engine side, e.g. Authz plugin in Spark.|boolean|1.7.0
 
 
 ### Spnego
