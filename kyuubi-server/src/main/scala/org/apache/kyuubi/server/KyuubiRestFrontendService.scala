@@ -167,7 +167,6 @@ class KyuubiRestFrontendService(override val serverable: Serverable)
         case e: Exception => throw new KyuubiException(s"Cannot start $getName", e)
       }
     }
-    KyuubiRestFrontendService.connectionUrl = server.getServerUri
     super.start()
   }
 
@@ -246,10 +245,4 @@ class KyuubiRestFrontendService(override val serverable: Serverable)
   }
 
   override val discoveryService: Option[Service] = None
-}
-
-object KyuubiRestFrontendService {
-  private var connectionUrl: String = _
-
-  def getConnectionUrl: String = connectionUrl
 }

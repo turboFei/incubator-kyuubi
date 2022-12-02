@@ -315,7 +315,6 @@ trait SparkMetadataTests extends HiveJDBCTestHelper {
         () => metaData.storesLowerCaseQuotedIdentifiers(),
         () => metaData.storesMixedCaseIdentifiers(),
         () => metaData.storesMixedCaseQuotedIdentifiers(),
-        () => metaData.getSQLKeywords,
         () => metaData.nullPlusNonNullIsNull,
         () => metaData.supportsConvert,
         () => metaData.supportsTableCorrelationNames,
@@ -396,7 +395,6 @@ trait SparkMetadataTests extends HiveJDBCTestHelper {
         () => metaData.getRowIdLifetime,
         () => metaData.supportsStoredFunctionsUsingCallSyntax,
         () => metaData.autoCommitFailureClosesAllResultSets,
-        () => metaData.getClientInfoProperties,
         () => metaData.getFunctionColumns("", "%", "%", "%"),
         () => metaData.getPseudoColumns("", "%", "%", "%"),
         () => metaData.generatedKeyAlwaysReturned).foreach { func =>
@@ -405,6 +403,7 @@ trait SparkMetadataTests extends HiveJDBCTestHelper {
       }
 
       assert(metaData.allTablesAreSelectable)
+      assert(metaData.getClientInfoProperties.next)
       assert(metaData.getDriverName === "Kyuubi Project Hive JDBC Shaded Client")
       assert(metaData.getDriverVersion === KYUUBI_VERSION)
       assert(

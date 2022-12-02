@@ -67,10 +67,18 @@
     <modules>
         <module>dev/kyuubi-codecov</module>
         <module>extensions/server/kyuubi-server-plugin</module>
+        <module>extensions/spark/kyuubi-extension-spark-jdbc-dialect</module>
+        <module>extensions/spark/kyuubi-spark-authz</module>
+        <module>extensions/spark/kyuubi-spark-connector-common</module>
+        <module>extensions/spark/kyuubi-spark-connector-tpcds</module>
+        <module>extensions/spark/kyuubi-spark-connector-tpch</module>
         <module>extensions/spark/kyuubi-spark-lineage</module>
         <module>externals/kyuubi-download</module>
         <module>externals/kyuubi-flink-sql-engine</module>
+        <module>externals/kyuubi-jdbc-engine</module>
+        <module>externals/kyuubi-hive-sql-engine</module>
         <module>externals/kyuubi-spark-sql-engine</module>
+        <module>externals/kyuubi-trino-engine</module>
         <module>integration-tests</module>
         <module>kyuubi-assembly</module>
         <module>kyuubi-common</module>
@@ -100,6 +108,7 @@
         <apache.archive.dist>https://archive.apache.org/dist</apache.archive.dist>
         <bouncycastle.version>1.67</bouncycastle.version>
         <codahale.metrics.version>4.2.8</codahale.metrics.version>
+        <commons-cli.version>1.5.0</commons-cli.version>
         <commons-codec.version>1.15</commons-codec.version>
         <commons-collections.version>3.2.2</commons-collections.version>
         <commons-io.version>2.8.0</commons-io.version>
@@ -107,7 +116,7 @@
         <commons-lang3.version>3.10</commons-lang3.version>
         <curator.version>2.12.0</curator.version>
         <etcd.version>0.7.3</etcd.version>
-        <delta.version>2.1.0</delta.version>
+        <delta.version>2.1.1</delta.version>
         <failsafe.verion>2.4.4</failsafe.verion>
         <fb303.version>0.9.3</fb303.version>
         <flink.version>1.15.2</flink.version>
@@ -121,18 +130,18 @@
         <guava.version>30.1-jre</guava.version>
         <guava.failureaccess.version>1.0.1</guava.failureaccess.version>
         <hadoop.version>3.3.4</hadoop.version>
-        <hive.version>2.3.9</hive.version>
         <hikaricp.version>4.0.3</hikaricp.version>
         <derby.version>10.14.2.0</derby.version>
         <fliptables.verion>1.0.2</fliptables.verion>
         <hive.engine.hive.version>3.1.3</hive.engine.hive.version>
-        <!-- for ebay internal hive service rpc -->
-        <hive.service.rpc.groupId>org.spark-project.hive</hive.service.rpc.groupId>
-        <hive.service.rpc.version>2.3.8.spark3</hive.service.rpc.version>
+        <hive.version>3.1.3</hive.version>
+        <hive.service.rpc.version>3.1.3.kyuubi</hive.service.rpc.version>
+        <hive.storage-api.version>2.7.0</hive.storage-api.version>
         <hive.archive.name>apache-hive-${hive.engine.hive.version}-bin.tar.gz</hive.archive.name>
         <hive.archive.mirror>${apache.archive.dist}/hive/hive-${hive.engine.hive.version}</hive.archive.mirror>
         <hive.archive.download.skip>false</hive.archive.download.skip>
         <httpclient.version>4.5.13</httpclient.version>
+        <httpcore.version>4.4.15</httpcore.version>
         <hudi.version>0.12.0</hudi.version>
         <iceberg.version>1.0.0</iceberg.version>
         <jackson.version>2.13.4</jackson.version>
@@ -176,36 +185,11 @@
         <trino.tpch.version>1.1</trino.tpch.version>
         <zookeeper.version>3.4.14</zookeeper.version>
 
-        <!-- apply to kyuubi client related modules for hadoop-->
-        <hadoop.client.version>3.3.2</hadoop.client.version>
-        <!-- org.apache.hadoop:hadoop-client-api:3.* -> org.apache.hadoop:hadoop-common:2.* -->
-        <hadoop.client.api.artifactId>hadoop-client-api</hadoop.client.api.artifactId>
-        <!-- org.apache.hadoop:hadoop-client-runtime:3.* -> org.apache.hadoop:hadoop-client:2.* -->
-        <hadoop.client.runtime.artifactId>hadoop-client-runtime</hadoop.client.runtime.artifactId>
-        <hadoop.client.runtime.artifactId.scope>runtime</hadoop.client.runtime.artifactId.scope>
-        <!-- apply to kyuubi-hive-jdbc/kyuubi-hive-jdbc-shaded module for hadoop-->
-        <jdbc.hadoop.client.artifactId>hadoop-client-api</jdbc.hadoop.client.artifactId>
-        <beeline.hadoop.client.artifactId>hadoop-client-runtime</beeline.hadoop.client.artifactId>
-        <hadoop.client.binary.version>hadoop3</hadoop.client.binary.version>
-
         <!-- apply to kyuubi-hive-jdbc/kyuubi-hive-beeline module -->
-        <hive.client.version>2.3.9</hive.client.version>
-        <hive.client.commons-lang.version>2.6</hive.client.commons-lang.version>
-        <hive.client.commons-cli.version>1.2</hive.client.commons-cli.version>
-        <hive.client.curator.version>2.12.0</hive.client.curator.version>
-        <hive.client.guava.version>14.0.1</hive.client.guava.version>
-        <hive.client.httpcomponents-client.version>4.5.13</hive.client.httpcomponents-client.version>
-        <hive.client.httpcomponents-core.version>4.4.13</hive.client.httpcomponents-core.version>
         <hive.client.jline.version>2.12</hive.client.jline.version>
-        <hive.client.storage-api.version>2.4.0</hive.client.storage-api.version>
         <hive.client.supercsv.version>2.2.0</hive.client.supercsv.version>
-        <hive.client.thrift.version>0.9.3</hive.client.thrift.version>
-        <hive.client.fb303.version>0.9.3</hive.client.fb303.version>
-        <hive.client.zookeeper.version>3.4.14</hive.client.zookeeper.version>
 
         <!-- apply to kyuubi-ebay module -->
-        <ebay.keystone.httpcomponents-client.version>4.5.13</ebay.keystone.httpcomponents-client.version>
-        <ebay.keystone.httpcomponents-core.version>4.4.15</ebay.keystone.httpcomponents-core.version>
         <ebay.fount.client.version>0.2.2</ebay.fount.client.version>
 
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -241,23 +225,16 @@
         <!-- Package to use when relocating shaded classes. -->
         <kyuubi.shade.packageName>org.apache.kyuubi.shade</kyuubi.shade.packageName>
 
+        <distMgmtReleaseId>apache.releases.https</distMgmtReleaseId>
+        <distMgmtReleaseName>Apache Release Distribution Repository</distMgmtReleaseName>
+        <distMgmtReleaseUrl>https://repository.apache.org/service/local/staging/deploy/maven2</distMgmtReleaseUrl>
+        <distMgmtSnapshotsId>apache.snapshots.https</distMgmtSnapshotsId>
+        <distMgmtSnapshotsName>Apache Development Snapshot Repository</distMgmtSnapshotsName>
+        <distMgmtSnapshotsUrl>https://repository.apache.org/content/repositories/snapshots</distMgmtSnapshotsUrl>
         <!-- ebay central repository -->
-        <distMgmtReleasesUrl>http://ebaycentral.qa.ebay.com/content/repositories/thirdparty</distMgmtReleasesUrl>
+        <distMgmtReleaseUrl>http://ebaycentral.qa.ebay.com/content/repositories/releases</distMgmtReleaseUrl>
         <distMgmtSnapshotsUrl>http://ebaycentral.qa.ebay.com/content/repositories/snapshots</distMgmtSnapshotsUrl>
     </properties>
-
-    <distributionManagement>
-        <repository>
-            <id>raptor.releases</id>
-            <name>eBay Raptor Distribution Repository</name>
-            <url>${distMgmtReleasesUrl}</url>
-        </repository>
-        <snapshotRepository>
-            <id>raptor.snapshots</id>
-            <name>eBay Raptor Distribution Snapshot Repository</name>
-            <url>${distMgmtSnapshotsUrl}</url>
-        </snapshotRepository>
-    </distributionManagement>
 
     <repositories>
         <repository>
@@ -343,6 +320,19 @@
         </pluginRepository>
     </pluginRepositories>
 
+    <distributionManagement>
+        <repository>
+            <id>${distMgmtReleaseId}</id>
+            <name>${distMgmtReleaseName}</name>
+            <url>${distMgmtReleaseUrl}</url>
+        </repository>
+        <snapshotRepository>
+            <id>${distMgmtSnapshotsId}</id>
+            <name>${distMgmtSnapshotsName}</name>
+            <url>${distMgmtSnapshotsUrl}</url>
+        </snapshotRepository>
+    </distributionManagement>
+
     <dependencyManagement>
         <dependencies>
             <dependency>
@@ -397,10 +387,6 @@
                 </exclusions>
             </dependency>
 
-            <!--
-              Curator has a hard dependency on Guava, see detail at
-              https://cwiki.apache.org/confluence/display/CURATOR/TN13
-              -->
             <dependency>
                 <groupId>com.google.guava</groupId>
                 <artifactId>guava</artifactId>
@@ -435,6 +421,12 @@
                 <groupId>com.google.code.findbugs</groupId>
                 <artifactId>jsr305</artifactId>
                 <version>${google.jsr305.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>commons-cli</groupId>
+                <artifactId>commons-cli</artifactId>
+                <version>${commons-cli.version}</version>
             </dependency>
 
             <dependency>
@@ -693,7 +685,7 @@
             </dependency>
 
             <dependency>
-                <groupId>${hive.service.rpc.groupId}</groupId>
+                <groupId>org.apache.hive</groupId>
                 <artifactId>hive-service-rpc</artifactId>
                 <version>${hive.service.rpc.version}</version>
                 <exclusions>
@@ -868,6 +860,24 @@
                 <groupId>com.fasterxml.jackson.module</groupId>
                 <artifactId>jackson-module-scala_${scala.binary.version}</artifactId>
                 <version>${jackson.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.apache.httpcomponents</groupId>
+                <artifactId>httpclient</artifactId>
+                <version>${httpclient.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>commons-logging</groupId>
+                        <artifactId>commons-logging</artifactId>
+                    </exclusion>
+                </exclusions>
+            </dependency>
+
+            <dependency>
+                <groupId>org.apache.httpcomponents</groupId>
+                <artifactId>httpcore</artifactId>
+                <version>${httpcore.version}</version>
             </dependency>
 
             <!--
@@ -2254,8 +2264,8 @@
                 <spark.version>3.1.1.1.0.0-SNAPSHOT</spark.version>
                 <spark.binary.version>3.1</spark.binary.version>
                 <delta.version>1.0.1</delta.version>
-                <maven.plugin.scalatest.exclude.tags>org.apache.kyuubi.tags.ExtendedSQLTest,org.apache.kyuubi.tags.FlinkTest,org.apache.kyuubi.tags.HiveTest,org.apache.kyuubi.tags.K8sTest,org.apache.kyuubi.tags.YarnTest,org.apache.kyuubi.tags.TrinoTest,org.scalatest.tags.Slow</maven.plugin.scalatest.exclude.tags>
                 <spark.archive.name>spark-${spark.version}-bin-hadoop3.2.tgz</spark.archive.name>
+                <maven.plugin.scalatest.exclude.tags>org.apache.kyuubi.tags.ExtendedSQLTest,org.apache.kyuubi.tags.FlinkTest,org.apache.kyuubi.tags.HiveTest,org.apache.kyuubi.tags.K8sTest,org.apache.kyuubi.tags.YarnTest,org.apache.kyuubi.tags.TrinoTest,org.scalatest.tags.Slow</maven.plugin.scalatest.exclude.tags>
             </properties>
             <modules>
                 <module>extensions/spark/kyuubi-extension-spark-common</module>
@@ -2268,7 +2278,7 @@
             <properties>
                 <spark.version>3.2.2</spark.version>
                 <spark.binary.version>3.2</spark.binary.version>
-                <delta.version>2.0.0</delta.version>
+                <delta.version>2.0.1</delta.version>
                 <spark.archive.name>spark-${spark.version}-bin-hadoop3.2.tgz</spark.archive.name>
                 <maven.plugin.scalatest.exclude.tags>org.scalatest.tags.Slow,org.apache.kyuubi.tags.HudiTest</maven.plugin.scalatest.exclude.tags>
             </properties>
@@ -2287,29 +2297,8 @@
                 <module>extensions/spark/kyuubi-extension-spark-common</module>
                 <module>extensions/spark/kyuubi-extension-spark-3-3</module>
                 <module>extensions/spark/kyuubi-spark-connector-hive</module>
+                <module>extensions/spark/kyuubi-spark-connector-kudu</module>
             </modules>
-        </profile>
-
-        <profile>
-            <id>hadoop-client-3</id>
-            <!-- Default kyuubi client hadoop profile. Uses global properties. -->
-            <properties>
-                <jdbc.standalone.version>hadoop3_standalone</jdbc.standalone.version>
-            </properties>
-        </profile>
-
-        <profile>
-            <id>hadoop-client-2</id>
-            <properties>
-                <hadoop.client.version>2.7.3.2.6.4.2.0.27</hadoop.client.version>
-                <hadoop.client.api.artifactId>hadoop-common</hadoop.client.api.artifactId>
-                <hadoop.client.runtime.artifactId>hadoop-client</hadoop.client.runtime.artifactId>
-                <hadoop.client.runtime.artifactId.scope>compile</hadoop.client.runtime.artifactId.scope>
-                <jdbc.hadoop.client.artifactId>hadoop-common</jdbc.hadoop.client.artifactId>
-                <beeline.hadoop.client.artifactId>hadoop-common</beeline.hadoop.client.artifactId>
-                <hadoop.client.binary.version>hadoop2</hadoop.client.binary.version>
-                <jdbc.standalone.version>hadoop2_standalone</jdbc.standalone.version>
-            </properties>
         </profile>
 
         <profile>
@@ -2381,44 +2370,6 @@
             <id>spark-block-cleaner</id>
             <modules>
                 <module>tools/spark-block-cleaner</module>
-            </modules>
-        </profile>
-
-        <profile>
-            <id>trino-engine</id>
-            <modules>
-                <module>externals/kyuubi-trino-engine</module>
-            </modules>
-        </profile>
-
-        <profile>
-            <id>hive-engine</id>
-            <modules>
-                <module>externals/kyuubi-hive-sql-engine</module>
-            </modules>
-        </profile>
-
-        <profile>
-            <id>jdbc-engine</id>
-            <modules>
-                <module>externals/kyuubi-jdbc-engine</module>
-            </modules>
-        </profile>
-
-        <profile>
-            <id>spark-authz</id>
-            <modules>
-                <module>extensions/spark/kyuubi-spark-authz</module>
-            </modules>
-        </profile>
-
-        <profile>
-            <id>spark-connector</id>
-            <modules>
-                <module>extensions/spark/kyuubi-spark-connector-common</module>
-                <module>extensions/spark/kyuubi-spark-connector-kudu</module>
-                <module>extensions/spark/kyuubi-spark-connector-tpcds</module>
-                <module>extensions/spark/kyuubi-spark-connector-tpch</module>
             </modules>
         </profile>
 

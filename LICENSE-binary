@@ -234,8 +234,10 @@ org.apache.hadoop:hadoop-client-api
 org.apache.hadoop:hadoop-client-runtime
 org.apache.hive:hive-common
 org.apache.hive:hive-metastore
+org.apache.hive:hive-standalone-metastore
+org.apache.hive:hive-llap-client
 org.apache.hive:hive-serde
-org.spark-project.hive:hive-service-rpc
+org.apache.hive:hive-service-rpc
 org.apache.hive:hive-shims-0.23
 org.apache.hive:hive-shims-common
 com.google.j2objc:j2objc-annotations

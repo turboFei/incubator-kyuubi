@@ -121,7 +121,7 @@ class KyuubiRestAuthenticationSuite extends RestClientTestHelper {
     UserGroupInformation.loginUserFromKeytab(testPrincipal, testKeytab)
     var token = generateToken(hostName)
     val sessionOpenRequest = new SessionOpenRequest(
-      TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V10.getValue,
+      TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V11.getValue,
       "kyuubi",
       "pass",
       "localhost",

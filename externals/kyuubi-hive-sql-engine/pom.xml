@@ -53,7 +53,7 @@
         </dependency>
 
         <dependency>
-            <groupId>${hive.service.rpc.groupId}</groupId>
+            <groupId>org.apache.hive</groupId>
             <artifactId>hive-service-rpc</artifactId>
             <scope>provided</scope>
         </dependency>
@@ -155,8 +155,14 @@
 
         <dependency>
             <groupId>org.apache.kyuubi</groupId>
-            <artifactId>kyuubi-hive-jdbc-shaded_${hadoop.client.binary.version}</artifactId>
+            <artifactId>kyuubi-hive-jdbc-shaded</artifactId>
             <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>com.zaxxer</groupId>
+            <artifactId>HikariCP</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

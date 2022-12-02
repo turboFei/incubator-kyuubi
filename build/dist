@@ -31,7 +31,6 @@ set -x
 KYUUBI_HOME="$(cd "`dirname "$0"`/.."; pwd)"
 DISTDIR="$KYUUBI_HOME/dist"
 MAKE_TGZ=false
-CLIENT_ONLY=false
 FLINK_PROVIDED=false
 SPARK_PROVIDED=false
 HIVE_PROVIDED=false
@@ -43,13 +42,12 @@ function usage {
   echo "./build/dist - Tool for making binary distributions of Kyuubi"
   echo ""
   echo "Usage:"
-  echo "+--------------------------------------------------------------------------------------+"
-  echo "| ./build/dist [--name <custom_name>] [--tgz] [--client] [--flink-provided] [--spark-provided]    |"
-  echo "|              [--mvn <maven_executable>] <maven build options>                        |"
-  echo "+--------------------------------------------------------------------------------------+"
+  echo "+------------------------------------------------------------------------------------------------------+"
+  echo "| ./build/dist [--name <custom_name>] [--tgz] [--flink-provided] [--spark-provided] [--hive-provided]  |"
+  echo "|              [--mvn <maven_executable>] <maven build options>                                        |"
+  echo "+------------------------------------------------------------------------------------------------------+"
   echo "name:           -  custom binary name, using project version if undefined"
   echo "tgz:            -  whether to make a whole bundled package"
-  echo "client:         -  whether to only build client"
   echo "flink-provided: -  whether to make a package without Flink binary"
   echo "spark-provided: -  whether to make a package without Spark binary"
   echo "hive-provided:  -  whether to make a package without Hive binary"
@@ -68,9 +66,6 @@ while (( "$#" )); do
   case $1 in
     --tgz)
       MAKE_TGZ=true
-      ;;
-    --client)
-      CLIENT_ONLY=true
       ;;
     --flink-provided)
       FLINK_PROVIDED=true
@@ -186,11 +181,6 @@ HIVE_VERSION=$("$MVN" help:evaluate -Dexpression=hive.version $@ 2>/dev/null\
     | grep -v "WARNING"\
     | tail -n 1)
 
-CLIENT_HADOOP_VERSION=$("$MVN" help:evaluate -Dexpression=hadoop.client.binary.version $@ 2>/dev/null\
-    | grep -v "INFO"\
-    | grep -v "WARNING"\
-    | tail -n 1)
-
 echo "Building Kyuubi package of version $VERSION against Flink $FLINK_VERSION, Spark $SPARK_VERSION"
 
 SUFFIX="-$NAME"
@@ -222,10 +212,6 @@ if [[ "$HIVE_PROVIDED" == "true" ]]; then
   MVN_DIST_OPT="$MVN_DIST_OPT -Phive-provided"
 fi
 
-if [[ "$CLIENT_ONLY" == "true" ]]; then
-  MVN_DIST_OPT="$MVN_DIST_OPT -pl kyuubi-common,kyuubi-zookeeper,kyuubi-ha,kyuubi-rest-client,kyuubi-ctl,kyuubi-hive-jdbc,kyuubi-hive-beeline"
-fi
-
 export MAVEN_OPTS="${MAVEN_OPTS:--Xmx2g}"
 
 BUILD_COMMAND=("$MVN" clean install $MVN_DIST_OPT $@)
@@ -235,70 +221,17 @@ echo -e "\$ ${BUILD_COMMAND[@]}\n"
 
 "${BUILD_COMMAND[@]}"
 
-if [[ "$CLIENT_ONLY" == "true" ]]; then
-  SUFFIX="-$NAME"
-  if [[ "$NAME" == "none" ]]; then
-    SUFFIX="-$CLIENT_HADOOP_VERSION"
-  fi
-
-  # Make directories
-  rm -rf "$DISTDIR"
-  mkdir -p "$DISTDIR/jars"
-  mkdir -p "${DISTDIR}/bin"
-  mkdir -p "${DISTDIR}/conf"
-  mkdir -p "${DISTDIR}/externals"
-  mkdir -p "${DISTDIR}/pid"
-  mkdir -p "${DISTDIR}/logs"
-  mkdir -p "${DISTDIR}/work"
-  echo "Kyuubi $VERSION $GITREVSTRING built for" > "$DISTDIR/RELEASE"
-  echo "Build flags: $@" >> "$DISTDIR/RELEASE"
-
-  # Copy kyuubi beeline jars
-  cp "$KYUUBI_HOME"/kyuubi-hive-beeline/target/*.jar "$DISTDIR/jars/"
-
-  # Copy kyuubi ctl jars
-  cp "$KYUUBI_HOME"/kyuubi-ctl/target/scala-${SCALA_VERSION}/jars/*.jar "$DISTDIR/jars/"
-  cp "$KYUUBI_HOME"/kyuubi-ctl/target/kyuubi-ctl_${SCALA_VERSION}-${VERSION}.jar "$DISTDIR/jars/"
-
-  cp "${KYUUBI_HOME}/bin/beeline" "${DISTDIR}/bin/beeline"
-  cp "${KYUUBI_HOME}/bin/kyuubi-ctl" "${DISTDIR}/bin/kyuubi-ctl"
-  cp "${KYUUBI_HOME}/bin/kyuubi-admin" "${DISTDIR}/bin/kyuubi-admin"
-  cp "${KYUUBI_HOME}/bin/load-kyuubi-env.sh" "${DISTDIR}/bin/load-kyuubi-env.sh"
-
-  cp "${KYUUBI_HOME}/conf/kyuubi-defaults.conf.template" "${DISTDIR}/conf/kyuubi-defaults.conf"
-  cp "${KYUUBI_HOME}/conf/kyuubi-env.sh.template" "${DISTDIR}/conf/kyuubi-env.sh"
-  cp "${KYUUBI_HOME}/conf/log4j2.xml.template" "${DISTDIR}/conf/log4j2.xml"
-  cat >"${DISTDIR}/conf/core-site.xml" <<EOF
-  <configuration>
-    <property>
-        <name>hadoop.security.authentication</name>
-        <value>kerberos</value>
-    </property>
-  </configuration>
-EOF
-
-
-  if [[ "$MAKE_TGZ" == "true" ]]; then
-    TARDIR_NAME="apache-kyuubi-$VERSION-client$SUFFIX"
-    TARDIR="$KYUUBI_HOME/$TARDIR_NAME"
-    rm -rf "$TARDIR"
-    cp -R "$DISTDIR" "$TARDIR"
-    tar czf "$TARDIR_NAME.tgz" -C "$KYUUBI_HOME" "$TARDIR_NAME"
-    rm -rf "$TARDIR"
-    echo "The Kyuubi client tarball $TARDIR_NAME.tgz is successfully generated in $KYUUBI_HOME."
-  fi
-  exit 0
-fi
-
 # Make directories
 rm -rf "$DISTDIR"
 mkdir -p "$DISTDIR/pid"
 mkdir -p "$DISTDIR/logs"
+mkdir -p "$DISTDIR/jars"
 mkdir -p "$DISTDIR/work"
 mkdir -p "$DISTDIR/externals/engines/flink"
 mkdir -p "$DISTDIR/externals/engines/spark"
 mkdir -p "$DISTDIR/externals/engines/trino"
 mkdir -p "$DISTDIR/externals/engines/hive"
+mkdir -p "$DISTDIR/externals/engines/jdbc"
 mkdir -p "$DISTDIR/beeline-jars"
 echo "Kyuubi $VERSION $GITREVSTRING built for" > "$DISTDIR/RELEASE"
 echo "Java $JAVA_VERSION" >> "$DISTDIR/RELEASE"
@@ -310,39 +243,54 @@ echo "Hive $HIVE_VERSION" >> "$DISTDIR/RELEASE"
 echo "Build flags: $@" >> "$DISTDIR/RELEASE"
 
 # Copy kyuubi server jars
-cp -r "$KYUUBI_HOME/kyuubi-assembly/target/scala-$SCALA_VERSION/jars/" "$DISTDIR/jars"
+cp -r "$KYUUBI_HOME"/kyuubi-assembly/target/scala-$SCALA_VERSION/jars/*.jar "$DISTDIR/jars/"
 
 # Copy kyuubi beeline jars
 cp "$KYUUBI_HOME"/kyuubi-hive-beeline/target/*.jar "$DISTDIR/beeline-jars/"
 
-# Share the jars between server and beeline to reduce binary size
-cd $DISTDIR/beeline-jars
+# Share the jars w/ server to reduce binary size
 for jar in $(ls "$DISTDIR/jars/"); do
   if [[ -f "$DISTDIR/beeline-jars/$jar" ]]; then
-    rm "$DISTDIR/beeline-jars/$jar"
-    ln -sn "../jars/$jar" "$DISTDIR/beeline-jars/$jar"
+    (cd $DISTDIR/beeline-jars; ln -snf "../jars/$jar" "$DISTDIR/beeline-jars/$jar")
   fi
 done
-cd -
 
 # Copy flink engines
-cp "$KYUUBI_HOME/externals/kyuubi-flink-sql-engine/target/kyuubi-flink-sql-engine_${SCALA_VERSION}-${VERSION}.jar" "$DISTDIR/externals/engines/flink"
+cp "$KYUUBI_HOME/externals/kyuubi-flink-sql-engine/target/kyuubi-flink-sql-engine_${SCALA_VERSION}-${VERSION}.jar" "$DISTDIR/externals/engines/flink/"
 
 # Copy spark engines
-cp "$KYUUBI_HOME/externals/kyuubi-spark-sql-engine/target/kyuubi-spark-sql-engine_${SCALA_VERSION}-${VERSION}.jar" "$DISTDIR/externals/engines/spark"
+cp "$KYUUBI_HOME/externals/kyuubi-spark-sql-engine/target/kyuubi-spark-sql-engine_${SCALA_VERSION}-${VERSION}.jar" "$DISTDIR/externals/engines/spark/"
 
 # Copy trino engines
-cp "$KYUUBI_HOME/externals/kyuubi-trino-engine/target/kyuubi-trino-engine_${SCALA_VERSION}-${VERSION}.jar" "$DISTDIR/externals/engines/trino"
-cp -r "$KYUUBI_HOME/externals/kyuubi-trino-engine/target/scala-$SCALA_VERSION/jars/" "$DISTDIR/externals/engines/trino"
+cp "$KYUUBI_HOME/externals/kyuubi-trino-engine/target/kyuubi-trino-engine_${SCALA_VERSION}-${VERSION}.jar" "$DISTDIR/externals/engines/trino/"
+cp -r "$KYUUBI_HOME"/externals/kyuubi-trino-engine/target/scala-$SCALA_VERSION/jars/*.jar "$DISTDIR/externals/engines/trino/"
+
+# Share the jars w/ server to reduce binary size
+for jar in $(ls "$DISTDIR/jars/"); do
+  if [[ -f "$DISTDIR/externals/engines/trino/$jar" ]]; then
+    (cd $DISTDIR/externals/engines/trino; ln -snf "../../../jars/$jar" "$DISTDIR/externals/engines/trino/$jar")
+  fi
+done
 
 # Copy hive engines
-cp "$KYUUBI_HOME/externals/kyuubi-hive-sql-engine/target/kyuubi-hive-sql-engine_${SCALA_VERSION}-${VERSION}.jar" "$DISTDIR/externals/engines/hive"
+cp "$KYUUBI_HOME/externals/kyuubi-hive-sql-engine/target/kyuubi-hive-sql-engine_${SCALA_VERSION}-${VERSION}.jar" "$DISTDIR/externals/engines/hive/"
+
+# Copy jdbc engines
+cp "$KYUUBI_HOME/externals/kyuubi-jdbc-engine/target/kyuubi-jdbc-engine_${SCALA_VERSION}-${VERSION}.jar" "$DISTDIR/externals/engines/jdbc/"
+cp -r "$KYUUBI_HOME"/externals/kyuubi-jdbc-engine/target/scala-$SCALA_VERSION/jars/*.jar "$DISTDIR/externals/engines/jdbc/"
+
+# Share the jars w/ server to reduce binary size
+for jar in $(ls "$DISTDIR/jars/"); do
+  if [[ -f "$DISTDIR/externals/engines/jdbc/$jar" ]]; then
+    (cd $DISTDIR/externals/engines/jdbc; ln -snf "../../../jars/$jar" "$DISTDIR/externals/engines/jdbc/$jar")
+  fi
+done
 
 # Copy kyuubi tools
 if [[ -f "$KYUUBI_HOME/tools/spark-block-cleaner/target/spark-block-cleaner_${SCALA_VERSION}-${VERSION}.jar" ]]; then
   mkdir -p "$DISTDIR/tools/spark-block-cleaner/kubernetes"
   mkdir -p "$DISTDIR/tools/spark-block-cleaner/jars"
-  cp -r "$KYUUBI_HOME/tools/spark-block-cleaner/kubernetes/" "$DISTDIR/tools/spark-block-cleaner/kubernetes/"
+  cp -r "$KYUUBI_HOME"/tools/spark-block-cleaner/kubernetes/* "$DISTDIR/tools/spark-block-cleaner/kubernetes/"
   cp "$KYUUBI_HOME/tools/spark-block-cleaner/target/spark-block-cleaner_${SCALA_VERSION}-${VERSION}.jar" "$DISTDIR/tools/spark-block-cleaner/jars/"
 fi
 
@@ -351,7 +299,7 @@ SPARK_EXTENSION_VERSIONS=('3-1' '3-2' '3-3')
 for SPARK_EXTENSION_VERSION in ${SPARK_EXTENSION_VERSIONS[@]}; do
   if [[ -f $"$KYUUBI_HOME/extensions/spark/kyuubi-extension-spark-$SPARK_EXTENSION_VERSION/target/kyuubi-extension-spark-${SPARK_EXTENSION_VERSION}_${SCALA_VERSION}-${VERSION}.jar" ]]; then
     mkdir -p "$DISTDIR/extension"
-    cp "$KYUUBI_HOME/extensions/spark/kyuubi-extension-spark-$SPARK_EXTENSION_VERSION/target/kyuubi-extension-spark-${SPARK_EXTENSION_VERSION}_${SCALA_VERSION}-${VERSION}.jar" "$DISTDIR/extension"
+    cp "$KYUUBI_HOME/extensions/spark/kyuubi-extension-spark-$SPARK_EXTENSION_VERSION/target/kyuubi-extension-spark-${SPARK_EXTENSION_VERSION}_${SCALA_VERSION}-${VERSION}.jar" "$DISTDIR/extension/"
   fi
 done
 
@@ -378,7 +326,7 @@ cp "$KYUUBI_HOME/DISCLAIMER" "$DISTDIR/DISCLAIMER"
 if [[ -f $"$KYUUBI_HOME/LICENSE-binary" ]]; then
   cp "$KYUUBI_HOME/LICENSE-binary" "$DISTDIR/LICENSE"
   cp -r "$KYUUBI_HOME/licenses-binary" "$DISTDIR/licenses"
-  # $KYUUBI_HOME/build/release/collect-licenses.sh "$DISTDIR" "$DISTDIR"
+  cp "$KYUUBI_HOME/NOTICE-binary" "$DISTDIR/NOTICE"
 fi
 
 cp -r "$KYUUBI_HOME/bin" "$DISTDIR"

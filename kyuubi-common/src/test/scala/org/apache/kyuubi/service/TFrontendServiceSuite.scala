@@ -171,6 +171,8 @@ class TFrontendServiceSuite extends KyuubiFunSuite {
       assert(client.GetInfo(req).getInfoValue.getStringValue === "Apache Kyuubi (Incubating)")
       req.setInfoType(TGetInfoType.CLI_DBMS_NAME)
       assert(client.GetInfo(req).getInfoValue.getStringValue === "Apache Kyuubi (Incubating)")
+      req.setInfoType(TGetInfoType.CLI_ODBC_KEYWORDS)
+      assert(client.GetInfo(req).getInfoValue.getStringValue === "Unimplemented")
       req.setInfoType(TGetInfoType.CLI_MAX_COLUMN_NAME_LEN)
       assert(client.GetInfo(req).getInfoValue.getLenValue === 128)
       req.setInfoType(TGetInfoType.CLI_MAX_SCHEMA_NAME_LEN)
@@ -352,6 +354,20 @@ class TFrontendServiceSuite extends KyuubiFunSuite {
       assert(resp1.getStatus.getStatusCode === TStatusCode.ERROR_STATUS)
       assert(resp1.getStatus.getSqlState === null)
       assert(resp1.getStatus.getErrorMessage startsWith "Invalid SessionHandle")
+    }
+  }
+
+  test("get query id") {
+    withSessionHandle { (client, handle) =>
+      val req = new TExecuteStatementReq()
+      req.setStatement("select 1")
+      req.setSessionHandle(handle)
+      req.setRunAsync(false)
+      val resp = client.ExecuteStatement(req)
+      val opHandle = resp.getOperationHandle
+      val req1 = new TGetQueryIdReq(opHandle)
+      val resp1 = client.GetQueryId(req1)
+      assert(resp1.getQueryId === "noop_query_id")
     }
   }
 

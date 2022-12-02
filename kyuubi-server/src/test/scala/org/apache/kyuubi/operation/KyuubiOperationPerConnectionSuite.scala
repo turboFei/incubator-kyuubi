@@ -17,30 +17,22 @@
 
 package org.apache.kyuubi.operation
 
-import java.io.File
-import java.net.URI
-import java.nio.file.Files
 import java.sql.SQLException
 import java.util
-import java.util.{Collections, Properties}
+import java.util.Properties
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable.ListBuffer
 
-import org.apache.commons.io.FileUtils
-import org.apache.hadoop.shaded.com.nimbusds.jose.util.StandardCharset
 import org.apache.hive.service.rpc.thrift._
 import org.scalatest.time.SpanSugar.convertIntToGrainOfTime
 
-import org.apache.kyuubi.{Utils, WithKyuubiServer}
-import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
+import org.apache.kyuubi.WithKyuubiServer
+import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf.SESSION_CONF_ADVISOR
 import org.apache.kyuubi.engine.ApplicationState
 import org.apache.kyuubi.jdbc.KyuubiHiveDriver
 import org.apache.kyuubi.jdbc.hive.KyuubiConnection
-import org.apache.kyuubi.jdbc.hive.logs.KyuubiEngineLogListener
 import org.apache.kyuubi.plugin.SessionConfAdvisor
-import org.apache.kyuubi.service.authentication.KyuubiAuthenticationFactory
 import org.apache.kyuubi.session.KyuubiSessionManager
 
 /**
@@ -225,68 +217,13 @@ class KyuubiOperationPerConnectionSuite extends WithKyuubiServer with HiveJDBCTe
     }
   }
 
-  test("without session cluster mode enabled, the session cluster doest not valid") {
-    withSessionConf(Map.empty)(Map.empty)(Map(
-      KyuubiEbayConf.SESSION_CLUSTER.key -> "test")) {
-      withJdbcStatement() { statement =>
-        val rs = statement.executeQuery("set spark.sql.kyuubi.session.cluster.test")
-        assert(rs.next())
-        assert(rs.getString(2).equals("<undefined>"))
-      }
-    }
-  }
-
-  test("test proxy batch account with unsupported exception") {
-    withSessionConf(Map(
-      KyuubiAuthenticationFactory.KYUUBI_PROXY_BATCH_ACCOUNT -> "b_stf"))(Map.empty)(Map.empty) {
-      val exception = intercept[SQLException] {
-        withJdbcStatement() { _ => // no-op
-        }
-      }
-      val verboseMessage = Utils.stringifyException(exception)
-      assert(verboseMessage.contains("batch account proxy is not supported"))
-    }
-  }
-
-  test("HADP-44732: kyuubi engine log listener") {
-    val engineLogs = ListBuffer[String]()
-
-    val engineLogListener = new KyuubiEngineLogListener {
-
-      override def onListenerRegistered(kyuubiConnection: KyuubiConnection): Unit = {}
-
-      override def onLogFetchSuccess(list: util.List[String]): Unit = {
-        engineLogs ++= list.asScala
-      }
-
-      override def onLogFetchFailure(throwable: Throwable): Unit = {}
-    }
-    withSessionConf()(Map.empty)(Map(
-      KyuubiConf.SESSION_ENGINE_LAUNCH_ASYNC.key -> "true")) {
-      val conn = new KyuubiConnection(jdbcUrlWithConf, new Properties(), engineLogListener)
-      assert(engineLogs.nonEmpty)
-      conn.close()
-    }
-  }
-
-  test("HADP-44631: get full spark url") {
-    withSessionConf()(Map.empty)(Map(
-      "spark.ui.enabled" -> "true")) {
-      withJdbcStatement() { statement =>
-        val conn = statement.getConnection.asInstanceOf[KyuubiConnection]
-        val sparkUrl = conn.getSparkURL
-        assert(sparkUrl.nonEmpty)
-      }
-    }
-  }
-
   test("transfer the TGetInfoReq to kyuubi engine side to verify the connection valid") {
     withSessionConf(Map.empty)(Map(
       KyuubiConf.SERVER_INFO_PROVIDER.key -> "ENGINE",
       KyuubiConf.SESSION_ENGINE_LAUNCH_ASYNC.key -> "false"))() {
       withJdbcStatement() { statement =>
         val conn = statement.getConnection.asInstanceOf[KyuubiConnection]
-        assert(conn.isValid(3))
+        assert(conn.isValid(3000))
         val sessionManager = server.backendService.sessionManager.asInstanceOf[KyuubiSessionManager]
         eventually(timeout(10.seconds)) {
           assert(sessionManager.allSessions().size === 1)
@@ -298,140 +235,8 @@ class KyuubiOperationPerConnectionSuite extends WithKyuubiServer with HiveJDBCTe
           assert(sessionManager.applicationManager.getApplicationInfo(None, engineId, None)
             .exists(_.state == ApplicationState.NOT_FOUND))
         }
-        assert(!conn.isValid(3))
+        assert(!conn.isValid(3000))
       }
-    }
-  }
-
-  test("transfer data and download data and upload data command") {
-    withSessionHandle { (client, handle) =>
-      val transferDataReq = new TTransferDataReq()
-      transferDataReq.setSessionHandle(handle)
-      transferDataReq.setValues("test".getBytes("UTF-8"))
-      transferDataReq.setPath("test")
-      val transferResp = client.TransferData(transferDataReq)
-      val fetchResultReq = new TFetchResultsReq()
-      fetchResultReq.setOperationHandle(transferResp.getOperationHandle)
-      fetchResultReq.setFetchType(0)
-      fetchResultReq.setMaxRows(10)
-      var fetchResultResp = client.FetchResults(fetchResultReq)
-      var results = fetchResultResp.getResults
-      val transferredFile = new File(
-        new URI(results.getColumns.get(0).getStringVal.getValues.get(0)).getPath)
-      assert(transferredFile.exists())
-      assert(FileUtils.readFileToString(transferredFile, "UTF-8") === "test")
-
-      val downloadDataReq = new TDownloadDataReq()
-      downloadDataReq.setSessionHandle(handle)
-      downloadDataReq.setQuery("select 'test' as kyuubi")
-      downloadDataReq.setFormat("parquet")
-      downloadDataReq.setDownloadOptions(Collections.emptyMap[String, String]())
-      val downloadResp = client.DownloadData(downloadDataReq)
-      fetchResultReq.setOperationHandle(downloadResp.getOperationHandle)
-      fetchResultReq.setFetchType(0)
-      fetchResultReq.setMaxRows(10)
-      fetchResultResp = client.FetchResults(fetchResultReq)
-      results = fetchResultResp.getResults
-
-      val col1 = results.getColumns.get(0).getStringVal.getValues // FILE_NAME
-      val col2 = results.getColumns.get(1).getBinaryVal.getValues // DATA
-      val col3 = results.getColumns.get(2).getStringVal.getValues // SCHEMA
-      val col4 = results.getColumns.get(3).getI64Val.getValues // SIZE
-
-      // the first row is schema
-      assert(col1.get(0).isEmpty)
-      assert(col2.get(0).capacity() === 0)
-      assert(col3.get(0) === "kyuubi")
-      val dataSize = col4.get(0)
-
-      // the second row is the content
-      assert(col1.get(1).endsWith("parquet"))
-      assert(col2.get(1).capacity() === dataSize)
-      val parquetContent = new String(col2.get(1).array(), "UTF-8")
-      assert(parquetContent.startsWith("PAR1") && parquetContent.endsWith("PAR1"))
-      assert(col3.get(1).isEmpty)
-      assert(col4.get(1) === dataSize)
-
-      // the last row is the EOF
-      assert(col1.get(2).endsWith("parquet"))
-      assert(col2.get(2).capacity() === 0)
-      assert(col3.get(2).isEmpty)
-      assert(col4.get(2) === -1)
-
-      // create table ta
-      val executeStmtReq = new TExecuteStatementReq()
-      executeStmtReq.setStatement("create table ta(c1 string) using parquet")
-      executeStmtReq.setSessionHandle(handle)
-      executeStmtReq.setRunAsync(false)
-      client.ExecuteStatement(executeStmtReq)
-
-      // upload data
-      executeStmtReq.setStatement("UPLOAD DATA INPATH 'test' OVERWRITE INTO TABLE ta")
-      client.ExecuteStatement(executeStmtReq)
-
-      // check upload result
-      executeStmtReq.setStatement("SELECT * FROM ta")
-      val executeStatementResp = client.ExecuteStatement(executeStmtReq)
-
-      fetchResultReq.setOperationHandle(executeStatementResp.getOperationHandle)
-      fetchResultResp = client.FetchResults(fetchResultReq)
-      val resultSet = fetchResultResp.getResults.getColumns.asScala
-      assert(resultSet.size == 1)
-      assert(resultSet.head.getStringVal.getValues.get(0) === "test")
-    }
-  }
-
-  test("move data command") {
-    withSessionHandle { (client, handle) =>
-      val tempDir = Utils.createTempDir()
-
-      val transferDataReq = new TTransferDataReq()
-      transferDataReq.setSessionHandle(handle)
-      transferDataReq.setValues("test".getBytes("UTF-8"))
-      transferDataReq.setPath("test")
-      client.TransferData(transferDataReq)
-
-      val executeStmtReq = new TExecuteStatementReq()
-      executeStmtReq.setSessionHandle(handle)
-      // upload data
-      executeStmtReq.setStatement(
-        s"MOVE DATA INPATH 'test' OVERWRITE INTO '${tempDir.toFile.getAbsolutePath}' 'dest.csv'")
-      client.ExecuteStatement(executeStmtReq)
-
-      val destFile = new File(tempDir.toFile, "dest.csv")
-      assert(destFile.isFile)
-      assert(FileUtils.readFileToString(destFile, "UTF-8") === "test")
-      Utils.deleteDirectoryRecursively(tempDir.toFile)
-    }
-  }
-
-  test("kyuubi connection upload file") {
-    withJdbcStatement() { statement =>
-      val connection = statement.getConnection.asInstanceOf[KyuubiConnection]
-      val tempDir = Utils.createTempDir()
-      val remoteDir = Utils.createTempDir()
-      val localFile = new File(tempDir.toFile, "local.txt")
-      Files.write(localFile.toPath, "test".getBytes(StandardCharset.UTF_8))
-      val remoteFile = new File(remoteDir.toFile, "local.txt")
-      assert(!remoteFile.exists())
-      var result =
-        connection.uploadFile(localFile.getAbsolutePath, remoteDir.toFile.getAbsolutePath, true)
-      assert(remoteFile.isFile)
-      assert(result === remoteFile.getAbsolutePath)
-      connection.uploadFile(localFile.getAbsolutePath, remoteDir.toFile.getAbsolutePath, true)
-      val e = intercept[SQLException] {
-        connection.uploadFile(localFile.getAbsolutePath, remoteDir.toFile.getAbsolutePath, false)
-      }
-      assert(e.getMessage.contains("Dest path already exists"))
-      val remoteFile2 = new File(remoteDir.toFile, "local2.txt")
-      assert(!remoteFile2.exists())
-      result = connection.uploadFile(
-        localFile.getAbsolutePath,
-        remoteDir.toFile.getAbsolutePath,
-        "local2.txt",
-        false)
-      assert(remoteFile2.isFile)
-      assert(result === remoteFile2.getAbsolutePath)
     }
   }
 }

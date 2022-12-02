@@ -18,7 +18,7 @@
 package org.apache.kyuubi.ha.client
 
 import org.apache.kyuubi.config.KyuubiConf
-import org.apache.kyuubi.ha.HighAvailabilityConf.SERVER_HA_ZK_ENABLED
+import org.apache.kyuubi.config.KyuubiEbayConf.SERVER_HA_ZK_ENABLED
 import org.apache.kyuubi.service.FrontendService
 
 /**

@@ -46,7 +46,6 @@
         <dependency>
             <groupId>org.apache.httpcomponents</groupId>
             <artifactId>httpclient</artifactId>
-            <version>${ebay.keystone.httpcomponents-client.version}</version>
             <exclusions>
                 <exclusion>
                     <groupId>*</groupId>
@@ -58,7 +57,6 @@
         <dependency>
             <groupId>org.apache.httpcomponents</groupId>
             <artifactId>httpcore</artifactId>
-            <version>${ebay.keystone.httpcomponents-core.version}</version>
         </dependency>
 
         <dependency>

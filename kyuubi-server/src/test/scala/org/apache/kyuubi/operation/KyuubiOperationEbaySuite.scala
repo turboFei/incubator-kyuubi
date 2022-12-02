@@ -17,11 +17,27 @@
 
 package org.apache.kyuubi.operation
 
+import java.io.File
+import java.net.URI
+import java.nio.file.Files
 import java.sql.SQLException
-import java.util.UUID
+import java.util
+import java.util.{Collections, Properties, UUID}
+
+import scala.collection.JavaConverters._
+import scala.collection.mutable.ListBuffer
+
+import org.apache.commons.io.FileUtils
+import org.apache.hadoop.shaded.com.nimbusds.jose.util.StandardCharset
+import org.apache.hive.service.rpc.thrift.{TDownloadDataReq, TExecuteStatementReq, TFetchResultsReq, TTransferDataReq}
+import org.scalatest.concurrent.PatienceConfiguration.Timeout
+import org.scalatest.time.SpanSugar.convertIntToGrainOfTime
 
 import org.apache.kyuubi.{Utils, WithKyuubiServer}
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
+import org.apache.kyuubi.jdbc.hive.KyuubiConnection
+import org.apache.kyuubi.jdbc.hive.logs.KyuubiEngineLogListener
+import org.apache.kyuubi.service.authentication.KyuubiAuthenticationFactory
 import org.apache.kyuubi.session.KyuubiSessionImpl
 
 class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper {
@@ -125,13 +141,6 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper 
         assert(rs.next())
         assert(rs.getInt(1) === 1)
         assert(!rs.next())
-        val getSchemaMethod = classOf[org.apache.kyuubi.jdbc.hive.KyuubiBaseResultSet]
-          .getDeclaredMethod("getSchema")
-        getSchemaMethod.setAccessible(true)
-        val schema = getSchemaMethod.invoke(rs).asInstanceOf[
-          org.apache.kyuubi.shade.org.apache.hive.service.cli.TableSchema]
-        val comment = schema.getColumnDescriptorAt(0).getComment
-        assert(comment === "intercepted by gateway")
       }
     }
   }
@@ -212,6 +221,264 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper 
             }
           }
         }
+      }
+    }
+  }
+
+  test("transfer data and download data and upload data command") {
+    withSessionConf(Map(KyuubiEbayConf.SESSION_CLUSTER.key -> "test"))(Map())(Map()) {
+      withSessionHandle { (client, handle) =>
+        val transferDataReq = new TTransferDataReq()
+        transferDataReq.setSessionHandle(handle)
+        transferDataReq.setValues("test".getBytes("UTF-8"))
+        transferDataReq.setPath("test")
+        val transferResp = client.TransferData(transferDataReq)
+        val fetchResultReq = new TFetchResultsReq()
+        fetchResultReq.setOperationHandle(transferResp.getOperationHandle)
+        fetchResultReq.setFetchType(0)
+        fetchResultReq.setMaxRows(10)
+        var fetchResultResp = client.FetchResults(fetchResultReq)
+        var results = fetchResultResp.getResults
+        val transferredFile = new File(
+          new URI(results.getColumns.get(0).getStringVal.getValues.get(0)).getPath)
+        assert(transferredFile.exists())
+        assert(FileUtils.readFileToString(transferredFile, "UTF-8") === "test")
+
+        val downloadDataReq = new TDownloadDataReq()
+        downloadDataReq.setSessionHandle(handle)
+        downloadDataReq.setQuery("select 'test' as kyuubi")
+        downloadDataReq.setFormat("parquet")
+        downloadDataReq.setDownloadOptions(Collections.emptyMap[String, String]())
+        val downloadResp = client.DownloadData(downloadDataReq)
+        fetchResultReq.setOperationHandle(downloadResp.getOperationHandle)
+        fetchResultReq.setFetchType(0)
+        fetchResultReq.setMaxRows(10)
+        fetchResultResp = client.FetchResults(fetchResultReq)
+        results = fetchResultResp.getResults
+
+        val col1 = results.getColumns.get(0).getStringVal.getValues // FILE_NAME
+        val col2 = results.getColumns.get(1).getBinaryVal.getValues // DATA
+        val col3 = results.getColumns.get(2).getStringVal.getValues // SCHEMA
+        val col4 = results.getColumns.get(3).getI64Val.getValues // SIZE
+
+        // the first row is schema
+        assert(col1.get(0).isEmpty)
+        assert(col2.get(0).capacity() === 0)
+        assert(col3.get(0) === "kyuubi")
+        val dataSize = col4.get(0)
+
+        // the second row is the content
+        assert(col1.get(1).endsWith("parquet"))
+        assert(col2.get(1).capacity() === dataSize)
+        val parquetContent = new String(col2.get(1).array(), "UTF-8")
+        assert(parquetContent.startsWith("PAR1") && parquetContent.endsWith("PAR1"))
+        assert(col3.get(1).isEmpty)
+        assert(col4.get(1) === dataSize)
+
+        // the last row is the EOF
+        assert(col1.get(2).endsWith("parquet"))
+        assert(col2.get(2).capacity() === 0)
+        assert(col3.get(2).isEmpty)
+        assert(col4.get(2) === -1)
+
+        // create table ta
+        val executeStmtReq = new TExecuteStatementReq()
+        executeStmtReq.setStatement("create table ta(c1 string) using parquet")
+        executeStmtReq.setSessionHandle(handle)
+        executeStmtReq.setRunAsync(false)
+        client.ExecuteStatement(executeStmtReq)
+
+        // upload data
+        executeStmtReq.setStatement("UPLOAD DATA INPATH 'test' OVERWRITE INTO TABLE ta")
+        client.ExecuteStatement(executeStmtReq)
+
+        // check upload result
+        executeStmtReq.setStatement("SELECT * FROM ta")
+        val executeStatementResp = client.ExecuteStatement(executeStmtReq)
+
+        fetchResultReq.setOperationHandle(executeStatementResp.getOperationHandle)
+        fetchResultResp = client.FetchResults(fetchResultReq)
+        val resultSet = fetchResultResp.getResults.getColumns.asScala
+        assert(resultSet.size == 1)
+        assert(resultSet.head.getStringVal.getValues.get(0) === "test")
+      }
+    }
+  }
+
+  test("move data command") {
+    withSessionConf(Map(KyuubiEbayConf.SESSION_CLUSTER.key -> "test"))(Map.empty)(Map()) {
+      withSessionHandle { (client, handle) =>
+        val tempDir = Utils.createTempDir()
+
+        val transferDataReq = new TTransferDataReq()
+        transferDataReq.setSessionHandle(handle)
+        transferDataReq.setValues("test".getBytes("UTF-8"))
+        transferDataReq.setPath("test")
+        client.TransferData(transferDataReq)
+
+        val executeStmtReq = new TExecuteStatementReq()
+        executeStmtReq.setSessionHandle(handle)
+        // upload data
+        executeStmtReq.setStatement(
+          s"MOVE DATA INPATH 'test' OVERWRITE INTO '${tempDir.toFile.getAbsolutePath}' 'dest.csv'")
+        client.ExecuteStatement(executeStmtReq)
+
+        val destFile = new File(tempDir.toFile, "dest.csv")
+        assert(destFile.isFile)
+        assert(FileUtils.readFileToString(destFile, "UTF-8") === "test")
+        Utils.deleteDirectoryRecursively(tempDir.toFile)
+      }
+    }
+  }
+
+  test("kyuubi connection upload file") {
+    withSessionConf(Map.empty)(Map.empty)(Map(
+      KyuubiEbayConf.SESSION_CLUSTER.key -> "test")) {
+      withJdbcStatement() { statement =>
+        val connection = statement.getConnection.asInstanceOf[KyuubiConnection]
+        val tempDir = Utils.createTempDir()
+        val remoteDir = Utils.createTempDir()
+        val localFile = new File(tempDir.toFile, "local.txt")
+        Files.write(localFile.toPath, "test".getBytes(StandardCharset.UTF_8))
+        val remoteFile = new File(remoteDir.toFile, "local.txt")
+        assert(!remoteFile.exists())
+        var result =
+          connection.uploadFile(localFile.getAbsolutePath, remoteDir.toFile.getAbsolutePath, true)
+        assert(remoteFile.isFile)
+        assert(result === remoteFile.getAbsolutePath)
+        connection.uploadFile(localFile.getAbsolutePath, remoteDir.toFile.getAbsolutePath, true)
+        val e = intercept[SQLException] {
+          connection.uploadFile(localFile.getAbsolutePath, remoteDir.toFile.getAbsolutePath, false)
+        }
+        assert(e.getMessage.contains("Dest path already exists"))
+        val remoteFile2 = new File(remoteDir.toFile, "local2.txt")
+        assert(!remoteFile2.exists())
+        result = connection.uploadFile(
+          localFile.getAbsolutePath,
+          remoteDir.toFile.getAbsolutePath,
+          "local2.txt",
+          false)
+        assert(remoteFile2.isFile)
+        assert(result === remoteFile2.getAbsolutePath)
+      }
+    }
+  }
+
+  ignore("without session cluster mode enabled, the session cluster doest not valid") {
+    withSessionConf(Map.empty)(Map.empty)(Map(
+      KyuubiEbayConf.SESSION_CLUSTER.key -> "test")) {
+      withJdbcStatement() { statement =>
+        val rs = statement.executeQuery("set spark.sql.kyuubi.session.cluster.test")
+        assert(rs.next())
+        assert(rs.getString(2).equals("<undefined>"))
+      }
+    }
+  }
+
+  test("test proxy batch account with unsupported exception") {
+    withSessionConf(Map(
+      KyuubiAuthenticationFactory.KYUUBI_PROXY_BATCH_ACCOUNT -> "b_stf",
+      KyuubiEbayConf.SESSION_CLUSTER.key -> "test"))(Map.empty)(Map.empty) {
+      val exception = intercept[SQLException] {
+        withJdbcStatement() { _ => // no-op
+        }
+      }
+      val verboseMessage = Utils.stringifyException(exception)
+      assert(verboseMessage.contains("batch account proxy is not supported"))
+    }
+  }
+
+  test("HADP-44732: kyuubi engine log listener") {
+    val engineLogs = ListBuffer[String]()
+
+    val engineLogListener = new KyuubiEngineLogListener {
+
+      override def onListenerRegistered(kyuubiConnection: KyuubiConnection): Unit = {}
+
+      override def onLogFetchSuccess(list: util.List[String]): Unit = {
+        engineLogs ++= list.asScala
+      }
+
+      override def onLogFetchFailure(throwable: Throwable): Unit = {}
+    }
+    withSessionConf()(Map.empty)(Map(
+      KyuubiConf.SESSION_ENGINE_LAUNCH_ASYNC.key -> "true",
+      KyuubiEbayConf.SESSION_CLUSTER.key -> "test")) {
+      val conn = new KyuubiConnection(jdbcUrlWithConf, new Properties(), engineLogListener)
+      eventually(Timeout(20.seconds)) {
+        assert(engineLogs.nonEmpty)
+      }
+      conn.close()
+    }
+  }
+
+  test("HADP-44631: get full spark url") {
+    withSessionConf()(Map.empty)(Map(
+      "spark.ui.enabled" -> "true",
+      KyuubiEbayConf.SESSION_CLUSTER.key -> "test")) {
+      withJdbcStatement() { statement =>
+        val conn = statement.getConnection.asInstanceOf[KyuubiConnection]
+        val sparkUrl = conn.getSparkURL
+        assert(sparkUrl.nonEmpty)
+      }
+    }
+  }
+
+  test("HADP-44628: Enable the timeout for KyuubiConnection::isValid") {
+    withSessionConf(Map.empty)(Map.empty)(
+      Map(
+        KyuubiConf.SESSION_ENGINE_LAUNCH_ASYNC.key -> "false",
+        KyuubiEbayConf.SESSION_CLUSTER.key -> "test")) {
+      withJdbcStatement() { statement =>
+        val conn = statement.getConnection
+        assert(conn.isInstanceOf[KyuubiConnection])
+        assert(conn.isValid(3))
+      }
+    }
+  }
+
+  test("HADP-44779: Support to get update count") {
+    withSessionConf(Map.empty)(Map.empty)(Map(KyuubiEbayConf.SESSION_CLUSTER.key -> "test")) {
+      withJdbcStatement("test_update_count") { statement =>
+        statement.executeQuery("create table test_update_count(id int) using parquet")
+        statement.executeQuery("insert into test_update_count values(1), (2)")
+        assert(statement.getUpdateCount === 2)
+      }
+    }
+  }
+
+  test("test engine spark result max rows") {
+    withSessionConf()(Map.empty)(Map(
+      KyuubiConf.OPERATION_RESULT_MAX_ROWS.key -> "1",
+      KyuubiEbayConf.SESSION_CLUSTER.key -> "test")) {
+      withJdbcStatement("va") { statement =>
+        statement.executeQuery("create temporary view va as select * from values(1),(2)")
+
+        val resultLimit1 = statement.executeQuery("select * from va")
+        assert(resultLimit1.next())
+        assert(!resultLimit1.next())
+
+        statement.executeQuery(s"set ${KyuubiConf.OPERATION_RESULT_MAX_ROWS.key}=0")
+        statement.executeQuery(s"set ${KyuubiEbayConf.EBAY_OPERATION_MAX_RESULT_COUNT.key}=1")
+        val resultUnLimit = statement.executeQuery("select * from va")
+        assert(resultUnLimit.next())
+        assert(resultUnLimit.next())
+      }
+    }
+    withSessionConf()(Map.empty)(Map(
+      KyuubiEbayConf.EBAY_OPERATION_MAX_RESULT_COUNT.key -> "1",
+      KyuubiEbayConf.SESSION_CLUSTER.key -> "test")) {
+      withJdbcStatement("va") { statement =>
+        statement.executeQuery("create temporary view va as select * from values(1),(2)")
+
+        val resultLimit1 = statement.executeQuery("select * from va")
+        assert(resultLimit1.next())
+        assert(!resultLimit1.next())
+
+        statement.executeQuery(s"set ${KyuubiEbayConf.EBAY_OPERATION_MAX_RESULT_COUNT.key}=0")
+        val resultUnLimit = statement.executeQuery("select * from va")
+        assert(resultUnLimit.next())
+        assert(resultUnLimit.next())
       }
     }
   }

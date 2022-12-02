@@ -19,6 +19,7 @@ package org.apache.kyuubi.engine.hive.operation
 
 import java.util.List
 
+import org.apache.hadoop.hive.conf.HiveConf.ConfVars
 import org.apache.hive.service.rpc.thrift.TRowSet
 
 import org.apache.kyuubi.config.KyuubiConf._
@@ -156,5 +157,11 @@ class HiveOperationManager() extends OperationManager("HiveOperationManager") {
       maxRows: Int): TRowSet = {
     val operation = getOperation(opHandle).asInstanceOf[HiveOperation]
     operation.getOperationLogRowSet(order, maxRows)
+  }
+
+  override def getQueryId(operation: Operation): String = {
+    val hiveOperation = operation.asInstanceOf[HiveOperation]
+    val internalHiveOperation = hiveOperation.internalHiveOperation
+    internalHiveOperation.getParentSession.getHiveConf.getVar(ConfVars.HIVEQUERYID)
   }
 }

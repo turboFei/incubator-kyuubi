@@ -19,35 +19,41 @@ package org.apache.kyuubi.jdbc.hive;
 
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import org.apache.hive.service.rpc.thrift.TTypeId;
 
 public abstract class KyuubiMetaDataResultSet<M> extends KyuubiBaseResultSet {
-  protected final List<M> data;
+  protected List<M> data = Collections.emptyList();
 
-  @SuppressWarnings("unchecked")
   public KyuubiMetaDataResultSet(
-      final List<String> columnNames, final List<String> columnTypes, final List<M> data)
+      final List<String> columnNames, final List<TTypeId> columnTypes, final List<M> data)
       throws SQLException {
     if (data != null) {
-      this.data = new ArrayList<M>(data);
-    } else {
-      this.data = new ArrayList<M>();
+      this.data = new ArrayList<>(data);
     }
-    if (columnNames != null) {
-      this.columnNames = new ArrayList<String>(columnNames);
-      this.normalizedColumnNames = new ArrayList<String>();
-      for (String colName : columnNames) {
-        this.normalizedColumnNames.add(colName.toLowerCase());
-      }
-    } else {
-      this.columnNames = new ArrayList<String>();
-      this.normalizedColumnNames = new ArrayList<String>();
-    }
+
     if (columnTypes != null) {
-      this.columnTypes = new ArrayList<String>(columnTypes);
+      this.columnTypes = new ArrayList<>(columnTypes);
     } else {
-      this.columnTypes = new ArrayList<String>();
+      this.columnTypes = Collections.emptyList();
     }
+
+    if (columnNames != null) {
+      this.columnNames = new ArrayList<>(columnNames);
+      this.normalizedColumnNames = normalizeColumnNames(columnNames);
+    } else {
+      this.columnNames = Collections.emptyList();
+      this.normalizedColumnNames = Collections.emptyList();
+    }
+  }
+
+  private List<String> normalizeColumnNames(final List<String> columnNames) {
+    List<String> result = new ArrayList<>(columnNames.size());
+    for (String colName : columnNames) {
+      result.add(colName.toLowerCase());
+    }
+    return result;
   }
 
   @Override

@@ -21,9 +21,9 @@ import java.io.*;
 import java.sql.*;
 import java.util.*;
 import org.apache.hive.beeline.logs.KyuubiBeelineInPlaceUpdateStream;
+import org.apache.kyuubi.jdbc.hive.JdbcConnectionParams;
 import org.apache.kyuubi.jdbc.hive.KyuubiStatement;
 import org.apache.kyuubi.jdbc.hive.Utils;
-import org.apache.kyuubi.jdbc.hive.Utils.JdbcConnectionParams;
 import org.apache.kyuubi.jdbc.hive.logs.InPlaceUpdateStream;
 import org.apache.kyuubi.jdbc.hive.logs.KyuubiLoggable;
 
@@ -109,20 +109,9 @@ public class KyuubiCommands extends Commands {
     return true;
   }
 
-  private boolean isScalaCommand(String line) {
-    if (line.startsWith(BeeLine.COMMAND_PREFIX)) {
-      line = line.substring(BeeLine.COMMAND_PREFIX.length()).trim();
-      String[] arr = line.split("\\s+");
-      return arr.length >= 1 && arr[0].equalsIgnoreCase(KyuubiBeeLine.SCALA_COMMAND_PREFIX);
-    }
-    return false;
-  }
-
   // Return false only occurred error when execution the sql and the sql should follow the rules
   // of beeline.
   private boolean executeInternal(String sql, boolean call) {
-    boolean isScala = false;
-
     if (!beeLine.isBeeLine()) {
       sql = cliToBeelineCmd(sql);
     }
@@ -142,27 +131,19 @@ public class KyuubiCommands extends Commands {
     }
 
     if (sql.startsWith(BeeLine.COMMAND_PREFIX)) {
-      isScala = isScalaCommand(sql);
-      if (!isScala) {
-        return beeLine.execCommandWithPrefix(sql);
-      }
-      sql = sql.substring(BeeLine.COMMAND_PREFIX.length());
+      return beeLine.execCommandWithPrefix(sql);
     }
 
-    if (isScala) {
-      sql = sql.trim().substring(KyuubiBeeLine.SCALA_COMMAND_PREFIX.length());
-    } else {
-      String prefix = call ? "call" : "sql";
+    String prefix = call ? "call" : "sql";
 
-      if (sql.startsWith(prefix)) {
-        sql = sql.substring(prefix.length());
-      }
+    if (sql.startsWith(prefix)) {
+      sql = sql.substring(prefix.length());
+    }
 
-      // batch statements?
-      if (beeLine.getBatch() != null) {
-        beeLine.getBatch().add(sql);
-        return true;
-      }
+    // batch statements?
+    if (beeLine.getBatch() != null) {
+      beeLine.getBatch().add(sql);
+      return true;
     }
 
     if (!(beeLine.assertConnection())) {
@@ -185,12 +166,7 @@ public class KyuubiCommands extends Commands {
         } else {
           stmnt = beeLine.createStatement();
           if (beeLine.getOpts().isSilent()) {
-            if (isScala) {
-              ((KyuubiStatement) stmnt).executeScala(sql);
-              hasResults = true;
-            } else {
-              hasResults = stmnt.execute(sql);
-            }
+            hasResults = stmnt.execute(sql);
           } else {
             InPlaceUpdateStream.EventNotifier eventNotifier =
                 new InPlaceUpdateStream.EventNotifier();
@@ -202,12 +178,7 @@ public class KyuubiCommands extends Commands {
               kyuubiStatement.setInPlaceUpdateStream(
                   new KyuubiBeelineInPlaceUpdateStream(beeLine.getErrorStream(), eventNotifier));
             }
-            if (isScala) {
-              ((KyuubiStatement) stmnt).executeScala(sql);
-              hasResults = true;
-            } else {
-              hasResults = stmnt.execute(sql);
-            }
+            hasResults = stmnt.execute(sql);
             logThread.interrupt();
             logThread.join(DEFAULT_QUERY_PROGRESS_THREAD_TIMEOUT);
           }
@@ -588,38 +559,5 @@ public class KyuubiCommands extends Commands {
         commands.showRemainingLogsIfAny(kyuubiLoggable);
       }
     }
-  }
-
-  public boolean sparksubmit(String line) throws Exception {
-    return executeKyuubiStatementInternal(line);
-  }
-
-  public boolean scala(String line) throws Exception {
-    return executeKyuubiStatementInternal(line);
-  }
-
-  private boolean executeKyuubiStatementInternal(String line) throws Exception {
-    if (line == null || line.length() == 0) {
-      return false; // ???
-    }
-
-    // use multiple lines for statements not terminated by the delimiter
-    try {
-      line = handleMultiLineCmd(line);
-    } catch (Exception e) {
-      beeLine.handleException(e);
-    }
-
-    line = line.trim();
-    List<String> cmdList = getCmdList(line, false);
-    for (int i = 0; i < cmdList.size(); i++) {
-      String cmd = cmdList.get(i).trim();
-      if (cmd.length() != 0) {
-        if (!executeInternal(BeeLine.COMMAND_PREFIX + cmd, false)) {
-          return false;
-        }
-      }
-    }
-    return true;
   }
 }

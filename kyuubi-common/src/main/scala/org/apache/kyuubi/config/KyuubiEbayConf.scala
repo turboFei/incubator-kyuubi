@@ -29,6 +29,12 @@ import org.apache.kyuubi.session.SessionManager
 object KyuubiEbayConf extends Logging {
   private def buildConf(key: String): ConfigBuilder = KyuubiConf.buildConf(key)
 
+  val SERVER_HA_ZK_ENABLED: ConfigEntry[Boolean] = buildConf("kyuubi.server.ha.zookeeper.enabled")
+    .doc("Whether to enable the ha zookeeper discovery in server side")
+    .internal
+    .booleanConf
+    .createWithDefault(true)
+
   val SESSION_CLUSTER_MODE_ENABLED: ConfigEntry[Boolean] =
     buildConf("kyuubi.session.cluster.mode.enabled")
       .doc("Whether to enable session with cluster specify mode. If it is enabled," +
@@ -328,23 +334,6 @@ object KyuubiEbayConf extends Logging {
       .internal
       .timeConf
       .createWithDefaultString("PT336H")
-
-  KyuubiConf.serverOnlyConfEntries ++= Set(
-    SESSION_CLUSTER_MODE_ENABLED,
-    SESSION_CLUSTER_CONF_REFRESH_INTERVAL,
-    SESSION_CLUSTER_LIST,
-    AUTHENTICATION_BATCH_ACCOUNT_CLASS,
-    AUTHENTICATION_BATCH_ACCOUNT_ENDPOINT,
-    AUTHENTICATION_BATCH_ACCOUNT_LOAD_ALL_ENABLED,
-    AUTHENTICATION_BATCH_ACCOUNT_LOAD_ALL_ENDPOINT,
-    AUTHENTICATION_BATCH_ACCOUNT_LOAD_ALL_INTERVAL,
-    AUTHENTICATION_KEYSTONE_ENDPOINT,
-    METADATA_STORE_JDBC_TABLE,
-    BATCH_SPARK_HBASE_CONFIG_TAG,
-    LOG_AGG_ENABLED,
-    LOG_AGG_THREADS_NUM,
-    LOG_AGG_CLUSTER_DIR,
-    LOG_AGG_FETCH_TIMEOUT)
 
   def getDefaultPropertiesFileForCluster(
       clusterOpt: Option[String],

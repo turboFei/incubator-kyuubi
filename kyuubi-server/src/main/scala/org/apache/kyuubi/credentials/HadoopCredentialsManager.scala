@@ -303,6 +303,7 @@ class HadoopCredentialsManager private (name: String) extends AbstractService(na
             if (userRef.getNoOperationTime < credentialsTimeout) {
               scheduleRenewal(userRef, renewalRetryWait)
             }
+
             if (waitUntilCredentialsReady) {
               promise.tryFailure(e)
             }

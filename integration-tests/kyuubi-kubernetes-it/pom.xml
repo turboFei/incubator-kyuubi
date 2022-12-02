@@ -89,7 +89,7 @@
         <!-- for hive driver related dependency -->
         <dependency>
             <groupId>org.apache.kyuubi</groupId>
-            <artifactId>kyuubi-hive-jdbc-shaded_${hadoop.client.binary.version}</artifactId>
+            <artifactId>kyuubi-hive-jdbc-shaded</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>

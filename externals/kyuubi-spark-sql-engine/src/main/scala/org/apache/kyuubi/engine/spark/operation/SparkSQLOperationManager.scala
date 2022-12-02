@@ -188,6 +188,10 @@ class SparkSQLOperationManager private (name: String) extends OperationManager(n
     throw KyuubiSQLException.featureNotSupported()
   }
 
+  override def getQueryId(operation: Operation): String = {
+    throw KyuubiSQLException.featureNotSupported()
+  }
+
   override def newTransferDataOperation(
       session: Session,
       values: ByteBuffer,

@@ -124,7 +124,7 @@
 
         <dependency>
             <groupId>org.apache.kyuubi</groupId>
-            <artifactId>kyuubi-hive-jdbc-shaded_${hadoop.client.binary.version}</artifactId>
+            <artifactId>kyuubi-hive-jdbc-shaded</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
@@ -230,8 +230,8 @@
                             <include>org.apache.curator:curator-client</include>
                             <include>org.apache.curator:curator-framework</include>
                             <include>org.apache.curator:curator-recipes</include>
-                            <include>${hive.service.rpc.groupId}:hive-service-rpc</include>
                             <include>org.apache.zookeeper:zookeeper</include>
+                            <include>org.apache.hive:hive-service-rpc</include>
                             <include>org.apache.thrift:*</include>
                         </includes>
                     </artifactSet>

@@ -17,40 +17,15 @@
 
 package org.apache.kyuubi.jdbc.hive;
 
-import static org.apache.hive.service.rpc.thrift.TCLIServiceConstants.TYPE_NAMES;
-
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.ResultSetMetaData;
-import java.sql.SQLException;
-import java.sql.SQLFeatureNotSupportedException;
-import java.sql.Statement;
+import java.sql.*;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.locks.ReentrantLock;
-import org.apache.hadoop.hive.common.type.HiveDecimal;
-import org.apache.hive.service.cli.RowSet;
-import org.apache.hive.service.cli.RowSetFactory;
-import org.apache.hive.service.cli.TableSchema;
-import org.apache.hive.service.rpc.thrift.TCLIService;
-import org.apache.hive.service.rpc.thrift.TCLIServiceConstants;
-import org.apache.hive.service.rpc.thrift.TCloseOperationReq;
-import org.apache.hive.service.rpc.thrift.TCloseOperationResp;
-import org.apache.hive.service.rpc.thrift.TColumnDesc;
-import org.apache.hive.service.rpc.thrift.TFetchOrientation;
-import org.apache.hive.service.rpc.thrift.TFetchResultsReq;
-import org.apache.hive.service.rpc.thrift.TFetchResultsResp;
-import org.apache.hive.service.rpc.thrift.TGetResultSetMetadataReq;
-import org.apache.hive.service.rpc.thrift.TGetResultSetMetadataResp;
-import org.apache.hive.service.rpc.thrift.TOperationHandle;
-import org.apache.hive.service.rpc.thrift.TPrimitiveTypeEntry;
-import org.apache.hive.service.rpc.thrift.TProtocolVersion;
-import org.apache.hive.service.rpc.thrift.TRowSet;
-import org.apache.hive.service.rpc.thrift.TSessionHandle;
-import org.apache.hive.service.rpc.thrift.TTableSchema;
-import org.apache.hive.service.rpc.thrift.TTypeQualifierValue;
-import org.apache.hive.service.rpc.thrift.TTypeQualifiers;
+import org.apache.hive.service.rpc.thrift.*;
+import org.apache.kyuubi.jdbc.hive.cli.RowSet;
+import org.apache.kyuubi.jdbc.hive.cli.RowSetFactory;
+import org.apache.kyuubi.jdbc.hive.common.HiveDecimal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -92,7 +67,7 @@ public class KyuubiQueryResultSet extends KyuubiBaseResultSet {
 
     private boolean retrieveSchema = true;
     private List<String> colNames;
-    private List<String> colTypes;
+    private List<TTypeId> colTypes;
     private List<JdbcColumnAttributes> colAttributes;
     private int fetchSize = 50;
     private boolean emptyResultSet = false;
@@ -129,9 +104,9 @@ public class KyuubiQueryResultSet extends KyuubiBaseResultSet {
       return this;
     }
 
-    public Builder setSchema(List<String> colNames, List<String> colTypes) {
+    public Builder setSchema(List<String> colNames, List<TTypeId> colTypes) {
       // no column attributes provided - create list of null attributes.
-      List<JdbcColumnAttributes> colAttributes = new ArrayList<JdbcColumnAttributes>();
+      List<JdbcColumnAttributes> colAttributes = new ArrayList<>();
       for (int idx = 0; idx < colTypes.size(); ++idx) {
         colAttributes.add(null);
       }
@@ -139,12 +114,12 @@ public class KyuubiQueryResultSet extends KyuubiBaseResultSet {
     }
 
     public Builder setSchema(
-        List<String> colNames, List<String> colTypes, List<JdbcColumnAttributes> colAttributes) {
-      this.colNames = new ArrayList<String>();
+        List<String> colNames, List<TTypeId> colTypes, List<JdbcColumnAttributes> colAttributes) {
+      this.colNames = new ArrayList<>();
       this.colNames.addAll(colNames);
-      this.colTypes = new ArrayList<String>();
+      this.colTypes = new ArrayList<>();
       this.colTypes.addAll(colTypes);
-      this.colAttributes = new ArrayList<JdbcColumnAttributes>();
+      this.colAttributes = new ArrayList<>();
       this.colAttributes.addAll(colAttributes);
       this.retrieveSchema = false;
       return this;
@@ -185,10 +160,10 @@ public class KyuubiQueryResultSet extends KyuubiBaseResultSet {
     this.stmtHandle = builder.stmtHandle;
     this.sessHandle = builder.sessHandle;
     this.fetchSize = builder.fetchSize;
-    columnNames = new ArrayList<String>();
-    normalizedColumnNames = new ArrayList<String>();
-    columnTypes = new ArrayList<String>();
-    columnAttributes = new ArrayList<JdbcColumnAttributes>();
+    columnNames = new ArrayList<>();
+    normalizedColumnNames = new ArrayList<>();
+    columnTypes = new ArrayList<>();
+    columnAttributes = new ArrayList<>();
     if (builder.retrieveSchema) {
       retrieveSchema();
     } else {
@@ -256,7 +231,7 @@ public class KyuubiQueryResultSet extends KyuubiBaseResultSet {
         // TODO: should probably throw an exception here.
         return;
       }
-      setSchema(new TableSchema(schema));
+      setSchema(schema);
 
       List<TColumnDesc> columns = schema.getColumns();
       for (int pos = 0; pos < schema.getColumnsSize(); pos++) {
@@ -269,26 +244,20 @@ public class KyuubiQueryResultSet extends KyuubiBaseResultSet {
         normalizedColumnNames.add(columnName.toLowerCase());
         TPrimitiveTypeEntry primitiveTypeEntry =
             columns.get(pos).getTypeDesc().getTypes().get(0).getPrimitiveEntry();
-        String columnTypeName = TYPE_NAMES.get(primitiveTypeEntry.getType());
-        columnTypes.add(columnTypeName);
+        columnTypes.add(primitiveTypeEntry.getType());
         columnAttributes.add(getColumnAttributes(primitiveTypeEntry));
       }
     } catch (SQLException eS) {
       throw eS; // rethrow the SQLException as is
     } catch (Exception ex) {
       ex.printStackTrace();
-      throw new SQLException("Could not create ResultSet: " + ex.getMessage(), ex);
+      throw new KyuubiSQLException("Could not create ResultSet: " + ex.getMessage(), ex);
     }
   }
 
-  /**
-   * Set the specified schema to the resultset
-   *
-   * @param colNames
-   * @param colTypes
-   */
+  /** Set the specified schema to the resultset */
   private void setSchema(
-      List<String> colNames, List<String> colTypes, List<JdbcColumnAttributes> colAttributes) {
+      List<String> colNames, List<TTypeId> colTypes, List<JdbcColumnAttributes> colAttributes) {
     columnNames.addAll(colNames);
     columnTypes.addAll(colTypes);
     columnAttributes.addAll(colAttributes);
@@ -325,25 +294,26 @@ public class KyuubiQueryResultSet extends KyuubiBaseResultSet {
     } catch (SQLException e) {
       throw e;
     } catch (Exception e) {
-      throw new SQLException(e.toString(), "08S01", e);
+      throw new KyuubiSQLException(e.toString(), "08S01", e);
     }
   }
 
   /**
    * Moves the cursor down one row from its current position.
    *
-   * @see java.sql.ResultSet#next()
    * @throws SQLException if a database access error occurs.
+   * @see java.sql.ResultSet#next()
    */
+  @Override
   public boolean next() throws SQLException {
     if (isClosed) {
-      throw new SQLException("Resultset is closed");
+      throw new KyuubiSQLException("Resultset is closed");
     }
     if (emptyResultSet || (maxRows > 0 && rowsFetched >= maxRows)) {
       return false;
     }
 
-    /**
+    /*
      * Poll on the operation status, till the operation is complete. We need to wait only for
      * HiveStatement to complete. HiveDatabaseMetaData which also uses this ResultSet returns only
      * after the RPC is complete.
@@ -383,7 +353,7 @@ public class KyuubiQueryResultSet extends KyuubiBaseResultSet {
       throw eS;
     } catch (Exception ex) {
       ex.printStackTrace();
-      throw new SQLException("Error retrieving next row", ex);
+      throw new KyuubiSQLException("Error retrieving next row", ex);
     }
     // NOTE: fetchOne doesn't throw new SQLFeatureNotSupportedException("Method not supported").
     return true;
@@ -392,7 +362,7 @@ public class KyuubiQueryResultSet extends KyuubiBaseResultSet {
   @Override
   public ResultSetMetaData getMetaData() throws SQLException {
     if (isClosed) {
-      throw new SQLException("Resultset is closed");
+      throw new KyuubiSQLException("Resultset is closed");
     }
     return super.getMetaData();
   }
@@ -400,7 +370,7 @@ public class KyuubiQueryResultSet extends KyuubiBaseResultSet {
   @Override
   public void setFetchSize(int rows) throws SQLException {
     if (isClosed) {
-      throw new SQLException("Resultset is closed");
+      throw new KyuubiSQLException("Resultset is closed");
     }
     fetchSize = rows;
   }
@@ -408,7 +378,7 @@ public class KyuubiQueryResultSet extends KyuubiBaseResultSet {
   @Override
   public int getType() throws SQLException {
     if (isClosed) {
-      throw new SQLException("Resultset is closed");
+      throw new KyuubiSQLException("Resultset is closed");
     }
     if (isScrollable) {
       return ResultSet.TYPE_SCROLL_INSENSITIVE;
@@ -420,34 +390,24 @@ public class KyuubiQueryResultSet extends KyuubiBaseResultSet {
   @Override
   public int getFetchSize() throws SQLException {
     if (isClosed) {
-      throw new SQLException("Resultset is closed");
+      throw new KyuubiSQLException("Resultset is closed");
     }
     return fetchSize;
-  }
-
-  public <T> T getObject(String columnLabel, Class<T> type) throws SQLException {
-    // JDK 1.7
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  public <T> T getObject(int columnIndex, Class<T> type) throws SQLException {
-    // JDK 1.7
-    throw new SQLFeatureNotSupportedException("Method not supported");
   }
 
   /**
    * Moves the cursor before the first row of the resultset.
    *
-   * @see java.sql.ResultSet#next()
    * @throws SQLException if a database access error occurs.
+   * @see java.sql.ResultSet#next()
    */
   @Override
   public void beforeFirst() throws SQLException {
     if (isClosed) {
-      throw new SQLException("Resultset is closed");
+      throw new KyuubiSQLException("Resultset is closed");
     }
     if (!isScrollable) {
-      throw new SQLException("Method not supported for TYPE_FORWARD_ONLY resultset");
+      throw new KyuubiSQLException("Method not supported for TYPE_FORWARD_ONLY resultset");
     }
     fetchFirst = true;
     rowsFetched = 0;
@@ -456,7 +416,7 @@ public class KyuubiQueryResultSet extends KyuubiBaseResultSet {
   @Override
   public boolean isBeforeFirst() throws SQLException {
     if (isClosed) {
-      throw new SQLException("Resultset is closed");
+      throw new KyuubiSQLException("Resultset is closed");
     }
     return (rowsFetched == 0);
   }

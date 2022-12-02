@@ -113,6 +113,7 @@ abstract class AbstractSession(
       case TGetInfoType.CLI_SERVER_NAME | TGetInfoType.CLI_DBMS_NAME =>
         TGetInfoValue.stringValue("Apache Kyuubi (Incubating)")
       case TGetInfoType.CLI_DBMS_VER => TGetInfoValue.stringValue(org.apache.kyuubi.KYUUBI_VERSION)
+      case TGetInfoType.CLI_ODBC_KEYWORDS => TGetInfoValue.stringValue("Unimplemented")
       case TGetInfoType.CLI_MAX_COLUMN_NAME_LEN |
           TGetInfoType.CLI_MAX_SCHEMA_NAME_LEN |
           TGetInfoType.CLI_MAX_TABLE_NAME_LEN => TGetInfoValue.lenValue(128)
@@ -206,6 +207,12 @@ abstract class AbstractSession(
         foreignSchema,
         foreignTable)
     runOperation(operation)
+  }
+
+  override def getQueryId(operationHandle: OperationHandle): String = {
+    val operation = sessionManager.operationManager.getOperation(operationHandle)
+    val queryId = sessionManager.operationManager.getQueryId(operation)
+    queryId
   }
 
   override def transferData(values: ByteBuffer, path: String): OperationHandle = {

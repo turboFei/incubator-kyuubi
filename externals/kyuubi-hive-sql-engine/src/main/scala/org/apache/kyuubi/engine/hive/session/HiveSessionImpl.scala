@@ -61,6 +61,7 @@ class HiveSessionImpl(
       case TGetInfoType.CLI_SERVER_NAME => TGetInfoValue.stringValue("Hive")
       case TGetInfoType.CLI_DBMS_NAME => TGetInfoValue.stringValue("Apache Hive")
       case TGetInfoType.CLI_DBMS_VER => TGetInfoValue.stringValue(HiveVersionInfo.getVersion)
+      case TGetInfoType.CLI_ODBC_KEYWORDS => TGetInfoValue.stringValue("Unimplemented")
       case TGetInfoType.CLI_MAX_COLUMN_NAME_LEN |
           TGetInfoType.CLI_MAX_SCHEMA_NAME_LEN |
           TGetInfoType.CLI_MAX_TABLE_NAME_LEN => TGetInfoValue.lenValue(128)

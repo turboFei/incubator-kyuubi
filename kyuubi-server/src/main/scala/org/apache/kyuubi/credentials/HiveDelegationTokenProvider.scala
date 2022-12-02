@@ -22,7 +22,7 @@ import java.io.File
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hadoop.hive.metastore.{IMetaStoreClient, RetryingMetaStoreClient}
-import org.apache.hadoop.hive.thrift.DelegationTokenIdentifier
+import org.apache.hadoop.hive.metastore.security.DelegationTokenIdentifier
 import org.apache.hadoop.io.Text
 import org.apache.hadoop.security.{Credentials, SecurityUtil}
 import org.apache.hadoop.security.UserGroupInformation.AuthenticationMethod

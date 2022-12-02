@@ -54,7 +54,7 @@
 
         <dependency>
             <groupId>org.apache.kyuubi</groupId>
-            <artifactId>kyuubi-rest-client_${hadoop.client.binary.version}</artifactId>
+            <artifactId>kyuubi-rest-client</artifactId>
             <version>${project.version}</version>
         </dependency>
 
@@ -104,6 +104,12 @@
         <dependency>
             <groupId>com.google.code.findbugs</groupId>
             <artifactId>jsr305</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>failureaccess</artifactId>
             <scope>provided</scope>
         </dependency>
 

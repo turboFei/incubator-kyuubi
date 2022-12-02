@@ -21,15 +21,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.sql.Driver;
-import java.util.*;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import jline.console.completer.Completer;
-import jline.console.completer.StringsCompleter;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
@@ -37,12 +33,8 @@ import org.apache.commons.cli.ParseException;
 public class KyuubiBeeLine extends BeeLine {
   public static final String KYUUBI_BEELINE_DEFAULT_JDBC_DRIVER =
       "org.apache.kyuubi.jdbc.KyuubiHiveDriver";
-  private static final ResourceBundle beelineResourceBundle =
-      ResourceBundle.getBundle(BeeLine.class.getSimpleName());
   protected KyuubiCommands commands = new KyuubiCommands(this);
   private Driver defaultDriver = null;
-  public static final String SCALA_COMMAND_PREFIX = "scala";
-  ResourceBundle kyuubiResourceBundle = new KyuubiBeelineResourceBundle();
 
   public KyuubiBeeLine() {
     this(true);
@@ -54,29 +46,7 @@ public class KyuubiBeeLine extends BeeLine {
       Field commandsField = BeeLine.class.getDeclaredField("commands");
       commandsField.setAccessible(true);
       commandsField.set(this, commands);
-
-      Field resourceBundleField = BeeLine.class.getDeclaredField("resourceBundle");
-      resourceBundleField.setAccessible(true);
-      Field modifiers = Field.class.getDeclaredField("modifiers");
-      modifiers.setAccessible(true);
-      modifiers.setInt(resourceBundleField, resourceBundleField.getModifiers() & ~Modifier.FINAL);
-      resourceBundleField.set(null, kyuubiResourceBundle);
-
-      ReflectiveCommandHandler scalaHandler =
-          new ReflectiveCommandHandler(
-              this,
-              new String[] {"scala"},
-              new Completer[] {new StringsCompleter("!scala <code>")});
-
-      Field commandHandlersField = BeeLine.class.getDeclaredField("commandHandlers");
-      commandHandlersField.setAccessible(true);
-      List<CommandHandler> commandHandlers = new ArrayList<CommandHandler>();
-      commandHandlers.addAll(Arrays.asList((CommandHandler[]) commandHandlersField.get(this)));
-      commandHandlers.add(scalaHandler);
-      commandHandlersField.set(
-          this, commandHandlers.toArray(new CommandHandler[commandHandlers.size()]));
     } catch (Throwable t) {
-      t.printStackTrace();
       throw new ExceptionInInitializerError("Failed to inject kyuubi commands");
     }
     try {
@@ -136,24 +106,6 @@ public class KyuubiBeeLine extends BeeLine {
         });
   }
 
-  static class KyuubiBeelineResourceBundle extends ListResourceBundle {
-    private Object[][] contents = new Object[beelineResourceBundle.keySet().size() + 1][];
-
-    public KyuubiBeelineResourceBundle() {
-      int i = 0;
-      for (String key : beelineResourceBundle.keySet()) {
-        contents[i] = new Object[] {key, beelineResourceBundle.getString(key)};
-        i++;
-      }
-      contents[i] = new Object[] {"help-scala", "Scala code"};
-    }
-
-    @Override
-    protected Object[][] getContents() {
-      return contents;
-    }
-  }
-
   @Override
   int initArgs(String[] args) {
     List<String> commands = Collections.emptyList();
@@ -197,9 +149,9 @@ public class KyuubiBeeLine extends BeeLine {
     if (!connSuccessful && !exit) {
       try {
         Method defaultBeelineConnectMethod =
-            BeeLine.class.getDeclaredMethod("defaultBeelineConnect");
+            BeeLine.class.getDeclaredMethod("defaultBeelineConnect", CommandLine.class);
         defaultBeelineConnectMethod.setAccessible(true);
-        connSuccessful = (boolean) defaultBeelineConnectMethod.invoke(this);
+        connSuccessful = (boolean) defaultBeelineConnectMethod.invoke(this, cl);
 
       } catch (Exception t) {
         error(t.getMessage());

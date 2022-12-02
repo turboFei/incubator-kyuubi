@@ -31,46 +31,19 @@
     <packaging>pom</packaging>
     <url>https://kyuubi.apache.org/</url>
 
+    <modules>
+        <module>kyuubi-flink-it</module>
+        <module>kyuubi-hive-it</module>
+        <module>kyuubi-trino-it</module>
+        <module>kyuubi-jdbc-it</module>
+        <module>kyuubi-zookeeper-it</module>
+    </modules>
+
     <profiles>
-        <profile>
-            <id>flink-it</id>
-            <modules>
-                <module>kyuubi-flink-it</module>
-            </modules>
-        </profile>
-
-        <profile>
-            <id>hive-it</id>
-            <modules>
-                <module>kyuubi-hive-it</module>
-            </modules>
-        </profile>
-
         <profile>
             <id>kubernetes-it</id>
             <modules>
                 <module>kyuubi-kubernetes-it</module>
-            </modules>
-        </profile>
-
-        <profile>
-            <id>trino-it</id>
-            <modules>
-                <module>kyuubi-trino-it</module>
-            </modules>
-        </profile>
-
-        <profile>
-            <id>jdbc-it</id>
-            <modules>
-                <module>kyuubi-jdbc-it</module>
-            </modules>
-        </profile>
-
-        <profile>
-            <id>zookeeper-it</id>
-            <modules>
-                <module>kyuubi-zookeeper-it</module>
             </modules>
         </profile>
     </profiles>

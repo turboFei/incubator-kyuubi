@@ -151,6 +151,12 @@ abstract class AbstractBackendService(name: String)
         foreignTable)
   }
 
+  override def getQueryId(operationHandle: OperationHandle): String = {
+    val operation = sessionManager.operationManager.getOperation(operationHandle)
+    val queryId = sessionManager.operationManager.getQueryId(operation)
+    queryId
+  }
+
   override def transferData(
       sessionHandle: SessionHandle,
       values: ByteBuffer,

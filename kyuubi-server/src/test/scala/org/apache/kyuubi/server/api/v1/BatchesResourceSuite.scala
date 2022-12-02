@@ -232,13 +232,13 @@ class BatchesResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper wi
         "",
         ""))
     sessionManager.openSession(
-      TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V10,
+      TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V11,
       "",
       "",
       "",
       Map.empty)
     sessionManager.openSession(
-      TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V10,
+      TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V11,
       "",
       "",
       "",

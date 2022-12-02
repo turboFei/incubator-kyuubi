@@ -33,7 +33,7 @@ import org.apache.kyuubi.{KyuubiSQLException, Logging, Utils}
 import org.apache.kyuubi.Utils.stringifyException
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf.FRONTEND_CONNECTION_URL_USE_HOSTNAME
-import org.apache.kyuubi.config.KyuubiReservedKeys.KYUUBI_CLIENT_IP_KEY
+import org.apache.kyuubi.config.KyuubiReservedKeys.{KYUUBI_CLIENT_IP_KEY, KYUUBI_SESSION_CONNECTION_URL_KEY}
 import org.apache.kyuubi.operation.{FetchOrientation, OperationHandle}
 import org.apache.kyuubi.service.authentication.KyuubiAuthenticationFactory
 import org.apache.kyuubi.session.SessionHandle
@@ -196,7 +196,8 @@ abstract class TFrontendService(name: String)
     val userName = getUserName(req)
     val ipAddress = getIpAddress
     val configuration = Map(KYUUBI_CLIENT_IP_KEY -> ipAddress) ++
-      Option(req.getConfiguration).map(_.asScala.toMap).getOrElse(Map.empty[String, String])
+      Option(req.getConfiguration).map(_.asScala.toMap).getOrElse(Map.empty[String, String]) ++
+      Map(KYUUBI_SESSION_CONNECTION_URL_KEY -> connectionUrl)
     val sessionHandle = be.openSession(
       protocol,
       userName,
@@ -589,6 +590,36 @@ abstract class TFrontendService(name: String)
   override def RenewDelegationToken(req: TRenewDelegationTokenReq): TRenewDelegationTokenResp = {
     debug(req.toString)
     val resp = new TRenewDelegationTokenResp
+    resp.setStatus(OK_STATUS)
+    resp
+  }
+
+  override def GetQueryId(req: TGetQueryIdReq): TGetQueryIdResp = {
+    debug(req.toString)
+    val resp = new TGetQueryIdResp
+    val queryId = be.getQueryId(OperationHandle(req.getOperationHandle))
+    resp.setQueryId(queryId)
+    resp
+  }
+
+  override def SetClientInfo(req: TSetClientInfoReq): TSetClientInfoResp = {
+    debug(req.toString)
+    val resp = new TSetClientInfoResp
+    if (req.isSetConfiguration) {
+      val sessionHandle = SessionHandle(req.getSessionHandle)
+      val stringBuilder = new StringBuilder("Client information for ")
+        .append(sessionHandle)
+        .append(": ")
+      val entries = req.getConfiguration.entrySet.asScala.toSeq
+      entries.headOption.foreach(e => {
+        stringBuilder.append(e.getKey).append(" = ").append(e.getValue)
+      })
+      entries.tail.foreach { e =>
+        stringBuilder.append(", ")
+        stringBuilder.append(e.getKey).append(" = ").append(e.getValue)
+      }
+      info(stringBuilder.toString())
+    }
     resp.setStatus(OK_STATUS)
     resp
   }

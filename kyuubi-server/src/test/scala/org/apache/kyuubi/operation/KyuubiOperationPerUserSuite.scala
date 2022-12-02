@@ -25,10 +25,9 @@ import org.scalatest.time.SpanSugar._
 
 import org.apache.kyuubi.{Utils, WithKyuubiServer, WithSimpleDFSService}
 import org.apache.kyuubi.KYUUBI_VERSION
-import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
+import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf.KYUUBI_ENGINE_ENV_PREFIX
 import org.apache.kyuubi.engine.SemanticVersion
-import org.apache.kyuubi.jdbc.hive.KyuubiConnection
 import org.apache.kyuubi.jdbc.hive.KyuubiStatement
 import org.apache.kyuubi.session.{KyuubiSessionImpl, KyuubiSessionManager, SessionHandle}
 import org.apache.kyuubi.zookeeper.ZookeeperConf
@@ -167,27 +166,6 @@ class KyuubiOperationPerUserSuite
     assert(r1 !== r2)
   }
 
-  test("HADP-44628: Enable the timeout for KyuubiConnection::isValid") {
-    withSessionConf(Map.empty)(Map.empty)(
-      Map(KyuubiConf.SESSION_ENGINE_LAUNCH_ASYNC.key -> "false")) {
-      withJdbcStatement() { statement =>
-        val conn = statement.getConnection
-        assert(conn.isInstanceOf[KyuubiConnection])
-        assert(conn.isValid(3))
-      }
-    }
-  }
-
-  test("HADP-44779: Support to get update count") {
-    withJdbcStatement("test_update_count") { statement =>
-      statement.executeQuery("create table test_update_count(id int) using parquet")
-      withJdbcStatement() { statement2 =>
-        statement2.executeQuery("insert into test_update_count values(1), (2)")
-        assert(statement2.getUpdateCount == 2)
-      }
-    }
-  }
-
   test("test engine spark result max rows") {
     withSessionConf()(Map.empty)(Map(KyuubiConf.OPERATION_RESULT_MAX_ROWS.key -> "1")) {
       withJdbcStatement("va") { statement =>
@@ -198,21 +176,6 @@ class KyuubiOperationPerUserSuite
         assert(!resultLimit1.next())
 
         statement.executeQuery(s"set ${KyuubiConf.OPERATION_RESULT_MAX_ROWS.key}=0")
-        statement.executeQuery(s"set ${KyuubiEbayConf.EBAY_OPERATION_MAX_RESULT_COUNT.key}=1")
-        val resultUnLimit = statement.executeQuery("select * from va")
-        assert(resultUnLimit.next())
-        assert(resultUnLimit.next())
-      }
-    }
-    withSessionConf()(Map.empty)(Map(KyuubiEbayConf.EBAY_OPERATION_MAX_RESULT_COUNT.key -> "1")) {
-      withJdbcStatement("va") { statement =>
-        statement.executeQuery("create temporary view va as select * from values(1),(2)")
-
-        val resultLimit1 = statement.executeQuery("select * from va")
-        assert(resultLimit1.next())
-        assert(!resultLimit1.next())
-
-        statement.executeQuery(s"set ${KyuubiEbayConf.EBAY_OPERATION_MAX_RESULT_COUNT.key}=0")
         val resultUnLimit = statement.executeQuery("select * from va")
         assert(resultUnLimit.next())
         assert(resultUnLimit.next())
@@ -352,4 +315,11 @@ class KyuubiOperationPerUserSuite
     }
   }
 
+  test("transfer connection url when opening connection") {
+    withJdbcStatement() { _ =>
+      val session =
+        server.backendService.sessionManager.allSessions().head.asInstanceOf[KyuubiSessionImpl]
+      assert(session.connectionUrl == server.frontendServices.head.connectionUrl)
+    }
+  }
 }

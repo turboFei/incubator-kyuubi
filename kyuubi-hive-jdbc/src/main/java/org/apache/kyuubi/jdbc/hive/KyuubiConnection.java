@@ -17,16 +17,22 @@
 
 package org.apache.kyuubi.jdbc.hive;
 
+import static org.apache.kyuubi.jdbc.hive.JdbcConnectionParams.*;
+import static org.apache.kyuubi.jdbc.hive.Utils.HIVE_SERVER2_RETRY_KEY;
+import static org.apache.kyuubi.jdbc.hive.Utils.HIVE_SERVER2_RETRY_TRUE;
+
 import java.io.*;
 import java.lang.reflect.*;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.charset.StandardCharsets;
+import java.security.AccessControlContext;
+import java.security.AccessController;
 import java.security.KeyStore;
 import java.security.SecureRandom;
 import java.sql.*;
-import java.sql.Array;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.concurrent.*;
@@ -35,24 +41,16 @@ import java.util.zip.GZIPInputStream;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManagerFactory;
+import javax.security.auth.Subject;
 import javax.security.sasl.Sasl;
-import javax.security.sasl.SaslException;
-import org.apache.commons.lang.StringUtils;
-import org.apache.hadoop.hive.common.auth.HiveAuthUtils;
-import org.apache.hive.service.auth.HiveAuthFactory;
-import org.apache.hive.service.auth.KerberosSaslHelper;
-import org.apache.hive.service.auth.PlainSaslHelper;
-import org.apache.hive.service.auth.SaslQOP;
-import org.apache.hive.service.cli.FetchType;
-import org.apache.hive.service.cli.RowSet;
-import org.apache.hive.service.cli.RowSetFactory;
-import org.apache.hive.service.cli.thrift.*;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hive.service.rpc.thrift.*;
 import org.apache.http.HttpRequestInterceptor;
 import org.apache.http.HttpResponse;
+import org.apache.http.NoHttpResponseException;
 import org.apache.http.client.CookieStore;
-import org.apache.http.client.HttpRequestRetryHandler;
 import org.apache.http.client.ServiceUnavailableRetryStrategy;
+import org.apache.http.client.config.RequestConfig;
 import org.apache.http.config.Registry;
 import org.apache.http.config.RegistryBuilder;
 import org.apache.http.conn.socket.ConnectionSocketFactory;
@@ -61,11 +59,14 @@ import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
 import org.apache.http.impl.client.BasicCookieStore;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
-import org.apache.http.impl.client.HttpClients;
 import org.apache.http.impl.conn.BasicHttpClientConnectionManager;
 import org.apache.http.protocol.HttpContext;
 import org.apache.http.ssl.SSLContexts;
-import org.apache.kyuubi.jdbc.hive.Utils.JdbcConnectionParams;
+import org.apache.kyuubi.jdbc.hive.adapter.SQLConnection;
+import org.apache.kyuubi.jdbc.hive.auth.*;
+import org.apache.kyuubi.jdbc.hive.cli.FetchType;
+import org.apache.kyuubi.jdbc.hive.cli.RowSet;
+import org.apache.kyuubi.jdbc.hive.cli.RowSetFactory;
 import org.apache.kyuubi.jdbc.hive.logs.KyuubiEngineLogListener;
 import org.apache.kyuubi.jdbc.hive.logs.KyuubiLoggable;
 import org.apache.thrift.TException;
@@ -77,9 +78,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** KyuubiConnection. */
-public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
+public class KyuubiConnection implements SQLConnection, KyuubiLoggable {
   public static final Logger LOG = LoggerFactory.getLogger(KyuubiConnection.class.getName());
   public static final String BEELINE_MODE_PROPERTY = "BEELINE_MODE";
+  public static final String HS2_PROXY_USER = "hive.server2.proxy.user";
   public static int DEFAULT_ENGINE_LOG_THREAD_TIMEOUT = 10 * 1000;
   public static final String KYUUBI_PROXY_BATCH_ACCOUNT = "kyuubi.proxy.batchAccount";
   public static final String KYUUBI_ENGINE_LOG_LISTENER_CLASSES =
@@ -92,21 +94,20 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
   private int port;
   private final Map<String, String> sessConfMap;
   private JdbcConnectionParams connParams;
-  private final boolean isEmbeddedMode;
   private TTransport transport;
-  private boolean assumeSubject;
-  // TODO should be replaced by CliServiceClient
   private TCLIService.Iface client;
   private boolean isClosed = true;
   private SQLWarning warningChain = null;
   private TSessionHandle sessHandle = null;
-  private final List<TProtocolVersion> supportedProtocols = new LinkedList<TProtocolVersion>();
-  private int loginTimeout = 0;
+  private final List<TProtocolVersion> supportedProtocols = new LinkedList<>();
+  private int connectTimeout = 0;
+  private int socketTimeout = 0;
   private TProtocolVersion protocol;
   private int fetchSize = KyuubiStatement.DEFAULT_FETCH_SIZE;
   private String initFile = null;
+  private String wmPool = null, wmApp = null;
+  private Properties clientInfo;
   private boolean initFileCompleted = false;
-
   private TOperationHandle launchEngineOpHandle = null;
   private Thread engineLogThread;
   private boolean engineLogInflight = true;
@@ -116,9 +117,21 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
   private String engineUrl = "";
 
   private boolean isBeeLineMode;
-  private boolean fastConnectMode;
 
   private List<KyuubiEngineLogListener> engineLogListeners = new LinkedList();
+
+  /** Get all direct HiveServer2 URLs from a ZooKeeper based HiveServer2 URL */
+  public static List<JdbcConnectionParams> getAllUrls(String zookeeperBasedHS2Url)
+      throws Exception {
+    JdbcConnectionParams params = Utils.parseURL(zookeeperBasedHS2Url, new Properties());
+    // if zk is disabled or if HA service discovery is enabled we return the already populated
+    // params.
+    // in HA mode, params is already populated with Active server host info.
+    if (params.getZooKeeperEnsemble() == null) {
+      return Collections.singletonList(params);
+    }
+    return ZooKeeperHiveClientHelper.getDirectParamsList(params);
+  }
 
   public KyuubiConnection(String url, Properties info) throws SQLException {
     this(url, info, tryCreateKyuubiEngineLogListeners(info));
@@ -126,44 +139,44 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
 
   public KyuubiConnection(String uri, Properties info, KyuubiEngineLogListener... listeners)
       throws SQLException {
-    setupLoginTimeout();
+    isBeeLineMode = Boolean.parseBoolean(info.getProperty(BEELINE_MODE_PROPERTY));
     try {
       connParams = Utils.parseURL(uri, info);
     } catch (ZooKeeperHiveClientException e) {
-      throw new SQLException(e);
+      throw new KyuubiSQLException(e);
     }
-    isBeeLineMode = Boolean.parseBoolean(info.getProperty(BEELINE_MODE_PROPERTY));
-    fastConnectMode = Boolean.parseBoolean(info.getProperty(FAST_CONNECT_MODE));
     jdbcUriString = connParams.getJdbcUriString();
+    sessConfMap = connParams.getSessionVars();
     // JDBC URL: jdbc:hive2://<host>:<port>/dbName;sess_var_list?hive_conf_list#hive_var_list
     // each list: <key1>=<val1>;<key2>=<val2> and so on
     // sess_var_list -> sessConfMap
     // hive_conf_list -> hiveConfMap
     // hive_var_list -> hiveVarMap
-    host = connParams.getHost();
-    port = connParams.getPort();
-    sessConfMap = connParams.getSessionVars();
-    isEmbeddedMode = connParams.isEmbeddedMode();
-
-    if (sessConfMap.containsKey(JdbcConnectionParams.FETCH_SIZE)) {
-      fetchSize = Integer.parseInt(sessConfMap.get(JdbcConnectionParams.FETCH_SIZE));
+    if (isKerberosAuthMode()) {
+      host = Utils.getCanonicalHostName(connParams.getHost());
+    } else {
+      host = connParams.getHost();
     }
-    if (sessConfMap.containsKey(JdbcConnectionParams.INIT_FILE)) {
-      initFile = sessConfMap.get(JdbcConnectionParams.INIT_FILE);
+    port = connParams.getPort();
+
+    setupTimeout();
+
+    if (sessConfMap.containsKey(FETCH_SIZE)) {
+      fetchSize = Integer.parseInt(sessConfMap.get(FETCH_SIZE));
+    }
+    if (sessConfMap.containsKey(INIT_FILE)) {
+      initFile = sessConfMap.get(INIT_FILE);
+    }
+    wmPool = sessConfMap.get(WM_POOL);
+    for (String application : APPLICATION) {
+      wmApp = sessConfMap.get(application);
+      if (wmApp != null) break;
     }
 
     // add supported protocols
-    supportedProtocols.add(TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V1);
-    supportedProtocols.add(TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V2);
-    supportedProtocols.add(TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V3);
-    supportedProtocols.add(TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V4);
-    supportedProtocols.add(TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V5);
-    supportedProtocols.add(TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V6);
-    supportedProtocols.add(TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V7);
-    supportedProtocols.add(TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V8);
-    supportedProtocols.add(TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V9);
-    supportedProtocols.add(TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V10);
+    Collections.addAll(supportedProtocols, TProtocolVersion.values());
 
+    // add log listeners
     if (listeners != null) {
       for (KyuubiEngineLogListener listener : listeners) {
         if (listener != null) {
@@ -173,78 +186,65 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
       }
     }
 
-    if (isEmbeddedMode) {
-      EmbeddedThriftBinaryCLIService embeddedClient = new EmbeddedThriftBinaryCLIService();
-      embeddedClient.init(null);
-      TCLIService.Iface _client = embeddedClient;
-      // Wrap the client with a thread-safe proxy to serialize the RPC calls
-      client = newSynchronizedClient(_client);
-      // open client session
-      openSession();
-      showLaunchEngineLog();
-      if (!fastConnectMode) {
-        waitLaunchEngineToComplete();
+    int maxRetries = 1;
+    try {
+      String strRetries = sessConfMap.get(RETRIES);
+      if (StringUtils.isNotBlank(strRetries)) {
+        maxRetries = Integer.parseInt(strRetries);
       }
-      executeInitSql();
-    } else {
-      int maxRetries = 1;
+    } catch (NumberFormatException e) { // Ignore the exception
+    }
+
+    for (int numRetries = 0; ; ) {
       try {
-        String strRetries = sessConfMap.get(JdbcConnectionParams.RETRIES);
-        if (StringUtils.isNotBlank(strRetries)) {
-          maxRetries = Integer.parseInt(strRetries);
+        // open the client transport
+        openTransport();
+        // set up the client
+        TCLIService.Iface _client = new TCLIService.Client(new TBinaryProtocol(transport));
+        // Wrap the client with a thread-safe proxy to serialize the RPC calls
+        client = newSynchronizedClient(_client);
+        // open client session
+        openSession();
+        if (!isBeeLineMode) {
+          showLaunchEngineLog();
+          waitLaunchEngineToComplete();
+          executeInitSql();
         }
-      } catch (NumberFormatException e) { // Ignore the exception
-      }
-
-      for (int numRetries = 0; ; ) {
+        break;
+      } catch (Exception e) {
+        LOG.warn("Failed to connect to " + connParams.getHost() + ":" + connParams.getPort());
+        String errMsg = null;
+        String warnMsg = "Could not open client transport with JDBC Uri: " + jdbcUriString + ": ";
         try {
-          // open the client transport
-          openTransport();
-          // set up the client
-          TCLIService.Iface _client = new TCLIService.Client(new TBinaryProtocol(transport));
-          // Wrap the client with a thread-safe proxy to serialize the RPC calls
-          client = newSynchronizedClient(_client);
-          // open client session
-          openSession();
-          if (!isBeeLineMode) {
-            showLaunchEngineLog();
-            if (!fastConnectMode) {
-              waitLaunchEngineToComplete();
-            }
-            executeInitSql();
+          close();
+        } catch (Exception ex) {
+          // Swallow the exception
+          LOG.debug("Error while closing the connection", ex);
+        }
+        if (ZooKeeperHiveClientHelper.isZkDynamicDiscoveryMode(sessConfMap)) {
+          errMsg = "Could not open client transport for any of the Server URI's in ZooKeeper: ";
+          // Try next available server in zookeeper, or retry all the servers again if retry is
+          // enabled
+          while (!Utils.updateConnParamsFromZooKeeper(connParams) && ++numRetries < maxRetries) {
+            connParams.getRejectedHostZnodePaths().clear();
           }
-          break;
-        } catch (Exception e) {
-          LOG.warn("Failed to connect to " + connParams.getHost() + ":" + connParams.getPort());
-          String errMsg = null;
-          String warnMsg = "Could not open client transport with JDBC Uri: " + jdbcUriString + ": ";
-          try {
-            close();
-          } catch (Exception ex) {
-            // Swallow the exception
-            LOG.debug("Error while closing the connection", ex);
-          }
-          if (isZkDynamicDiscoveryMode()) {
-            errMsg = "Could not open client transport for any of the Server URI's in ZooKeeper: ";
-            // Try next available server in zookeeper, or retry all the servers again if retry is
-            // enabled
-            while (!Utils.updateConnParamsFromZooKeeper(connParams) && ++numRetries < maxRetries) {
-              connParams.getRejectedHostZnodePaths().clear();
-            }
-            // Update with new values
-            jdbcUriString = connParams.getJdbcUriString();
+          // Update with new values
+          jdbcUriString = connParams.getJdbcUriString();
+          if (isKerberosAuthMode()) {
+            host = Utils.getCanonicalHostName(connParams.getHost());
+          } else {
             host = connParams.getHost();
-            port = connParams.getPort();
-          } else {
-            errMsg = warnMsg;
-            ++numRetries;
           }
+          port = connParams.getPort();
+        } else {
+          errMsg = warnMsg;
+          ++numRetries;
+        }
 
-          if (numRetries >= maxRetries) {
-            throw new SQLException(errMsg + e.getMessage(), " 08S01", e);
-          } else {
-            LOG.warn(warnMsg + e.getMessage() + " Retrying " + numRetries + " of " + maxRetries);
-          }
+        if (numRetries >= maxRetries) {
+          throw new KyuubiSQLException(errMsg + e.getMessage(), "08S01", e);
+        } else {
+          LOG.warn(warnMsg + e.getMessage() + " Retrying " + numRetries + " of " + maxRetries);
         }
       }
     }
@@ -304,6 +304,7 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
    * @throws SQLException
    * @throws ClosedOrCancelledException if connection has been closed
    */
+  @Override
   public List<String> getExecLog() throws SQLException, ClosedOrCancelledException {
     if (isClosed()) {
       throw new ClosedOrCancelledException(
@@ -326,7 +327,7 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
         logs.add(String.valueOf(row[0]));
       }
     } catch (TException e) {
-      throw new SQLException("Error building result set for query log", e);
+      throw new KyuubiSQLException("Error building result set for query log", e);
     }
     engineLogInflight = !logs.isEmpty();
     return Collections.unmodifiableList(logs);
@@ -378,16 +379,17 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
           for (String sql : sqlList) {
             boolean hasResult = st.execute(sql);
             if (hasResult) {
-              ResultSet rs = st.getResultSet();
-              while (rs.next()) {
-                System.out.println(rs.getString(1));
+              try (ResultSet rs = st.getResultSet()) {
+                while (rs.next()) {
+                  System.out.println(rs.getString(1));
+                }
               }
             }
           }
         }
       } catch (Exception e) {
         LOG.error("Failed to execute initial SQL");
-        throw new SQLException(e.getMessage());
+        throw new KyuubiSQLException(e.getMessage());
       }
     }
     initFileCompleted = true;
@@ -403,9 +405,9 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
     List<String> initSqlList = null;
     try {
       FileInputStream input = new FileInputStream(file);
-      br = new BufferedReader(new InputStreamReader(input, "UTF-8"));
+      br = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8));
       String line;
-      StringBuilder sb = new StringBuilder("");
+      StringBuilder sb = new StringBuilder();
       while ((line = br.readLine()) != null) {
         line = line.trim();
         if (line.length() != 0) {
@@ -431,7 +433,7 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
 
   private static List<String> getInitSql(String sbLine) {
     char[] sqlArray = sbLine.toCharArray();
-    List<String> initSqlList = new ArrayList();
+    List<String> initSqlList = new ArrayList<>();
     int index = 0;
     int beginIndex = 0;
     for (; index < sqlArray.length; index++) {
@@ -445,14 +447,11 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
   }
 
   private void openTransport() throws Exception {
-    assumeSubject =
-        JdbcConnectionParams.AUTH_KERBEROS_AUTH_TYPE_FROM_SUBJECT.equals(
-            sessConfMap.get(JdbcConnectionParams.AUTH_KERBEROS_AUTH_TYPE));
     transport = isHttpTransportMode() ? createHttpTransport() : createBinaryTransport();
     if (!transport.isOpen()) {
       transport.open();
-      logZkDiscoveryMessage("Connected to " + connParams.getHost() + ":" + connParams.getPort());
     }
+    logZkDiscoveryMessage("Connected to " + connParams.getHost() + ":" + connParams.getPort());
   }
 
   public String getConnectedUrl() {
@@ -465,7 +464,7 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
     String schemeName = useSsl ? "https" : "http";
     // http path should begin with "/"
     String httpPath;
-    httpPath = sessConfMap.get(JdbcConnectionParams.HTTP_PATH);
+    httpPath = sessConfMap.get(HTTP_PATH);
     if (httpPath == null) {
       httpPath = "/";
     } else if (!httpPath.startsWith("/")) {
@@ -484,149 +483,141 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
   }
 
   private CloseableHttpClient getHttpClient(Boolean useSsl) throws SQLException {
-    boolean isCookieEnabled =
-        sessConfMap.get(JdbcConnectionParams.COOKIE_AUTH) == null
-            || (!JdbcConnectionParams.COOKIE_AUTH_FALSE.equalsIgnoreCase(
-                sessConfMap.get(JdbcConnectionParams.COOKIE_AUTH)));
-    String cookieName =
-        sessConfMap.get(JdbcConnectionParams.COOKIE_NAME) == null
-            ? JdbcConnectionParams.DEFAULT_COOKIE_NAMES_HS2
-            : sessConfMap.get(JdbcConnectionParams.COOKIE_NAME);
+    boolean isCookieEnabled = isCookieEnabled();
+    String cookieName = sessConfMap.getOrDefault(COOKIE_NAME, DEFAULT_COOKIE_NAMES_HS2);
     CookieStore cookieStore = isCookieEnabled ? new BasicCookieStore() : null;
-    HttpClientBuilder httpClientBuilder;
     // Request interceptor for any request pre-processing logic
-    HttpRequestInterceptor requestInterceptor;
-    Map<String, String> additionalHttpHeaders = new HashMap<String, String>();
+    Map<String, String> additionalHttpHeaders = new HashMap<>();
+    Map<String, String> customCookies = new HashMap<>();
 
     // Retrieve the additional HttpHeaders
     for (Map.Entry<String, String> entry : sessConfMap.entrySet()) {
       String key = entry.getKey();
 
-      if (key.startsWith(JdbcConnectionParams.HTTP_HEADER_PREFIX)) {
-        additionalHttpHeaders.put(
-            key.substring(JdbcConnectionParams.HTTP_HEADER_PREFIX.length()), entry.getValue());
+      if (key.startsWith(HTTP_HEADER_PREFIX)) {
+        additionalHttpHeaders.put(key.substring(HTTP_HEADER_PREFIX.length()), entry.getValue());
+      }
+      if (key.startsWith(HTTP_COOKIE_PREFIX)) {
+        customCookies.put(key.substring(HTTP_COOKIE_PREFIX.length()), entry.getValue());
       }
     }
-    // Configure http client for kerberos/password based authentication
-    if (isKerberosAuthMode()) {
-      /**
+
+    HttpRequestInterceptor requestInterceptor;
+    if (!isSaslAuthMode()) {
+      requestInterceptor = null;
+    } else if (isPlainSaslAuthMode()) {
+      /*
+       * Add an interceptor to pass username/password in the header. In https mode, the entire
+       * information is encrypted
+       */
+      requestInterceptor =
+          new HttpBasicAuthInterceptor(
+              getUserName(),
+              getPassword(),
+              cookieStore,
+              cookieName,
+              useSsl,
+              additionalHttpHeaders,
+              customCookies);
+    } else {
+      // Configure http client for kerberos-based authentication
+      Subject subject = createSubject();
+      /*
        * Add an interceptor which sets the appropriate header in the request. It does the kerberos
        * authentication and get the final service ticket, for sending to the server before every
        * request. In https mode, the entire information is encrypted
        */
       requestInterceptor =
           new HttpKerberosRequestInterceptor(
-              sessConfMap.get(JdbcConnectionParams.AUTH_PRINCIPAL),
+              sessConfMap.get(AUTH_PRINCIPAL),
               host,
-              getServerHttpUrl(useSsl),
-              assumeSubject,
+              subject,
               cookieStore,
               cookieName,
               useSsl,
-              additionalHttpHeaders);
-    } else {
-      // Check for delegation token, if present add it in the header
-      String tokenStr = getClientDelegationToken(sessConfMap);
-      if (tokenStr != null) {
-        requestInterceptor =
-            new HttpTokenAuthInterceptor(
-                tokenStr, cookieStore, cookieName, useSsl, additionalHttpHeaders);
-      } else {
-        /**
-         * Add an interceptor to pass username/password in the header. In https mode, the entire
-         * information is encrypted
-         */
-        requestInterceptor =
-            new HttpBasicAuthInterceptor(
-                getUserName(),
-                getPassword(),
-                cookieStore,
-                cookieName,
-                useSsl,
-                additionalHttpHeaders);
-      }
+              additionalHttpHeaders,
+              customCookies);
     }
+    HttpClientBuilder httpClientBuilder = HttpClientBuilder.create();
+
+    // Set timeout
+    RequestConfig config =
+        RequestConfig.custom()
+            .setConnectTimeout(connectTimeout)
+            .setSocketTimeout(socketTimeout)
+            .build();
+    httpClientBuilder.setDefaultRequestConfig(config);
+
     // Configure http client for cookie based authentication
     if (isCookieEnabled) {
       // Create a http client with a retry mechanism when the server returns a status code of 401.
-      httpClientBuilder =
-          HttpClients.custom()
-              .setServiceUnavailableRetryStrategy(
-                  new ServiceUnavailableRetryStrategy() {
-                    @Override
-                    public boolean retryRequest(
-                        final HttpResponse response,
-                        final int executionCount,
-                        final HttpContext context) {
-                      int statusCode = response.getStatusLine().getStatusCode();
-                      boolean ret = statusCode == 401 && executionCount <= 1;
+      httpClientBuilder.setServiceUnavailableRetryStrategy(
+          new ServiceUnavailableRetryStrategy() {
+            @Override
+            public boolean retryRequest(
+                final HttpResponse response, final int executionCount, final HttpContext context) {
+              int statusCode = response.getStatusLine().getStatusCode();
+              boolean ret = statusCode == 401 && executionCount <= 1;
 
-                      // Set the context attribute to true which will be interpreted by the request
-                      // interceptor
-                      if (ret) {
-                        context.setAttribute(
-                            Utils.HIVE_SERVER2_RETRY_KEY, Utils.HIVE_SERVER2_RETRY_TRUE);
-                      }
-                      return ret;
-                    }
+              // Set the context attribute to true which will be interpreted by the request
+              // interceptor
+              if (ret) {
+                context.setAttribute(HIVE_SERVER2_RETRY_KEY, HIVE_SERVER2_RETRY_TRUE);
+              }
+              return ret;
+            }
 
-                    @Override
-                    public long getRetryInterval() {
-                      // Immediate retry
-                      return 0;
-                    }
-                  });
-    } else {
-      httpClientBuilder = HttpClientBuilder.create();
+            @Override
+            public long getRetryInterval() {
+              // Immediate retry
+              return 0;
+            }
+          });
     }
     // In case the server's idletimeout is set to a lower value, it might close it's side of
     // connection. However we retry one more time on NoHttpResponseException
     httpClientBuilder.setRetryHandler(
-        new HttpRequestRetryHandler() {
-          @Override
-          public boolean retryRequest(
-              IOException exception, int executionCount, HttpContext context) {
-            if (executionCount > 1) {
-              LOG.info("Retry attempts to connect to server exceeded.");
-              return false;
-            }
-            if (exception instanceof org.apache.http.NoHttpResponseException) {
-              LOG.info("Could not connect to the server. Retrying one more time.");
-              return true;
-            }
+        (exception, executionCount, context) -> {
+          if (executionCount > 1) {
+            LOG.info("Retry attempts to connect to server exceeded.");
             return false;
           }
+          if (exception instanceof NoHttpResponseException) {
+            LOG.info("Could not connect to the server. Retrying one more time.");
+            return true;
+          }
+          return false;
         });
 
     // Add the request interceptor to the client builder
     httpClientBuilder.addInterceptorFirst(requestInterceptor);
 
     // Add an interceptor to add in an XSRF header
-    httpClientBuilder.addInterceptorLast(new XsrfHttpRequestInterceptor());
+    httpClientBuilder.addInterceptorLast(new HttpXsrfRequestInterceptor());
 
     // Configure http client for SSL
     if (useSsl) {
-      String useTwoWaySSL = sessConfMap.get(JdbcConnectionParams.USE_TWO_WAY_SSL);
-      String sslTrustStorePath = sessConfMap.get(JdbcConnectionParams.SSL_TRUST_STORE);
-      String sslTrustStorePassword = sessConfMap.get(JdbcConnectionParams.SSL_TRUST_STORE_PASSWORD);
+      String useTwoWaySSL = sessConfMap.get(USE_TWO_WAY_SSL);
+      String sslTrustStorePath = sessConfMap.get(SSL_TRUST_STORE);
+      String sslTrustStorePassword = sessConfMap.get(SSL_TRUST_STORE_PASSWORD);
       KeyStore sslTrustStore;
       SSLConnectionSocketFactory socketFactory;
       SSLContext sslContext;
-      /**
+      /*
        * The code within the try block throws: SSLInitializationException, KeyStoreException,
        * IOException, NoSuchAlgorithmException, CertificateException, KeyManagementException &
        * UnrecoverableKeyException. We don't want the client to retry on any of these, hence we
        * catch all and throw a SQLException.
        */
       try {
-        if (useTwoWaySSL != null && useTwoWaySSL.equalsIgnoreCase(JdbcConnectionParams.TRUE)) {
+        if (useTwoWaySSL != null && useTwoWaySSL.equalsIgnoreCase(TRUE)) {
           socketFactory = getTwoWaySSLSocketFactory();
         } else if (sslTrustStorePath == null || sslTrustStorePath.isEmpty()) {
           // Create a default socket factory based on standard JSSE trust material
           socketFactory = SSLConnectionSocketFactory.getSocketFactory();
         } else {
           // Pick trust store config from the given path
-          sslTrustStore = KeyStore.getInstance(JdbcConnectionParams.SSL_TRUST_STORE_TYPE);
+          sslTrustStore = KeyStore.getInstance(SSL_TRUST_STORE_TYPE);
           try (FileInputStream fis = new FileInputStream(sslTrustStorePath)) {
             sslTrustStore.load(fis, sslTrustStorePassword.toCharArray());
           }
@@ -642,18 +633,13 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
       } catch (Exception e) {
         String msg =
             "Could not create an https connection to " + jdbcUriString + ". " + e.getMessage();
-        throw new SQLException(msg, " 08S01", e);
+        throw new KyuubiSQLException(msg, "08S01", e);
       }
     }
     return httpClientBuilder.build();
   }
 
-  /**
-   * Create underlying SSL or non-SSL transport
-   *
-   * @return TTransport
-   * @throws TTransportException
-   */
+  /** Create underlying SSL or non-SSL transport */
   private TTransport createUnderlyingTransport() throws TTransportException {
     TTransport transport = null;
     // Note: Thrift returns an SSL socket that is already bound to the specified host:port
@@ -663,105 +649,84 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
     // if dynamic service discovery is configured.
     if (isSslConnection()) {
       // get SSL socket
-      String sslTrustStore = sessConfMap.get(JdbcConnectionParams.SSL_TRUST_STORE);
-      String sslTrustStorePassword = sessConfMap.get(JdbcConnectionParams.SSL_TRUST_STORE_PASSWORD);
+      String sslTrustStore = sessConfMap.get(SSL_TRUST_STORE);
+      String sslTrustStorePassword = sessConfMap.get(SSL_TRUST_STORE_PASSWORD);
 
       if (sslTrustStore == null || sslTrustStore.isEmpty()) {
-        transport = HiveAuthUtils.getSSLSocket(host, port, loginTimeout);
+        transport = ThriftUtils.getSSLSocket(host, port, connectTimeout, socketTimeout);
       } else {
         transport =
-            HiveAuthUtils.getSSLSocket(
-                host, port, loginTimeout, sslTrustStore, sslTrustStorePassword);
+            ThriftUtils.getSSLSocket(
+                host, port, connectTimeout, socketTimeout, sslTrustStore, sslTrustStorePassword);
       }
     } else {
       // get non-SSL socket transport
-      transport = HiveAuthUtils.getSocketTransport(host, port, loginTimeout);
+      transport = ThriftUtils.getSocketTransport(host, port, connectTimeout, socketTimeout);
     }
     return transport;
   }
 
   /**
    * Create transport per the connection options Supported transport options are: - SASL based
-   * transports over + Kerberos + Delegation token + SSL + non-SSL - Raw (non-SASL) socket
+   * transports over + Kerberos + SSL + non-SSL - Raw (non-SASL) socket
    *
-   * <p>Kerberos and Delegation token supports SASL QOP configurations
+   * <p>Kerberos supports SASL QOP configurations
    *
    * @throws SQLException, TTransportException
    */
   private TTransport createBinaryTransport() throws SQLException, TTransportException {
     try {
       TTransport socketTransport = createUnderlyingTransport();
-      // handle secure connection if specified
-      if (!JdbcConnectionParams.AUTH_SIMPLE.equals(
-          sessConfMap.get(JdbcConnectionParams.AUTH_TYPE))) {
-        // If Kerberos
-        Map<String, String> saslProps = new HashMap<String, String>();
-        SaslQOP saslQOP = SaslQOP.AUTH;
-        if (sessConfMap.containsKey(JdbcConnectionParams.AUTH_QOP)) {
-          try {
-            saslQOP = SaslQOP.fromString(sessConfMap.get(JdbcConnectionParams.AUTH_QOP));
-          } catch (IllegalArgumentException e) {
-            throw new SQLException(
-                "Invalid " + JdbcConnectionParams.AUTH_QOP + " parameter. " + e.getMessage(),
-                "42000",
-                e);
-          }
-          saslProps.put(Sasl.QOP, saslQOP.toString());
-        } else {
-          // If the client did not specify qop then just negotiate the one supported by server
-          saslProps.put(Sasl.QOP, "auth-conf,auth-int,auth");
-        }
-        saslProps.put(Sasl.SERVER_AUTH, "true");
-        if (sessConfMap.containsKey(JdbcConnectionParams.AUTH_PRINCIPAL)) {
-          transport =
-              KerberosSaslHelper.getKerberosTransport(
-                  sessConfMap.get(JdbcConnectionParams.AUTH_PRINCIPAL),
-                  host,
-                  socketTransport,
-                  saslProps,
-                  assumeSubject);
-        } else {
-          // If there's a delegation token available then use token based connection
-          String tokenStr = getClientDelegationToken(sessConfMap);
-          if (tokenStr != null) {
-            transport =
-                KerberosSaslHelper.getTokenTransport(tokenStr, host, socketTransport, saslProps);
-          } else {
-            // we are using PLAIN Sasl connection with user/password
-            String userName = getUserName();
-            String passwd = getPassword();
-            // Overlay the SASL transport on top of the base socket transport (SSL or non-SSL)
-            transport = PlainSaslHelper.getPlainTransport(userName, passwd, socketTransport);
-          }
-        }
-      } else {
-        // Raw socket connection (non-sasl)
-        transport = socketTransport;
+      // Raw socket connection (non-sasl)
+      if (!isSaslAuthMode()) {
+        return socketTransport;
       }
-    } catch (SaslException e) {
-      throw new SQLException(
+      // Use PLAIN Sasl connection with user/password
+      if (isPlainSaslAuthMode()) {
+        String userName = getUserName();
+        String passwd = getPassword();
+        // Overlay the SASL transport on top of the base socket transport (SSL or non-SSL)
+        return PlainSaslHelper.getPlainTransport(userName, passwd, socketTransport);
+      }
+
+      // Kerberos enabled
+      Map<String, String> saslProps = new HashMap<>();
+      saslProps.put(Sasl.SERVER_AUTH, "true");
+      // If the client did not specify qop then just negotiate the one supported by server
+      saslProps.put(Sasl.QOP, "auth-conf,auth-int,auth");
+      if (sessConfMap.containsKey(AUTH_QOP)) {
+        try {
+          SaslQOP saslQOP = SaslQOP.fromString(sessConfMap.get(AUTH_QOP));
+          saslProps.put(Sasl.QOP, saslQOP.toString());
+        } catch (IllegalArgumentException e) {
+          throw new KyuubiSQLException(
+              "Invalid " + AUTH_QOP + " parameter. " + e.getMessage(), "42000", e);
+        }
+      }
+
+      Subject subject = createSubject();
+      String serverPrincipal = sessConfMap.get(AUTH_PRINCIPAL);
+      return KerberosSaslHelper.createSubjectAssumedTransport(
+          subject, serverPrincipal, host, socketTransport, saslProps);
+    } catch (Exception e) {
+      throw new KyuubiSQLException(
           "Could not create secure connection to " + jdbcUriString + ": " + e.getMessage(),
-          " 08S01",
+          "08S01",
           e);
     }
-    return transport;
   }
 
   SSLConnectionSocketFactory getTwoWaySSLSocketFactory() throws SQLException {
-    SSLConnectionSocketFactory socketFactory = null;
-
     try {
       KeyManagerFactory keyManagerFactory =
-          KeyManagerFactory.getInstance(
-              JdbcConnectionParams.SUNX509_ALGORITHM_STRING,
-              JdbcConnectionParams.SUNJSSE_ALGORITHM_STRING);
-      String keyStorePath = sessConfMap.get(JdbcConnectionParams.SSL_KEY_STORE);
-      String keyStorePassword = sessConfMap.get(JdbcConnectionParams.SSL_KEY_STORE_PASSWORD);
-      KeyStore sslKeyStore = KeyStore.getInstance(JdbcConnectionParams.SSL_KEY_STORE_TYPE);
+          KeyManagerFactory.getInstance(SUNX509_ALGORITHM_STRING, SUNJSSE_ALGORITHM_STRING);
+      String keyStorePath = sessConfMap.get(SSL_KEY_STORE);
+      String keyStorePassword = sessConfMap.get(SSL_KEY_STORE_PASSWORD);
+      KeyStore sslKeyStore = KeyStore.getInstance(SSL_KEY_STORE_TYPE);
 
       if (keyStorePath == null || keyStorePath.isEmpty()) {
         throw new IllegalArgumentException(
-            JdbcConnectionParams.SSL_KEY_STORE
+            SSL_KEY_STORE
                 + " Not configured for 2 way SSL connection, keyStorePath param is empty");
       }
       try (FileInputStream fis = new FileInputStream(keyStorePath)) {
@@ -770,14 +735,14 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
       keyManagerFactory.init(sslKeyStore, keyStorePassword.toCharArray());
 
       TrustManagerFactory trustManagerFactory =
-          TrustManagerFactory.getInstance(JdbcConnectionParams.SUNX509_ALGORITHM_STRING);
-      String trustStorePath = sessConfMap.get(JdbcConnectionParams.SSL_TRUST_STORE);
-      String trustStorePassword = sessConfMap.get(JdbcConnectionParams.SSL_TRUST_STORE_PASSWORD);
-      KeyStore sslTrustStore = KeyStore.getInstance(JdbcConnectionParams.SSL_TRUST_STORE_TYPE);
+          TrustManagerFactory.getInstance(SUNX509_ALGORITHM_STRING);
+      String trustStorePath = sessConfMap.get(SSL_TRUST_STORE);
+      String trustStorePassword = sessConfMap.get(SSL_TRUST_STORE_PASSWORD);
+      KeyStore sslTrustStore = KeyStore.getInstance(SSL_TRUST_STORE_TYPE);
 
       if (trustStorePath == null || trustStorePath.isEmpty()) {
         throw new IllegalArgumentException(
-            JdbcConnectionParams.SSL_TRUST_STORE + " Not configured for 2 way SSL connection");
+            SSL_TRUST_STORE + " Not configured for 2 way SSL connection");
       }
       try (FileInputStream fis = new FileInputStream(trustStorePath)) {
         sslTrustStore.load(fis, trustStorePassword.toCharArray());
@@ -788,33 +753,16 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
           keyManagerFactory.getKeyManagers(),
           trustManagerFactory.getTrustManagers(),
           new SecureRandom());
-      socketFactory = new SSLConnectionSocketFactory(context);
+      return new SSLConnectionSocketFactory(context);
     } catch (Exception e) {
-      throw new SQLException("Error while initializing 2 way ssl socket factory ", e);
+      throw new KyuubiSQLException("Error while initializing 2 way ssl socket factory ", e);
     }
-    return socketFactory;
-  }
-
-  // Lookup the delegation token. First in the connection URL, then Configuration
-  private String getClientDelegationToken(Map<String, String> jdbcConnConf) throws SQLException {
-    String tokenStr = null;
-    if (JdbcConnectionParams.AUTH_TOKEN.equalsIgnoreCase(
-        jdbcConnConf.get(JdbcConnectionParams.AUTH_TYPE))) {
-      // check delegation token in job conf if any
-      try {
-        tokenStr =
-            org.apache.hadoop.hive.shims.Utils.getTokenStrForm(HiveAuthFactory.HS2_CLIENT_TOKEN);
-      } catch (IOException e) {
-        throw new SQLException("Error reading token ", e);
-      }
-    }
-    return tokenStr;
   }
 
   private void openSession() throws SQLException {
     TOpenSessionReq openReq = new TOpenSessionReq();
 
-    Map<String, String> openConf = new HashMap<String, String>();
+    Map<String, String> openConf = new HashMap<>();
     // for remote JDBC client, try to set the conf var using 'set foo=bar'
     for (Entry<String, String> hiveConf : connParams.getHiveConfs().entrySet()) {
       openConf.put("set:hiveconf:" + hiveConf.getKey(), hiveConf.getValue());
@@ -823,17 +771,27 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
     for (Entry<String, String> hiveVar : connParams.getHiveVars().entrySet()) {
       openConf.put("set:hivevar:" + hiveVar.getKey(), hiveVar.getValue());
     }
+    // switch the catalog
+    if (connParams.getCatalogName() != null) {
+      openConf.put("use:catalog", connParams.getCatalogName());
+    }
     // switch the database
     openConf.put("use:database", connParams.getDbName());
     // set the fetchSize
     openConf.put(
         "set:hiveconf:hive.server2.thrift.resultset.default.fetch.size",
         Integer.toString(fetchSize));
+    if (wmPool != null) {
+      openConf.put("set:hivevar:wmpool", wmPool);
+    }
+    if (wmApp != null) {
+      openConf.put("set:hivevar:wmapp", wmApp);
+    }
 
     // set the session configuration
     Map<String, String> sessVars = connParams.getSessionVars();
-    if (sessVars.containsKey(HiveAuthFactory.HS2_PROXY_USER)) {
-      openConf.put(HiveAuthFactory.HS2_PROXY_USER, sessVars.get(HiveAuthFactory.HS2_PROXY_USER));
+    if (sessVars.containsKey(HS2_PROXY_USER)) {
+      openConf.put(HS2_PROXY_USER, sessVars.get(HS2_PROXY_USER));
     }
     if (sessVars.containsKey(KYUUBI_PROXY_BATCH_ACCOUNT)) {
       openConf.put(KYUUBI_PROXY_BATCH_ACCOUNT, sessVars.get(KYUUBI_PROXY_BATCH_ACCOUNT));
@@ -846,9 +804,9 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
     openReq.setConfiguration(openConf);
 
     // Store the user name in the open request in case no non-sasl authentication
-    if (JdbcConnectionParams.AUTH_SIMPLE.equals(sessConfMap.get(JdbcConnectionParams.AUTH_TYPE))) {
-      openReq.setUsername(sessConfMap.get(JdbcConnectionParams.AUTH_USER));
-      openReq.setPassword(sessConfMap.get(JdbcConnectionParams.AUTH_PASSWD));
+    if (AUTH_SIMPLE.equals(sessConfMap.get(AUTH_TYPE))) {
+      openReq.setUsername(sessConfMap.get(AUTH_USER));
+      openReq.setPassword(sessConfMap.get(AUTH_PASSWD));
     }
 
     try {
@@ -889,86 +847,127 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
       }
     } catch (TException e) {
       LOG.error("Error opening session", e);
-      throw new SQLException(
-          "Could not establish connection to " + jdbcUriString + ": " + e.getMessage(),
-          " 08S01",
-          e);
+      throw new KyuubiSQLException(
+          "Could not establish connection to " + jdbcUriString + ": " + e.getMessage(), "08S01", e);
     }
     isClosed = false;
   }
 
   /** @return username from sessConfMap */
   private String getUserName() {
-    return getSessionValue(JdbcConnectionParams.AUTH_USER, JdbcConnectionParams.ANONYMOUS_USER);
+    return getSessionValue(AUTH_USER, ANONYMOUS_USER);
   }
 
   /** @return password from sessConfMap */
   private String getPassword() {
-    return getSessionValue(JdbcConnectionParams.AUTH_PASSWD, JdbcConnectionParams.ANONYMOUS_PASSWD);
+    return getSessionValue(AUTH_PASSWD, ANONYMOUS_PASSWD);
+  }
+
+  private boolean isCookieEnabled() {
+    return !"false".equalsIgnoreCase(sessConfMap.get(COOKIE_AUTH));
   }
 
   private boolean isSslConnection() {
-    return "true".equalsIgnoreCase(sessConfMap.get(JdbcConnectionParams.USE_SSL));
+    return "true".equalsIgnoreCase(sessConfMap.get(USE_SSL));
+  }
+
+  private boolean isSaslAuthMode() {
+    return !AUTH_SIMPLE.equalsIgnoreCase(sessConfMap.get(AUTH_TYPE));
+  }
+
+  private boolean isFromSubjectAuthMode() {
+    return isSaslAuthMode()
+        && hasSessionValue(AUTH_PRINCIPAL)
+        && AUTH_KERBEROS_AUTH_TYPE_FROM_SUBJECT.equalsIgnoreCase(
+            sessConfMap.get(AUTH_KERBEROS_AUTH_TYPE));
+  }
+
+  private boolean isKeytabAuthMode() {
+    return isSaslAuthMode()
+        && hasSessionValue(AUTH_PRINCIPAL)
+        && hasSessionValue(AUTH_KYUUBI_CLIENT_PRINCIPAL)
+        && hasSessionValue(AUTH_KYUUBI_CLIENT_KEYTAB);
+  }
+
+  private boolean isTgtCacheAuthMode() {
+    return isSaslAuthMode()
+        && hasSessionValue(AUTH_PRINCIPAL)
+        && !hasSessionValue(AUTH_KYUUBI_CLIENT_PRINCIPAL)
+        && !hasSessionValue(AUTH_KYUUBI_CLIENT_KEYTAB);
+  }
+
+  private boolean isPlainSaslAuthMode() {
+    return isSaslAuthMode() && !hasSessionValue(AUTH_PRINCIPAL);
   }
 
   private boolean isKerberosAuthMode() {
-    return !JdbcConnectionParams.AUTH_SIMPLE.equals(sessConfMap.get(JdbcConnectionParams.AUTH_TYPE))
-        && sessConfMap.containsKey(JdbcConnectionParams.AUTH_PRINCIPAL);
+    return isSaslAuthMode() && hasSessionValue(AUTH_PRINCIPAL);
+  }
+
+  private Subject createSubject() {
+    if (isFromSubjectAuthMode()) {
+      AccessControlContext context = AccessController.getContext();
+      return Subject.getSubject(context);
+    } else if (isTgtCacheAuthMode()) {
+      return KerberosAuthenticationManager.getTgtCacheAuthentication().getSubject();
+    } else if (isKeytabAuthMode()) {
+      String principal = sessConfMap.get(AUTH_KYUUBI_CLIENT_PRINCIPAL);
+      String keytab = sessConfMap.get(AUTH_KYUUBI_CLIENT_KEYTAB);
+      return KerberosAuthenticationManager.getKeytabAuthentication(principal, keytab).getSubject();
+    } else {
+      // This should never happen
+      throw new IllegalArgumentException("Unsupported auth mode");
+    }
   }
 
   private boolean isHttpTransportMode() {
-    String transportMode = sessConfMap.get(JdbcConnectionParams.TRANSPORT_MODE);
-    if (transportMode != null && (transportMode.equalsIgnoreCase("http"))) {
-      return true;
-    }
-    return false;
-  }
-
-  private boolean isZkDynamicDiscoveryMode() {
-    return (sessConfMap.get(JdbcConnectionParams.SERVICE_DISCOVERY_MODE) != null)
-        && (JdbcConnectionParams.SERVICE_DISCOVERY_MODE_ZOOKEEPER.equalsIgnoreCase(
-            sessConfMap.get(JdbcConnectionParams.SERVICE_DISCOVERY_MODE)));
+    return "http".equalsIgnoreCase(sessConfMap.get(TRANSPORT_MODE));
   }
 
   private void logZkDiscoveryMessage(String message) {
-    if (isZkDynamicDiscoveryMode()) {
+    if (ZooKeeperHiveClientHelper.isZkDynamicDiscoveryMode(sessConfMap)) {
       LOG.info(message);
     }
   }
 
-  /**
-   * Lookup varName in sessConfMap, if its null or empty return the default value varDefault
-   *
-   * @param varName
-   * @param varDefault
-   * @return
-   */
+  private boolean hasSessionValue(String varName) {
+    String varValue = sessConfMap.get(varName);
+    return !(varValue == null || varValue.isEmpty());
+  }
+
+  /** Lookup varName in sessConfMap, if its null or empty return the default value varDefault */
   private String getSessionValue(String varName, String varDefault) {
     String varValue = sessConfMap.get(varName);
-    if ((varValue == null) || varValue.isEmpty()) {
+    if (varValue == null || varValue.isEmpty()) {
       varValue = varDefault;
     }
     return varValue;
   }
 
-  // copy loginTimeout from driver manager. Thrift timeout needs to be in millis
-  private void setupLoginTimeout() {
-    long timeOut = TimeUnit.SECONDS.toMillis(DriverManager.getLoginTimeout());
-    if (timeOut > Integer.MAX_VALUE) {
-      loginTimeout = Integer.MAX_VALUE;
-    } else {
-      loginTimeout = (int) timeOut;
+  private void setupTimeout() {
+    if (sessConfMap.containsKey(CONNECT_TIMEOUT)) {
+      String connectTimeoutStr = sessConfMap.get(CONNECT_TIMEOUT);
+      try {
+        long connectTimeoutMs = Long.parseLong(connectTimeoutStr);
+        connectTimeout = (int) Math.max(0, Math.min(connectTimeoutMs, Integer.MAX_VALUE));
+      } catch (NumberFormatException e) {
+        LOG.info("Failed to parse connectTimeout of value " + connectTimeoutStr);
+      }
     }
-  }
-
-  public void abort(Executor executor) throws SQLException {
-    // JDK 1.7
-    throw new SQLFeatureNotSupportedException("Method not supported");
+    if (sessConfMap.containsKey(SOCKET_TIMEOUT)) {
+      String socketTimeoutStr = sessConfMap.get(SOCKET_TIMEOUT);
+      try {
+        long socketTimeoutMs = Long.parseLong(socketTimeoutStr);
+        socketTimeout = (int) Math.max(0, Math.min(socketTimeoutMs, Integer.MAX_VALUE));
+      } catch (NumberFormatException e) {
+        LOG.info("Failed to parse socketTimeout of value " + socketTimeoutStr);
+      }
+    }
   }
 
   public String getDelegationToken(String owner, String renewer) throws SQLException {
     if (isClosed) {
-      throw new SQLException("Connection is closed");
+      throw new KyuubiSQLException("Connection is closed");
     }
     TGetDelegationTokenReq req = new TGetDelegationTokenReq(sessHandle, owner, renewer);
     try {
@@ -976,54 +975,40 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
       Utils.verifySuccess(tokenResp.getStatus());
       return tokenResp.getDelegationToken();
     } catch (TException e) {
-      throw new SQLException("Could not retrieve token: " + e.getMessage(), " 08S01", e);
+      throw new KyuubiSQLException("Could not retrieve token: " + e.getMessage(), "08S01", e);
     }
   }
 
   public void cancelDelegationToken(String tokenStr) throws SQLException {
     if (isClosed) {
-      throw new SQLException("Connection is closed");
+      throw new KyuubiSQLException("Connection is closed");
     }
     TCancelDelegationTokenReq cancelReq = new TCancelDelegationTokenReq(sessHandle, tokenStr);
     try {
       TCancelDelegationTokenResp cancelResp = client.CancelDelegationToken(cancelReq);
       Utils.verifySuccess(cancelResp.getStatus());
-      return;
     } catch (TException e) {
-      throw new SQLException("Could not cancel token: " + e.getMessage(), " 08S01", e);
+      throw new KyuubiSQLException("Could not cancel token: " + e.getMessage(), "08S01", e);
     }
   }
 
   public void renewDelegationToken(String tokenStr) throws SQLException {
     if (isClosed) {
-      throw new SQLException("Connection is closed");
+      throw new KyuubiSQLException("Connection is closed");
     }
     TRenewDelegationTokenReq cancelReq = new TRenewDelegationTokenReq(sessHandle, tokenStr);
     try {
       TRenewDelegationTokenResp renewResp = client.RenewDelegationToken(cancelReq);
       Utils.verifySuccess(renewResp.getStatus());
-      return;
     } catch (TException e) {
-      throw new SQLException("Could not renew token: " + e.getMessage(), " 08S01", e);
+      throw new KyuubiSQLException("Could not renew token: " + e.getMessage(), "08S01", e);
     }
   }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#clearWarnings()
-   */
 
   @Override
   public void clearWarnings() throws SQLException {
     warningChain = null;
   }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#close()
-   */
 
   @Override
   public void close() throws SQLException {
@@ -1033,7 +1018,7 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
         client.CloseSession(closeReq);
       }
     } catch (TException e) {
-      throw new SQLException("Error while cleaning up the server resources", e);
+      throw new KyuubiSQLException("Error while cleaning up the server resources", e);
     } finally {
       isClosed = true;
       client = null;
@@ -1041,7 +1026,6 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
         transport.close();
         transport = null;
       }
-      engineLogListeners.clear();
     }
   }
 
@@ -1050,84 +1034,11 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
       engineLogThread.interrupt();
       try {
         engineLogThread.join(DEFAULT_ENGINE_LOG_THREAD_TIMEOUT);
-      } catch (Exception e) {
+      } catch (Exception ignore) {
       }
     }
     engineLogThread = null;
     close();
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#commit()
-   */
-
-  @Override
-  public void commit() throws SQLException {
-    // TODO Auto-generated method stub
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#createArrayOf(java.lang.String,
-   * java.lang.Object[])
-   */
-
-  @Override
-  public Array createArrayOf(String arg0, Object[] arg1) throws SQLException {
-    // TODO Auto-generated method stub
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#createBlob()
-   */
-
-  @Override
-  public Blob createBlob() throws SQLException {
-    // TODO Auto-generated method stub
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#createClob()
-   */
-
-  @Override
-  public Clob createClob() throws SQLException {
-    // TODO Auto-generated method stub
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#createNClob()
-   */
-
-  @Override
-  public NClob createNClob() throws SQLException {
-    // TODO Auto-generated method stub
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#createSQLXML()
-   */
-
-  @Override
-  public SQLXML createSQLXML() throws SQLException {
-    // TODO Auto-generated method stub
-    throw new SQLFeatureNotSupportedException("Method not supported");
   }
 
   /**
@@ -1139,7 +1050,7 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
   @Override
   public Statement createStatement() throws SQLException {
     if (isClosed) {
-      throw new SQLException("Can't create Statement, connection is closed");
+      throw new KyuubiSQLException("Can't create Statement, connection is closed");
     }
     return new KyuubiStatement(this, client, sessHandle, fetchSize);
   }
@@ -1148,224 +1059,104 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
     return ((KyuubiStatement) createStatement());
   }
 
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#createStatement(int, int)
-   */
-
   @Override
   public Statement createStatement(int resultSetType, int resultSetConcurrency)
       throws SQLException {
     if (resultSetConcurrency != ResultSet.CONCUR_READ_ONLY) {
-      throw new SQLException(
+      throw new KyuubiSQLException(
           "Statement with resultset concurrency " + resultSetConcurrency + " is not supported",
           "HYC00"); // Optional feature not implemented
     }
     if (resultSetType == ResultSet.TYPE_SCROLL_SENSITIVE) {
-      throw new SQLException(
+      throw new KyuubiSQLException(
           "Statement with resultset type " + resultSetType + " is not supported",
           "HYC00"); // Optional feature not implemented
     }
     if (isClosed) {
-      throw new SQLException("Connection is closed");
+      throw new KyuubiSQLException("Connection is closed");
     }
     return new KyuubiStatement(
         this, client, sessHandle, resultSetType == ResultSet.TYPE_SCROLL_INSENSITIVE, fetchSize);
   }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#createStatement(int, int, int)
-   */
-
-  @Override
-  public Statement createStatement(
-      int resultSetType, int resultSetConcurrency, int resultSetHoldability) throws SQLException {
-    // TODO Auto-generated method stub
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#createStruct(java.lang.String, java.lang.Object[])
-   */
-
-  @Override
-  public Struct createStruct(String typeName, Object[] attributes) throws SQLException {
-    // TODO Auto-generated method stub
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#getAutoCommit()
-   */
 
   @Override
   public boolean getAutoCommit() throws SQLException {
     return true;
   }
 
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#getCatalog()
-   */
-
   @Override
   public String getCatalog() throws SQLException {
     if (isClosed) {
-      throw new SQLException("Connection is closed");
+      throw new KyuubiSQLException("Connection is closed");
     }
     try (KyuubiStatement stmt = createKyuubiStatement();
         ResultSet res = stmt.executeGetCurrentCatalog("_GET_CATALOG")) {
       if (!res.next()) {
-        throw new SQLException("Failed to get catalog information");
+        throw new KyuubiSQLException("Failed to get catalog information");
       }
       return res.getString(1);
-    } catch (Exception e) {
+    } catch (Exception ignore) {
       return "";
     }
   }
 
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#getClientInfo()
-   */
-
   @Override
   public Properties getClientInfo() throws SQLException {
-    // TODO Auto-generated method stub
-    throw new SQLFeatureNotSupportedException("Method not supported");
+    return clientInfo == null ? new Properties() : clientInfo;
   }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#getClientInfo(java.lang.String)
-   */
 
   @Override
   public String getClientInfo(String name) throws SQLException {
-    // TODO Auto-generated method stub
-    throw new SQLFeatureNotSupportedException("Method not supported");
+    if (clientInfo == null) return null;
+    return clientInfo.getProperty(name);
   }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#getHoldability()
-   */
-
-  @Override
-  public int getHoldability() throws SQLException {
-    // TODO Auto-generated method stub
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#getMetaData()
-   */
 
   @Override
   public DatabaseMetaData getMetaData() throws SQLException {
     if (isClosed) {
-      throw new SQLException("Connection is closed");
+      throw new KyuubiSQLException("Connection is closed");
     }
     return new KyuubiDatabaseMetaData(this, client, sessHandle);
   }
 
-  public int getNetworkTimeout() throws SQLException {
-    // JDK 1.7
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
+  @Override
   public String getSchema() throws SQLException {
     if (isClosed) {
-      throw new SQLException("Connection is closed");
+      throw new KyuubiSQLException("Connection is closed");
     }
     try (KyuubiStatement stmt = createKyuubiStatement();
         ResultSet res = stmt.executeGetCurrentDatabase("SELECT current_database()")) {
       if (!res.next()) {
-        throw new SQLException("Failed to get schema information");
+        throw new KyuubiSQLException("Failed to get schema information");
       }
       return res.getString(1);
     }
   }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#getTransactionIsolation()
-   */
 
   @Override
   public int getTransactionIsolation() throws SQLException {
     return Connection.TRANSACTION_NONE;
   }
 
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#getTypeMap()
-   */
-
-  @Override
-  public Map<String, Class<?>> getTypeMap() throws SQLException {
-    // TODO Auto-generated method stub
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#getWarnings()
-   */
-
   @Override
   public SQLWarning getWarnings() throws SQLException {
     return warningChain;
   }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#isClosed()
-   */
 
   @Override
   public boolean isClosed() throws SQLException {
     return isClosed;
   }
 
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#isReadOnly()
-   */
-
   @Override
   public boolean isReadOnly() throws SQLException {
     return false;
   }
 
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#isValid(int)
-   */
-
   @Override
   public boolean isValid(int timeout) throws SQLException {
     if (timeout < 0) {
-      throw new SQLException("timeout value was negative");
+      throw new KyuubiSQLException("timeout value was negative");
     }
     if (isClosed) {
       return false;
@@ -1385,194 +1176,43 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
               });
       future.get(timeout, TimeUnit.SECONDS);
       rc = true;
-    } catch (Exception e) {
-      // IGNORE
+    } catch (Exception ignore) {
     } finally {
       executorService.shutdown();
     }
     return rc;
   }
 
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#nativeSQL(java.lang.String)
-   */
-
-  @Override
-  public String nativeSQL(String sql) throws SQLException {
-    // TODO Auto-generated method stub
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#prepareCall(java.lang.String)
-   */
-
-  @Override
-  public CallableStatement prepareCall(String sql) throws SQLException {
-    // TODO Auto-generated method stub
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#prepareCall(java.lang.String, int, int)
-   */
-
-  @Override
-  public CallableStatement prepareCall(String sql, int resultSetType, int resultSetConcurrency)
-      throws SQLException {
-    // TODO Auto-generated method stub
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#prepareCall(java.lang.String, int, int, int)
-   */
-
-  @Override
-  public CallableStatement prepareCall(
-      String sql, int resultSetType, int resultSetConcurrency, int resultSetHoldability)
-      throws SQLException {
-    // TODO Auto-generated method stub
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#prepareStatement(java.lang.String)
-   */
-
   @Override
   public PreparedStatement prepareStatement(String sql) throws SQLException {
     if (isClosed) {
-      throw new SQLException("Connection is closed");
+      throw new KyuubiSQLException("Connection is closed");
     }
     return new KyuubiPreparedStatement(this, client, sessHandle, sql);
   }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#prepareStatement(java.lang.String, int)
-   */
 
   @Override
   public PreparedStatement prepareStatement(String sql, int autoGeneratedKeys) throws SQLException {
     if (isClosed) {
-      throw new SQLException("Connection is closed");
+      throw new KyuubiSQLException("Connection is closed");
     }
     return new KyuubiPreparedStatement(this, client, sessHandle, sql);
   }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#prepareStatement(java.lang.String, int[])
-   */
-
-  @Override
-  public PreparedStatement prepareStatement(String sql, int[] columnIndexes) throws SQLException {
-    // TODO Auto-generated method stub
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#prepareStatement(java.lang.String,
-   * java.lang.String[])
-   */
-
-  @Override
-  public PreparedStatement prepareStatement(String sql, String[] columnNames) throws SQLException {
-    // TODO Auto-generated method stub
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#prepareStatement(java.lang.String, int, int)
-   */
 
   @Override
   public PreparedStatement prepareStatement(String sql, int resultSetType, int resultSetConcurrency)
       throws SQLException {
     if (isClosed) {
-      throw new SQLException("Connection is closed");
+      throw new KyuubiSQLException("Connection is closed");
     }
     return new KyuubiPreparedStatement(this, client, sessHandle, sql);
   }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#prepareStatement(java.lang.String, int, int, int)
-   */
-
-  @Override
-  public PreparedStatement prepareStatement(
-      String sql, int resultSetType, int resultSetConcurrency, int resultSetHoldability)
-      throws SQLException {
-    // TODO Auto-generated method stub
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#releaseSavepoint(java.sql.Savepoint)
-   */
-
-  @Override
-  public void releaseSavepoint(Savepoint savepoint) throws SQLException {
-    // TODO Auto-generated method stub
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#rollback()
-   */
-
-  @Override
-  public void rollback() throws SQLException {
-    // TODO Auto-generated method stub
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#rollback(java.sql.Savepoint)
-   */
-
-  @Override
-  public void rollback(Savepoint savepoint) throws SQLException {
-    // TODO Auto-generated method stub
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#setAutoCommit(boolean)
-   */
 
   @Override
   public void setAutoCommit(boolean autoCommit) throws SQLException {
     // Per JDBC spec, if the connection is closed a SQLException should be thrown.
     if (isClosed) {
-      throw new SQLException("Connection is closed");
+      throw new KyuubiSQLException("Connection is closed");
     }
     // The auto-commit mode is always enabled for this connection. Per JDBC spec,
     // if setAutoCommit is called and the auto-commit mode is not changed, the call is a no-op.
@@ -1584,167 +1224,97 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
     }
   }
 
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#setCatalog(java.lang.String)
-   */
-
   @Override
   public void setCatalog(String catalog) throws SQLException {
     if (isClosed) {
-      throw new SQLException("Connection is closed");
+      throw new KyuubiSQLException("Connection is closed");
     }
     try (KyuubiStatement stmt = createKyuubiStatement()) {
       stmt.executeSetCurrentCatalog("_SET_CATALOG", catalog);
-    } catch (SQLException e) {
-
+    } catch (SQLException ignore) {
     }
   }
 
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#setClientInfo(java.util.Properties)
-   */
-
   @Override
   public void setClientInfo(Properties properties) throws SQLClientInfoException {
-    // TODO Auto-generated method stub
-    throw new SQLClientInfoException("Method not supported", null);
+    clientInfo = properties;
+    setClientInfo();
   }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#setClientInfo(java.lang.String, java.lang.String)
-   */
 
   @Override
   public void setClientInfo(String name, String value) throws SQLClientInfoException {
-    // TODO Auto-generated method stub
-    throw new SQLClientInfoException("Method not supported", null);
+    if (clientInfo == null) {
+      clientInfo = new Properties();
+    }
+    clientInfo.put(name, value);
+    setClientInfo();
   }
 
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#setHoldability(int)
-   */
-
-  @Override
-  public void setHoldability(int holdability) throws SQLException {
-    // TODO Auto-generated method stub
-    throw new SQLFeatureNotSupportedException("Method not supported");
+  private void setClientInfo() throws SQLClientInfoException {
+    if (isClosed) {
+      throw new SQLClientInfoException("Connection is closed", null);
+    }
+    TSetClientInfoReq req = new TSetClientInfoReq(sessHandle);
+    Map<String, String> map = new HashMap<>();
+    if (clientInfo != null) {
+      for (Entry<Object, Object> e : clientInfo.entrySet()) {
+        if (e.getKey() == null || e.getValue() == null) continue;
+        map.put(e.getKey().toString(), e.getValue().toString());
+      }
+    }
+    req.setConfiguration(map);
+    try {
+      TSetClientInfoResp openResp = client.SetClientInfo(req);
+      Utils.verifySuccess(openResp.getStatus());
+    } catch (TException | SQLException e) {
+      LOG.error("Error setting client info", e);
+      throw new SQLClientInfoException("Error setting client info", null, e);
+    }
   }
-
-  public void setNetworkTimeout(Executor executor, int milliseconds) throws SQLException {
-    // JDK 1.7
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#setReadOnly(boolean)
-   */
 
   @Override
   public void setReadOnly(boolean readOnly) throws SQLException {
     // Per JDBC spec, if the connection is closed a SQLException should be thrown.
     if (isClosed) {
-      throw new SQLException("Connection is closed");
+      throw new KyuubiSQLException("Connection is closed");
     }
     // Per JDBC spec, the request defines a hint to the driver to enable database optimizations.
     // The read-only mode for this connection is disabled and cannot be enabled (isReadOnly always
     // returns false).
     // The most correct behavior is to throw only if the request tries to enable the read-only mode.
     if (readOnly) {
-      throw new SQLException("Enabling read-only mode not supported");
+      throw new KyuubiSQLException("Enabling read-only mode not supported");
     }
   }
 
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#setSavepoint()
-   */
-
   @Override
-  public Savepoint setSavepoint() throws SQLException {
-    // TODO Auto-generated method stub
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#setSavepoint(java.lang.String)
-   */
-
-  @Override
-  public Savepoint setSavepoint(String name) throws SQLException {
-    // TODO Auto-generated method stub
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
   public void setSchema(String schema) throws SQLException {
     // JDK 1.7
     if (isClosed) {
-      throw new SQLException("Connection is closed");
+      throw new KyuubiSQLException("Connection is closed");
     }
     if (schema == null || schema.isEmpty()) {
-      throw new SQLException("Schema name is null or empty");
+      throw new KyuubiSQLException("Schema name is null or empty");
     }
     try (KyuubiStatement stmt = createKyuubiStatement()) {
       stmt.executeSetCurrentDatabase("use " + schema, schema);
     }
   }
 
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#setTransactionIsolation(int)
-   */
-
   @Override
   public void setTransactionIsolation(int level) throws SQLException {
     // TODO: throw an exception?
   }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Connection#setTypeMap(java.util.Map)
-   */
-
-  @Override
-  public void setTypeMap(Map<String, Class<?>> map) throws SQLException {
-    // TODO Auto-generated method stub
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Wrapper#isWrapperFor(java.lang.Class)
-   */
 
   @Override
   public boolean isWrapperFor(Class<?> iface) throws SQLException {
     return iface.isInstance(this);
   }
 
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Wrapper#unwrap(java.lang.Class)
-   */
-
   @Override
   public <T> T unwrap(Class<T> iface) throws SQLException {
     if (!isWrapperFor(iface)) {
-      throw new SQLException(
+      throw new KyuubiSQLException(
           this.getClass().getName() + " not unwrappable from " + iface.getName());
     }
     return iface.cast(this);
@@ -1778,7 +1348,7 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
       } catch (InvocationTargetException e) {
         // all IFace APIs throw TException
         if (e.getTargetException() instanceof TException) {
-          throw (TException) e.getTargetException();
+          throw e.getTargetException();
         } else {
           // should not happen
           throw new TException(
@@ -1812,17 +1382,17 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
               break;
             case CANCELED_STATE:
               // 01000 -> warning
-              throw new SQLException("Launch engine was cancelled", "01000");
+              throw new KyuubiSQLException("Launch engine was cancelled", "01000");
             case TIMEDOUT_STATE:
               throw new SQLTimeoutException("Launch engine timeout");
             case ERROR_STATE:
               // Get the error details from the underlying exception
-              throw new SQLException(
+              throw new KyuubiSQLException(
                   statusResp.getErrorMessage(),
                   statusResp.getSqlState(),
                   statusResp.getErrorCode());
             case UKNOWN_STATE:
-              throw new SQLException("Unknown state", "HY000");
+              throw new KyuubiSQLException("Unknown state", "HY000");
             case INITIALIZED_STATE:
             case PENDING_STATE:
             case RUNNING_STATE:
@@ -1835,7 +1405,7 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
         if (e instanceof SQLException) {
           throw (SQLException) e;
         } else {
-          throw new SQLException(e.getMessage(), "08S01", e);
+          throw new KyuubiSQLException(e.getMessage(), "08S01", e);
         }
       }
     }
@@ -1879,6 +1449,7 @@ public class KyuubiConnection implements java.sql.Connection, KyuubiLoggable {
     return engineUrl;
   }
 
+  /** Upload and Download data api. */
   public final Integer TRANSFROM_DATA_BATCH_BYTE_SIZE = 5 * 1024 * 1024;
 
   public String uploadFile(String localPath, String remoteDir, Boolean isOverwrite)

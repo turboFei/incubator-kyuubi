@@ -15,15 +15,13 @@
  * limitations under the License.
  */
 
-package org.apache.kyuubi.jdbc.hive;
+package org.apache.kyuubi.jdbc.hive.auth;
 
-import java.io.IOException;
-import org.apache.http.HttpException;
 import org.apache.http.HttpRequest;
 import org.apache.http.HttpRequestInterceptor;
 import org.apache.http.protocol.HttpContext;
 
-public class XsrfHttpRequestInterceptor implements HttpRequestInterceptor {
+public class HttpXsrfRequestInterceptor implements HttpRequestInterceptor {
 
   // Note : This implements HttpRequestInterceptor rather than extending
   // HttpRequestInterceptorBase, because that class is an auth-specific
@@ -38,15 +36,14 @@ public class XsrfHttpRequestInterceptor implements HttpRequestInterceptor {
   // redirecting a browser that has login credentials from making a
   // request to HS2 on their behalf.
 
-  private static boolean injectHeader = true;
+  private boolean injectHeader = true;
 
-  public static void enableHeaderInjection(boolean enabled) {
+  public void enableHeaderInjection(boolean enabled) {
     injectHeader = enabled;
   }
 
   @Override
-  public void process(HttpRequest httpRequest, HttpContext httpContext)
-      throws HttpException, IOException {
+  public void process(HttpRequest httpRequest, HttpContext httpContext) {
     if (injectHeader) {
       httpRequest.addHeader("X-XSRF-HEADER", "true");
     }

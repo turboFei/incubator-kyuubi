@@ -144,4 +144,9 @@ class NoopOperationManager extends OperationManager("noop") {
     tRow.addToColumns(tColumn)
     tRow
   }
+
+  override def getQueryId(operation: Operation): String = {
+    val queryId = "noop_query_id"
+    queryId
+  }
 }

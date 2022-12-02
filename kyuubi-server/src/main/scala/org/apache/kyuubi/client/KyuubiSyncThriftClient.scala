@@ -354,6 +354,12 @@ class KyuubiSyncThriftClient private (
     resp.getOperationHandle
   }
 
+  def getQueryId(operationHandle: TOperationHandle): TGetQueryIdResp = {
+    val req = new TGetQueryIdReq(operationHandle)
+    val resp = withLockAcquiredAsyncRequest(GetQueryId(req))
+    resp
+  }
+
   def transferData(values: ByteBuffer, path: String): TOperationHandle = {
     val req = new TTransferDataReq(_remoteSessionHandle, path, values)
     val resp = withLockAcquiredAsyncRequest(TransferData(req))

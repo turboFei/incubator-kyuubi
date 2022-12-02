@@ -44,7 +44,7 @@ function build_classpath() {
       classifier_end_index=index(jar_name, ".jar") - 1;
       classifier=substr(jar_name, classifier_start_index, classifier_end_index - classifier_start_index + 1);
       print artifact_id"/"version"/"classifier"/"jar_name
-    }' | grep -v "kyuubi" | sort >> "${DEP_PR}"
+    }' | grep -v "^kyuubi" | sort >> "${DEP_PR}"
 }
 
 function check_diff() {

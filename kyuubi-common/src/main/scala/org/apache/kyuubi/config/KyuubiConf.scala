@@ -24,7 +24,6 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.regex.Pattern
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable
 import scala.util.matching.Regex
 
 import org.apache.kyuubi.{Logging, Utils}
@@ -2116,7 +2115,7 @@ object KyuubiConf {
       .booleanConf
       .createWithDefault(true)
 
-  private[config] val serverOnlyConfEntries: mutable.Set[ConfigEntry[_]] = mutable.Set(
+  private val serverOnlyConfEntries: Set[ConfigEntry[_]] = Set(
     FRONTEND_BIND_HOST,
     FRONTEND_BIND_PORT,
     FRONTEND_THRIFT_BINARY_BIND_HOST,

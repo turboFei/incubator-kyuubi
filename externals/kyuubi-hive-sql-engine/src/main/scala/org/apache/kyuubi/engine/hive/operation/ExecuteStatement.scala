@@ -29,7 +29,7 @@ class ExecuteStatement(
     session: Session,
     override val statement: String,
     confOverlay: Map[String, String],
-    override val shouldRunAsync: Boolean,
+    runAsync: Boolean,
     queryTimeout: Long)
   extends HiveOperation(session) {
 
@@ -38,9 +38,11 @@ class ExecuteStatement(
       hive,
       statement,
       confOverlay.asJava,
-      shouldRunAsync,
+      runAsync,
       queryTimeout)
   }
 
   EventBus.post(HiveOperationEvent(this))
+
+  override def shouldRunAsync: Boolean = runAsync && getBackgroundHandle != null
 }

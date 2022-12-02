@@ -287,13 +287,13 @@ class BatchCliSuite extends RestClientTestHelper with TestPrematureExit with Bat
         "",
         ""))
     sessionManager.openSession(
-      TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V10,
+      TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V11,
       "",
       "",
       "",
       Map.empty)
     sessionManager.openSession(
-      TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V10,
+      TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V11,
       "",
       "",
       "",

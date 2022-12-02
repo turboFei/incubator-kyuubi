@@ -17,30 +17,15 @@
 
 package org.apache.kyuubi.jdbc.hive;
 
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.SQLFeatureNotSupportedException;
-import java.sql.SQLTimeoutException;
-import java.sql.SQLWarning;
+import com.google.common.annotations.VisibleForTesting;
+import java.sql.*;
 import java.util.*;
-import org.apache.hive.service.cli.FetchType;
-import org.apache.hive.service.cli.RowSet;
-import org.apache.hive.service.cli.RowSetFactory;
-import org.apache.hive.service.rpc.thrift.TCLIService;
-import org.apache.hive.service.rpc.thrift.TCancelOperationReq;
-import org.apache.hive.service.rpc.thrift.TCancelOperationResp;
-import org.apache.hive.service.rpc.thrift.TCloseOperationReq;
-import org.apache.hive.service.rpc.thrift.TCloseOperationResp;
-import org.apache.hive.service.rpc.thrift.TExecuteStatementReq;
-import org.apache.hive.service.rpc.thrift.TExecuteStatementResp;
-import org.apache.hive.service.rpc.thrift.TFetchOrientation;
-import org.apache.hive.service.rpc.thrift.TFetchResultsReq;
-import org.apache.hive.service.rpc.thrift.TFetchResultsResp;
-import org.apache.hive.service.rpc.thrift.TGetOperationStatusReq;
-import org.apache.hive.service.rpc.thrift.TGetOperationStatusResp;
-import org.apache.hive.service.rpc.thrift.TOperationHandle;
-import org.apache.hive.service.rpc.thrift.TSessionHandle;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.hive.service.rpc.thrift.*;
+import org.apache.kyuubi.jdbc.hive.adapter.SQLStatement;
+import org.apache.kyuubi.jdbc.hive.cli.FetchType;
+import org.apache.kyuubi.jdbc.hive.cli.RowSet;
+import org.apache.kyuubi.jdbc.hive.cli.RowSetFactory;
 import org.apache.kyuubi.jdbc.hive.logs.InPlaceUpdateStream;
 import org.apache.kyuubi.jdbc.hive.logs.KyuubiLoggable;
 import org.apache.thrift.TException;
@@ -48,18 +33,19 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** KyuubiStatement. */
-public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
+public class KyuubiStatement implements SQLStatement, KyuubiLoggable {
   public static final Logger LOG = LoggerFactory.getLogger(KyuubiStatement.class.getName());
   public static final int DEFAULT_FETCH_SIZE = 1000;
   private final KyuubiConnection connection;
   private TCLIService.Iface client;
   private TOperationHandle stmtHandle = null;
   private final TSessionHandle sessHandle;
-  Map<String, String> sessConf = new HashMap<String, String>();
+  Map<String, String> sessConf = new HashMap<>();
   private int fetchSize = DEFAULT_FETCH_SIZE;
   private boolean isScrollableResultset = false;
   private boolean isOperationComplete = false;
   private long updateCount = -1;
+
   /**
    * We need to keep a reference to the result set to support the following: <code>
    * statement.execute(String sql);
@@ -100,8 +86,6 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
 
   private InPlaceUpdateStream inPlaceUpdateStream = InPlaceUpdateStream.NO_OP;
 
-  private volatile TGetOperationStatusResp statusResp;
-
   public KyuubiStatement(
       KyuubiConnection connection, TCLIService.Iface client, TSessionHandle sessHandle) {
     this(connection, client, sessHandle, false, DEFAULT_FETCH_SIZE);
@@ -136,23 +120,6 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
     this.fetchSize = fetchSize;
   }
 
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#addBatch(java.lang.String)
-   */
-
-  @Override
-  public void addBatch(String sql) throws SQLException {
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#cancel()
-   */
-
   @Override
   public void cancel() throws SQLException {
     checkConnection("cancel");
@@ -169,56 +136,43 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
     } catch (SQLException e) {
       throw e;
     } catch (Exception e) {
-      throw new SQLException(e.toString(), "08S01", e);
+      throw new KyuubiSQLException(e.toString(), "08S01", e);
     }
     isCancelled = true;
   }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#clearBatch()
-   */
-
-  @Override
-  public void clearBatch() throws SQLException {
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#clearWarnings()
-   */
 
   @Override
   public void clearWarnings() throws SQLException {
     warningChain = null;
   }
 
-  void closeClientOperation() throws SQLException {
+  /**
+   * Closes the statement if there is one running. Do not change the the flags.
+   *
+   * @throws SQLException If there is an error closing the statement
+   */
+  private void closeStatementIfNeeded() throws SQLException {
     try {
       if (stmtHandle != null) {
         TCloseOperationReq closeReq = new TCloseOperationReq(stmtHandle);
         TCloseOperationResp closeResp = client.CloseOperation(closeReq);
         Utils.verifySuccessWithInfo(closeResp.getStatus());
+        stmtHandle = null;
       }
     } catch (SQLException e) {
       throw e;
     } catch (Exception e) {
-      throw new SQLException(e.toString(), "08S01", e);
+      throw new KyuubiSQLException(e.toString(), "08S01", e);
     }
+  }
+
+  void closeClientOperation() throws SQLException {
+    closeStatementIfNeeded();
     isQueryClosed = true;
     isExecuteStatementFailed = false;
     stmtHandle = null;
-    statusResp = null;
   }
 
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#close()
-   */
   @Override
   public void close() throws SQLException {
     if (isClosed) {
@@ -232,17 +186,6 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
     }
     isClosed = true;
   }
-
-  // JDK 1.7
-  public void closeOnCompletion() throws SQLException {
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#execute(java.lang.String)
-   */
 
   @Override
   public boolean execute(String sql) throws SQLException {
@@ -309,8 +252,7 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
   private void runAsyncOnServer(String sql, Map<String, String> confOneTime) throws SQLException {
     checkConnection("execute");
 
-    closeClientOperation();
-    initFlags();
+    reInitState();
 
     TExecuteStatementReq execReq = new TExecuteStatementReq(sessHandle, sql);
     /**
@@ -339,7 +281,7 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
     } catch (Exception ex) {
       isExecuteStatementFailed = true;
       isLogBeingGenerated = false;
-      throw new SQLException(ex.toString(), "08S01", ex);
+      throw new KyuubiSQLException(ex.toString(), "08S01", ex);
     }
   }
 
@@ -351,20 +293,17 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
    */
   private TGetOperationStatusResp waitForResultSetStatus() throws SQLException {
     TGetOperationStatusReq statusReq = new TGetOperationStatusReq(stmtHandle);
+    TGetOperationStatusResp statusResp = null;
 
     while (statusResp == null || !statusResp.isSetHasResultSet()) {
       try {
         statusResp = client.GetOperationStatus(statusReq);
       } catch (TException e) {
         isLogBeingGenerated = false;
-        throw new SQLException(e.toString(), "08S01", e);
+        throw new KyuubiSQLException(e.toString(), "08S01", e);
       }
     }
 
-    return statusResp;
-  }
-
-  public TGetOperationStatusResp getStatusResp() {
     return statusResp;
   }
 
@@ -376,6 +315,7 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
       /** progress bar is completed if there is nothing we want to request in the first place. */
       inPlaceUpdateStream.getEventNotifier().progressBarCompleted();
     }
+    TGetOperationStatusResp statusResp = null;
 
     // Poll on the operation status, till the operation is complete
     while (!isOperationComplete) {
@@ -396,17 +336,22 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
               break;
             case CANCELED_STATE:
               // 01000 -> warning
-              throw new SQLException("Query was cancelled", "01000");
+              String errMsg = statusResp.getErrorMessage();
+              if (errMsg != null && !errMsg.isEmpty()) {
+                throw new KyuubiSQLException("Query was cancelled. " + errMsg, "01000");
+              } else {
+                throw new KyuubiSQLException("Query was cancelled", "01000");
+              }
             case TIMEDOUT_STATE:
               throw new SQLTimeoutException("Query timed out after " + queryTimeout + " seconds");
             case ERROR_STATE:
               // Get the error details from the underlying exception
-              throw new SQLException(
+              throw new KyuubiSQLException(
                   statusResp.getErrorMessage(),
                   statusResp.getSqlState(),
                   statusResp.getErrorCode());
             case UKNOWN_STATE:
-              throw new SQLException("Unknown query", "HY000");
+              throw new KyuubiSQLException("Unknown query", "HY000");
             case INITIALIZED_STATE:
             case PENDING_STATE:
             case RUNNING_STATE:
@@ -418,7 +363,7 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
         throw e;
       } catch (Exception e) {
         isLogBeingGenerated = false;
-        throw new SQLException(e.toString(), "08S01", e);
+        throw new KyuubiSQLException(e.toString(), "08S01", e);
       }
     }
 
@@ -434,11 +379,17 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
 
   private void checkConnection(String action) throws SQLException {
     if (isClosed) {
-      throw new SQLException("Can't " + action + " after statement has been closed");
+      throw new KyuubiSQLException("Can't " + action + " after statement has been closed");
     }
   }
 
-  private void initFlags() {
+  /**
+   * Close statement if needed, and reset the flags.
+   *
+   * @throws SQLException
+   */
+  private void reInitState() throws SQLException {
+    closeStatementIfNeeded();
     isCancelled = false;
     isQueryClosed = false;
     isLogBeingGenerated = true;
@@ -446,60 +397,10 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
     isOperationComplete = false;
   }
 
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#execute(java.lang.String, int)
-   */
-
-  @Override
-  public boolean execute(String sql, int autoGeneratedKeys) throws SQLException {
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#execute(java.lang.String, int[])
-   */
-
-  @Override
-  public boolean execute(String sql, int[] columnIndexes) throws SQLException {
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#execute(java.lang.String, java.lang.String[])
-   */
-
-  @Override
-  public boolean execute(String sql, String[] columnNames) throws SQLException {
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#executeBatch()
-   */
-
-  @Override
-  public int[] executeBatch() throws SQLException {
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#executeQuery(java.lang.String)
-   */
-
   @Override
   public ResultSet executeQuery(String sql) throws SQLException {
     if (!execute(sql)) {
-      throw new SQLException("The query did not generate a result set!");
+      throw new KyuubiSQLException("The query did not generate a result set!");
     }
     return resultSet;
   }
@@ -507,7 +408,7 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
   public ResultSet executeScala(String code) throws SQLException {
     if (!executeWithConfOverlay(
         code, Collections.singletonMap("kyuubi.operation.language", "SCALA"))) {
-      throw new SQLException("The query did not generate a result set!");
+      throw new KyuubiSQLException("The query did not generate a result set!");
     }
     return resultSet;
   }
@@ -522,7 +423,7 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
   public ResultSet executeGetCurrentCatalog(String sql) throws SQLException {
     if (!executeWithConfOverlay(
         sql, Collections.singletonMap("kyuubi.operation.get.current.catalog", ""))) {
-      throw new SQLException("The query did not generate a result set!");
+      throw new KyuubiSQLException("The query did not generate a result set!");
     }
     return resultSet;
   }
@@ -537,16 +438,10 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
   public ResultSet executeGetCurrentDatabase(String sql) throws SQLException {
     if (!executeWithConfOverlay(
         sql, Collections.singletonMap("kyuubi.operation.get.current.database", ""))) {
-      throw new SQLException("The query did not generate a result set!");
+      throw new KyuubiSQLException("The query did not generate a result set!");
     }
     return resultSet;
   }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#executeUpdate(java.lang.String)
-   */
 
   @Override
   public int executeUpdate(String sql) throws SQLException {
@@ -554,56 +449,11 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
     return getUpdateCount();
   }
 
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#executeUpdate(java.lang.String, int)
-   */
-
-  @Override
-  public int executeUpdate(String sql, int autoGeneratedKeys) throws SQLException {
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#executeUpdate(java.lang.String, int[])
-   */
-
-  @Override
-  public int executeUpdate(String sql, int[] columnIndexes) throws SQLException {
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#executeUpdate(java.lang.String, java.lang.String[])
-   */
-
-  @Override
-  public int executeUpdate(String sql, String[] columnNames) throws SQLException {
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#getConnection()
-   */
-
   @Override
   public Connection getConnection() throws SQLException {
     checkConnection("getConnection");
     return this.connection;
   }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#getFetchDirection()
-   */
 
   @Override
   public int getFetchDirection() throws SQLException {
@@ -611,45 +461,11 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
     return ResultSet.FETCH_FORWARD;
   }
 
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#getFetchSize()
-   */
-
   @Override
   public int getFetchSize() throws SQLException {
     checkConnection("getFetchSize");
     return fetchSize;
   }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#getGeneratedKeys()
-   */
-
-  @Override
-  public ResultSet getGeneratedKeys() throws SQLException {
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#getMaxFieldSize()
-   */
-
-  @Override
-  public int getMaxFieldSize() throws SQLException {
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#getMaxRows()
-   */
 
   @Override
   public int getMaxRows() throws SQLException {
@@ -657,33 +473,10 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
     return maxRows;
   }
 
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#getMoreResults()
-   */
-
   @Override
   public boolean getMoreResults() throws SQLException {
     return false;
   }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#getMoreResults(int)
-   */
-
-  @Override
-  public boolean getMoreResults(int current) throws SQLException {
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#getQueryTimeout()
-   */
 
   @Override
   public int getQueryTimeout() throws SQLException {
@@ -691,45 +484,11 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
     return 0;
   }
 
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#getResultSet()
-   */
-
   @Override
   public ResultSet getResultSet() throws SQLException {
     checkConnection("getResultSet");
     return resultSet;
   }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#getResultSetConcurrency()
-   */
-
-  @Override
-  public int getResultSetConcurrency() throws SQLException {
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#getResultSetHoldability()
-   */
-
-  @Override
-  public int getResultSetHoldability() throws SQLException {
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#getResultSetType()
-   */
 
   @Override
   public int getResultSetType() throws SQLException {
@@ -737,11 +496,6 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
     return ResultSet.TYPE_FORWARD_ONLY;
   }
 
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#getUpdateCount()
-   */
   @Override
   public int getUpdateCount() throws SQLException {
     checkConnection("getUpdateCount");
@@ -757,88 +511,34 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
     return (int) updateCount;
   }
 
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#getWarnings()
-   */
-
   @Override
   public SQLWarning getWarnings() throws SQLException {
     checkConnection("getWarnings");
     return warningChain;
   }
 
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#isClosed()
-   */
-
   @Override
   public boolean isClosed() throws SQLException {
     return isClosed;
   }
 
-  // JDK 1.7
+  @Override
   public boolean isCloseOnCompletion() throws SQLException {
     return false;
   }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#isPoolable()
-   */
 
   @Override
   public boolean isPoolable() throws SQLException {
     return false;
   }
 
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#setCursorName(java.lang.String)
-   */
-
-  @Override
-  public void setCursorName(String name) throws SQLException {
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#setEscapeProcessing(boolean)
-   */
-
-  @Override
-  public void setEscapeProcessing(boolean enable) throws SQLException {
-    if (enable) {
-      throw new SQLFeatureNotSupportedException("Method not supported");
-    }
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#setFetchDirection(int)
-   */
-
   @Override
   public void setFetchDirection(int direction) throws SQLException {
     checkConnection("setFetchDirection");
     if (direction != ResultSet.FETCH_FORWARD) {
-      throw new SQLException("Not supported direction " + direction);
+      throw new KyuubiSQLException("Not supported direction " + direction);
     }
   }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#setFetchSize(int)
-   */
 
   @Override
   public void setFetchSize(int rows) throws SQLException {
@@ -851,78 +551,32 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
       // In this case it means reverting it to the default value.
       fetchSize = DEFAULT_FETCH_SIZE;
     } else {
-      throw new SQLException("Fetch size must be greater or equal to 0");
+      throw new KyuubiSQLException("Fetch size must be greater or equal to 0");
     }
   }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#setMaxFieldSize(int)
-   */
-
-  @Override
-  public void setMaxFieldSize(int max) throws SQLException {
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#setMaxRows(int)
-   */
 
   @Override
   public void setMaxRows(int max) throws SQLException {
     checkConnection("setMaxRows");
     if (max < 0) {
-      throw new SQLException("max must be >= 0");
+      throw new KyuubiSQLException("max must be >= 0");
     }
     maxRows = max;
   }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#setPoolable(boolean)
-   */
-
-  @Override
-  public void setPoolable(boolean poolable) throws SQLException {
-    throw new SQLFeatureNotSupportedException("Method not supported");
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Statement#setQueryTimeout(int)
-   */
 
   @Override
   public void setQueryTimeout(int seconds) throws SQLException {
     this.queryTimeout = seconds;
   }
 
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Wrapper#isWrapperFor(java.lang.Class)
-   */
-
   @Override
   public boolean isWrapperFor(Class<?> iface) throws SQLException {
     return false;
   }
 
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.sql.Wrapper#unwrap(java.lang.Class)
-   */
-
   @Override
   public <T> T unwrap(Class<T> iface) throws SQLException {
-    throw new SQLException("Cannot unwrap to " + iface);
+    throw new KyuubiSQLException("Cannot unwrap to " + iface);
   }
 
   /**
@@ -933,6 +587,7 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
    * @return true if query execution might be producing more logs. It does not indicate if last log
    *     lines have been fetched by getQueryLog.
    */
+  @Override
   public boolean hasMoreLogs() {
     return isLogBeingGenerated;
   }
@@ -946,6 +601,7 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
    * @throws SQLException
    * @throws ClosedOrCancelledException if statement has been cancelled or closed
    */
+  @Override
   public List<String> getExecLog() throws SQLException, ClosedOrCancelledException {
     return getQueryLog(true, fetchSize);
   }
@@ -989,9 +645,9 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
     } catch (SQLException e) {
       throw e;
     } catch (TException e) {
-      throw new SQLException("Error when getting query log: " + e, e);
+      throw new KyuubiSQLException("Error when getting query log: " + e, e);
     } catch (Exception e) {
-      throw new SQLException("Error when getting query log: " + e, e);
+      throw new KyuubiSQLException("Error when getting query log: " + e, e);
     }
 
     try {
@@ -1001,7 +657,7 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
         logs.add(String.valueOf(row[0]));
       }
     } catch (TException e) {
-      throw new SQLException("Error building result set for query log: " + e, e);
+      throw new KyuubiSQLException("Error building result set for query log: " + e, e);
     }
 
     return logs;
@@ -1030,6 +686,30 @@ public class KyuubiStatement implements java.sql.Statement, KyuubiLoggable {
       return guid64;
     }
     return null;
+  }
+
+  /**
+   * Returns the Query ID if it is running. This method is a public API for usage outside of Hive,
+   * although it is not part of the interface java.sql.Statement.
+   *
+   * @return Valid query ID if it is running else returns NULL.
+   * @throws SQLException If any internal failures.
+   */
+  @VisibleForTesting
+  public String getQueryId() throws SQLException {
+    if (stmtHandle == null) {
+      // If query is not running or already closed.
+      return null;
+    }
+
+    try {
+      final String queryId = client.GetQueryId(new TGetQueryIdReq(stmtHandle)).getQueryId();
+
+      // queryId can be empty string if query was already closed. Need to return null in such case.
+      return StringUtils.isBlank(queryId) ? null : queryId;
+    } catch (TException e) {
+      throw new KyuubiSQLException(e);
+    }
   }
 
   /**

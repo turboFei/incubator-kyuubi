@@ -18,7 +18,6 @@
 package org.apache.kyuubi.events
 
 import org.apache.kyuubi.Utils
-import org.apache.kyuubi.server.KyuubiServer
 import org.apache.kyuubi.session.KyuubiSession
 
 /**
@@ -62,9 +61,6 @@ case class KyuubiSessionEvent(
 
 object KyuubiSessionEvent {
   def apply(session: KyuubiSession): KyuubiSessionEvent = {
-    // TODO: backport KYUUBI #3575
-    val serverIP =
-      Option(KyuubiServer.kyuubiServer).map(_.frontendServices.head.connectionUrl).getOrElse("")
     KyuubiSessionEvent(
       session.handle.identifier.toString,
       session.protocol.getValue,
@@ -72,7 +68,7 @@ object KyuubiSessionEvent {
       session.name.getOrElse(""),
       session.user,
       session.ipAddress,
-      serverIP,
+      session.connectionUrl,
       session.conf,
       session.createTime,
       session.sessionCluster.getOrElse(""))
