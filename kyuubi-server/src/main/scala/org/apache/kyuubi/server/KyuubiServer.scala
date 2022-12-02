@@ -33,6 +33,7 @@ import org.apache.kyuubi.events.{EventBus, KyuubiServerInfoEvent, ServerEventHan
 import org.apache.kyuubi.ha.HighAvailabilityConf._
 import org.apache.kyuubi.ha.client.{AuthTypes, KyuubiServiceDiscovery}
 import org.apache.kyuubi.metrics.{MetricsConf, MetricsSystem}
+import org.apache.kyuubi.server.metadata.jdbc.JDBCMetadataStoreConf
 import org.apache.kyuubi.service.{AbstractBackendService, AbstractFrontendService, Serverable, ServiceState}
 import org.apache.kyuubi.util.{KyuubiHadoopUtils, SignalRegister}
 import org.apache.kyuubi.zookeeper.EmbeddedZookeeper
@@ -95,6 +96,9 @@ object KyuubiServer extends Logging {
     info(s"Using Scala ${Properties.versionString}, ${Properties.javaVmName}," +
       s" ${Properties.javaVersion}")
     SignalRegister.registerLogger(logger)
+
+    // register conf entries
+    JDBCMetadataStoreConf
     val conf = new KyuubiConf().loadFileDefaults()
     UserGroupInformation.setConfiguration(KyuubiHadoopUtils.newHadoopConf(conf))
     startServer(conf)
