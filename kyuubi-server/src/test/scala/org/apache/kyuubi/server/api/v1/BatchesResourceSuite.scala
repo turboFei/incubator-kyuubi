@@ -339,6 +339,13 @@ class BatchesResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper wi
     Seq(
       (
         newBatchRequest(
+          null,
+          sparkBatchTestResource.get,
+          sparkBatchTestMainClass,
+          sparkBatchTestAppName),
+        "is not in the supported list"),
+      (
+        newBatchRequest(
           "sp",
           sparkBatchTestResource.get,
           sparkBatchTestMainClass,

@@ -162,7 +162,6 @@ private[v1] class BatchesResource extends ApiRequestContext with Logging {
   @POST
   @Consumes(Array(MediaType.APPLICATION_JSON))
   def openBatchSession(request: BatchRequest): Batch = {
-    request.setBatchType(Option(request.getBatchType).getOrElse(DEFAULT_BATCH_TYPE))
     require(
       supportedBatchType(request.getBatchType),
       s"${request.getBatchType} is not in the supported list: $SUPPORTED_BATCH_TYPES}")
@@ -393,7 +392,6 @@ private[v1] class BatchesResource extends ApiRequestContext with Logging {
 }
 
 object BatchesResource {
-  val DEFAULT_BATCH_TYPE = "SPARK"
   val SUPPORTED_BATCH_TYPES = Seq("SPARK", "PYSPARK")
   val VALID_BATCH_STATES = Seq(
     OperationState.PENDING,
