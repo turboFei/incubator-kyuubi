@@ -212,7 +212,7 @@ if [[ "$HIVE_PROVIDED" == "true" ]]; then
   MVN_DIST_OPT="$MVN_DIST_OPT -Phive-provided"
 fi
 
-MVN_DIST_OPT="$MVN_DIST_OPT -pl kyuubi-common,kyuubi-zookeeper,kyuubi-ha,kyuubi-rest-client,kyuubi-ctl,kyuubi-hive-jdbc,kyuubi-hive-beeline"
+MVN_DIST_OPT="$MVN_DIST_OPT -pl kyuubi-common,kyuubi-zookeeper,kyuubi-ha,kyuubi-rest-client,kyuubi-ctl,kyuubi-hive-jdbc,kyuubi-hive-beeline,kyuubi-data"
 
 export MAVEN_OPTS="${MAVEN_OPTS:--Xmx2g}"
 
@@ -236,6 +236,7 @@ mkdir -p "$DISTDIR/externals/engines/trino"
 mkdir -p "$DISTDIR/externals/engines/hive"
 mkdir -p "$DISTDIR/externals/engines/jdbc"
 mkdir -p "$DISTDIR/beeline-jars"
+mkdir -p "$DISTDIR/data-jars"
 echo "Kyuubi $VERSION $GITREVSTRING built for" > "$DISTDIR/RELEASE"
 echo "Java $JAVA_VERSION" >> "$DISTDIR/RELEASE"
 echo "Scala $SCALA_VERSION" >> "$DISTDIR/RELEASE"
@@ -247,6 +248,9 @@ echo "Build flags: $@" >> "$DISTDIR/RELEASE"
 
 # Copy kyuubi beeline jars
 cp "$KYUUBI_HOME"/kyuubi-hive-beeline/target/*.jar "$DISTDIR/beeline-jars/"
+
+# Copy kyuubi data jars
+cp "$KYUUBI_HOME"/kyuubi-data/target/*.jar "$DISTDIR/data-jars/"
 
 # Copy kyuubi ctl jars
 cp "$KYUUBI_HOME"/kyuubi-ctl/target/scala-${SCALA_VERSION}/jars/*.jar "$DISTDIR/jars/"
@@ -260,6 +264,15 @@ cp -r "$KYUUBI_HOME/docker" "$DISTDIR"
 for jar in $(ls "$DISTDIR/jars/"); do
   if [[ -f "$DISTDIR/beeline-jars/$jar" ]]; then
     (cd $DISTDIR/beeline-jars; ln -snf "../jars/$jar" "$DISTDIR/beeline-jars/$jar")
+  fi
+done
+
+# Make soft link for data jars to reduce binary size
+for jar in $(ls "$DISTDIR/data-jars/"); do
+  if [[ -f "$DISTDIR/beeline-jars/$jar" ]]; then
+    (cd $DISTDIR/data-jars; ln -snf "../beeline-jars/$jar" "$DISTDIR/data-jars/$jar")
+  elif [[ -f "$DISTDIR/jars/$jar" ]]; then
+    (cd $DISTDIR/data-jars; ln -snf "../jars/$jar" "$DISTDIR/data-jars/$jar")
   fi
 done
 

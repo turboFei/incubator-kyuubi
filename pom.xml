@@ -70,7 +70,6 @@
         <module>kyuubi-assembly</module>
         <module>kyuubi-common</module>
         <module>kyuubi-ctl</module>
-        <module>kyuubi-ebay</module>
         <module>kyuubi-events</module>
         <module>kyuubi-ha</module>
         <module>kyuubi-hive-beeline</module>
@@ -80,6 +79,8 @@
         <module>kyuubi-rest-client</module>
         <module>kyuubi-server</module>
         <module>kyuubi-zookeeper</module>
+        <module>kyuubi-data</module>
+        <module>kyuubi-ebay</module>
     </modules>
 
     <scm>

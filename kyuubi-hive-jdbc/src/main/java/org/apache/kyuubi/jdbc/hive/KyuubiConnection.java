@@ -1586,6 +1586,7 @@ public class KyuubiConnection implements SQLConnection, KyuubiLoggable {
       preparedStatement = prepareStatement(sql);
       resultSet = preparedStatement.executeQuery();
       if (resultSet.next()) {
+        LOG.info(String.format("Update count[%d]", preparedStatement.getUpdateCount()));
         // Remote file path
         return resultSet.getString(2);
       } else {
