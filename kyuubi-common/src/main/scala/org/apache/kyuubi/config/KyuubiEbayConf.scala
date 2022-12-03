@@ -32,6 +32,7 @@ object KyuubiEbayConf extends Logging {
   val SERVER_HA_ZK_ENABLED: ConfigEntry[Boolean] = buildConf("kyuubi.server.ha.zookeeper.enabled")
     .doc("Whether to enable the ha zookeeper discovery in server side")
     .internal
+    .serverOnly
     .booleanConf
     .createWithDefault(true)
 
@@ -40,6 +41,7 @@ object KyuubiEbayConf extends Logging {
       .doc("Whether to enable session with cluster specify mode. If it is enabled," +
         " the cluster for session connection is must to be specified.")
       .version("1.4.0")
+      .serverOnly
       .booleanConf
       .createWithDefault(false)
 
@@ -47,6 +49,7 @@ object KyuubiEbayConf extends Logging {
     buildConf("kyuubi.session.cluster.conf.refresh.interval")
       .doc("The session cluster conf refresh interval.")
       .internal
+      .serverOnly
       .timeConf
       .createWithDefaultString("PT10M")
 
@@ -54,6 +57,7 @@ object KyuubiEbayConf extends Logging {
     buildConf("kyuubi.session.cluster.list")
       .doc("The session cluster list.")
       .internal
+      .serverOnly
       .stringConf
       .toSequence()
       .createOptional
@@ -72,6 +76,7 @@ object KyuubiEbayConf extends Logging {
       .doc("The authentication class name for batch account authentication," +
         " eBay internal requirement")
       .version("1.5.0")
+      .serverOnly
       .stringConf
       .createOptional
 
@@ -111,6 +116,7 @@ object KyuubiEbayConf extends Logging {
       .internal
       .doc("The endpoint for batch account verification.")
       .version("1.6.0")
+      .serverOnly
       .stringConf
       .checkValue(_.contains("$serviceAccount"), "the endpoint should contains `$serviceAccount`")
       .createWithDefault("https://bdp.vip.ebay.com/product/batch/$serviceAccount/service/mapping?")
@@ -118,6 +124,7 @@ object KyuubiEbayConf extends Logging {
   val AUTHENTICATION_BATCH_ACCOUNT_LOAD_ALL_ENABLED: ConfigEntry[Boolean] =
     buildConf("kyuubi.authentication.batch.account.load.all.enabled")
       .internal
+      .serverOnly
       .doc("Whether to enable to load all service account and batch account mapping.")
       .version("1.6.0")
       .booleanConf
@@ -126,6 +133,7 @@ object KyuubiEbayConf extends Logging {
   val AUTHENTICATION_BATCH_ACCOUNT_LOAD_ALL_ENDPOINT: ConfigEntry[String] =
     buildConf("kyuubi.authentication.batch.account.load.all.endpoint")
       .internal
+      .serverOnly
       .doc("The endpoint for loading all service account and batch account mapping.")
       .version("1.6.0")
       .stringConf
@@ -135,12 +143,14 @@ object KyuubiEbayConf extends Logging {
     buildConf("kyuubi.authentication.batch.account.load.all.interval")
       .doc("The interval for loading all service account and batch account mapping.")
       .version("1.6.0")
+      .serverOnly
       .timeConf
       .createWithDefault(Duration.ofHours(1).toMillis)
 
   val AUTHENTICATION_KEYSTONE_ENDPOINT: ConfigEntry[String] =
     buildConf("kyuubi.authentication.keystone.endpoint")
       .internal
+      .serverOnly
       .doc("The endpoint for keystone authentication.")
       .version("1.6.0")
       .stringConf
@@ -165,6 +175,7 @@ object KyuubiEbayConf extends Logging {
   val METADATA_STORE_JDBC_TABLE: OptionalConfigEntry[String] =
     buildConf("kyuubi.metadata.store.jdbc.table")
       .internal
+      .serverOnly
       .doc("The table name for jdbc metadata, which is used to isolate the prod and pre-prod env.")
       .version("1.6.0")
       .stringConf
@@ -182,6 +193,7 @@ object KyuubiEbayConf extends Logging {
   val BATCH_SPARK_HBASE_CONFIG_TAG: ConfigEntry[String] =
     buildConf("kyuubi.batch.spark.hbase.config.tag")
       .internal
+      .serverOnly
       .doc("The config tag for batch spark hbase conf.")
       .version("1.6.0")
       .stringConf
@@ -225,24 +237,28 @@ object KyuubiEbayConf extends Logging {
   val LOG_AGG_ENABLED: ConfigEntry[Boolean] =
     buildConf("kyuubi.log.agg.enabled")
       .internal
+      .serverOnly
       .booleanConf
       .createWithDefault(false)
 
   val LOG_AGG_THREADS_NUM: ConfigEntry[Int] =
     buildConf("kyuubi.log.agg.threads.num")
       .internal
+      .serverOnly
       .intConf
       .createWithDefault(10)
 
   val LOG_AGG_CLUSTER_DIR: ConfigEntry[String] =
     buildConf("kyuubi.log.agg.cluster.dir")
       .internal
+      .serverOnly
       .stringConf
       .createWithDefault("/kyuubi-logs")
 
   val LOG_AGG_FETCH_TIMEOUT: ConfigEntry[Long] =
     buildConf("kyuubi.log.agg.fetch.timeout")
       .internal
+      .serverOnly
       .longConf
       .createWithDefault(120000)
 
@@ -314,24 +330,28 @@ object KyuubiEbayConf extends Logging {
   val OPERATION_INTERCEPT_ENABLED: ConfigEntry[Boolean] =
     buildConf("kyuubi.operation.intercept.enabled")
       .internal
+      .serverOnly
       .booleanConf
       .createWithDefault(false)
 
   val LOG_AGG_CLEANER_ENABLED: ConfigEntry[Boolean] =
     buildConf("kyuubi.log.agg.cleaner.enabled")
       .internal
+      .serverOnly
       .booleanConf
       .createWithDefault(false)
 
   val LOG_AGG_CLEANER_INTERVAL: ConfigEntry[Long] =
     buildConf("kyuubi.log.agg.cleaner.interval")
       .internal
+      .serverOnly
       .timeConf
       .createWithDefaultString("PT6H")
 
   val LOG_AGG_CLEANER_MAX_LOG_AGE: ConfigEntry[Long] =
     buildConf("kyuubi.log.agg.cleaner.maxAge")
       .internal
+      .serverOnly
       .timeConf
       .createWithDefaultString("PT336H")
 
@@ -422,5 +442,9 @@ object KyuubiEbayConf extends Logging {
     } else {
       None
     }
+  }
+
+  def getTagConfOnly(conf: KyuubiConf, tag: String): Map[String, String] = {
+    conf.getAllWithPrefix(s"___${tag}___", "")
   }
 }

@@ -254,9 +254,6 @@
         <distMgmtSnapshotsId>apache.snapshots.https</distMgmtSnapshotsId>
         <distMgmtSnapshotsName>Apache Development Snapshot Repository</distMgmtSnapshotsName>
         <distMgmtSnapshotsUrl>https://repository.apache.org/content/repositories/snapshots</distMgmtSnapshotsUrl>
-        <!-- ebay central repository -->
-        <distMgmtReleaseUrl>http://ebaycentral.qa.ebay.com/content/repositories/releases</distMgmtReleaseUrl>
-        <distMgmtSnapshotsUrl>http://ebaycentral.qa.ebay.com/content/repositories/snapshots</distMgmtSnapshotsUrl>
     </properties>
 
     <dependencyManagement>
@@ -2329,7 +2326,7 @@
                 <spark.binary.version>3.1</spark.binary.version>
                 <delta.version>1.0.1</delta.version>
                 <spark.archive.name>spark-${spark.version}-bin-hadoop3.2.tgz</spark.archive.name>
-                <maven.plugin.scalatest.exclude.tags>org.apache.kyuubi.tags.ExtendedSQLTest,org.apache.kyuubi.tags.FlinkTest,org.apache.kyuubi.tags.HiveTest,org.apache.kyuubi.tags.K8sTest,org.apache.kyuubi.tags.YarnTest,org.apache.kyuubi.tags.TrinoTest,org.scalatest.tags.Slow</maven.plugin.scalatest.exclude.tags>
+                <maven.plugin.scalatest.exclude.tags>org.scalatest.tags.Slow</maven.plugin.scalatest.exclude.tags>
             </properties>
         </profile>
 

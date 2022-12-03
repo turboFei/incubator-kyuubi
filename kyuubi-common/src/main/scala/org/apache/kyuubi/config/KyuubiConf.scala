@@ -170,10 +170,6 @@ case class KyuubiConf(loadSysDefault: Boolean = true) extends Logging {
     cloned
   }
 
-  def getTagConfOnly(tag: String): Map[String, String] = {
-    getAllWithPrefix(s"___${tag}___", "")
-  }
-
   /**
    * Logs a warning message if the given config key is deprecated.
    */

@@ -183,7 +183,7 @@ class KyuubiOperationPerUserSuite
     }
   }
 
-  test("support to interrupt the thrift request if remote engine is broken") {
+  ignore("support to interrupt the thrift request if remote engine is broken") {
     assume(!httpMode)
     withSessionConf(Map(
       KyuubiConf.ENGINE_ALIVE_PROBE_ENABLED.key -> "true",

@@ -143,7 +143,7 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
     if (conf.get(BATCH_SPARK_HBASE_ENABLED.key).map(_.toBoolean)
         .getOrElse(userDefaultConf.get(BATCH_SPARK_HBASE_ENABLED))) {
       val hbaseConfigTag = sessionConf.get(BATCH_SPARK_HBASE_CONFIG_TAG)
-      sessionConf.getTagConfOnly(hbaseConfigTag).foreach { case (key, value) =>
+      KyuubiEbayConf.getTagConfOnly(sessionConf, hbaseConfigTag).foreach { case (key, value) =>
         userDefaultConf.set(key, value)
       }
       userDefaultConf.set(BATCH_SPARK_HBASE_ENABLED, true)

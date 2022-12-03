@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit
 import scala.collection.JavaConverters._
 
 import org.apache.kyuubi.{Logging, Utils}
-import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiConf.KYUUBI_HOME
 import org.apache.kyuubi.plugin.SessionConfAdvisor
 import org.apache.kyuubi.util.ThreadUtils
@@ -77,8 +77,8 @@ class TagBasedSessionConfAdvisor extends SessionConfAdvisor with Logging {
       user: String,
       sessionConf: JMap[String, String]): JMap[String, String] = {
     val sessionTag = sessionConf.asScala.get(SESSION_TAG_KEY).getOrElse(KYUUBI_DEFAULT_TAG)
-    val tagLevelConfOverlay = tagConf.getTagConfOnly(sessionTag)
-    val serviceOverwriteConfOverlay = tagConf.getTagConfOnly(KYUUBI_OVERWRITE_TAG)
+    val tagLevelConfOverlay = KyuubiEbayConf.getTagConfOnly(tagConf, sessionTag)
+    val serviceOverwriteConfOverlay = KyuubiEbayConf.getTagConfOnly(tagConf, KYUUBI_OVERWRITE_TAG)
     (tagLevelConfOverlay ++ serviceOverwriteConfOverlay).asJava
   }
 }

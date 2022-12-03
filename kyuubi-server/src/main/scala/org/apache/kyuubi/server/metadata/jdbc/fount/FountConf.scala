@@ -25,12 +25,14 @@ object FountConf {
   val FOUNT_DATASOURCE: ConfigEntry[String] =
     buildConf("kyuubi.ebay.fount.datasource")
       .internal
+      .serverOnly
       .stringConf
       .createWithDefault("kyuubimyhost")
 
   val FOUNT_ENV: ConfigEntry[String] =
     buildConf("kyuubi.ebay.fount.env")
       .internal
+      .serverOnly
       .doc("Fount env, prod or staging")
       .stringConf
       .createWithDefault("prod")
@@ -38,6 +40,7 @@ object FountConf {
   val FOUNT_APP: ConfigEntry[String] =
     buildConf("kyuubi.ebay.fount.app")
       .internal
+      .serverOnly
       .doc("Fount app name")
       .stringConf
       .createWithDefault("kyuubi")
