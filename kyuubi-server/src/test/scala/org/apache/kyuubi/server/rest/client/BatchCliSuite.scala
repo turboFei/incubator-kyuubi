@@ -102,7 +102,7 @@ class BatchCliSuite extends RestClientTestHelper with TestPrematureExit with Bat
       0,
       Int.MaxValue).foreach {
       batch =>
-        sessionManager.applicationManager.killApplication(None, batch.getId, None)
+        sessionManager.applicationManager.killApplication(None, batch.getId)
         sessionManager.cleanupMetadata(batch.getId)
     }
   }

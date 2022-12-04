@@ -36,8 +36,8 @@ import org.apache.spark.sql.internal.SQLConf.StoreAssignmentPolicy
 import org.apache.spark.sql.types.{MetadataBuilder, NumericType, StringType}
 
 import org.apache.kyuubi.KyuubiSQLException
+import org.apache.kyuubi.config.{KyuubiEbayConf, KyuubiReservedKeys}
 import org.apache.kyuubi.config.KyuubiEbayConf._
-import org.apache.kyuubi.config.KyuubiReservedKeys
 import org.apache.kyuubi.engine.spark.SparkSQLEngine
 import org.apache.kyuubi.engine.spark.session.SparkSessionImpl
 
@@ -118,7 +118,7 @@ case class UploadDataCommand(
 
     // Check source file
     val sessionId =
-      sparkSession.sparkContext.getLocalProperty(KyuubiReservedKeys.KYUUBI_SESSION_ID_KEY)
+      sparkSession.sparkContext.getLocalProperty(KyuubiEbayConf.KYUUBI_SESSION_ID_KEY)
     val sessionUser =
       sparkSession.sparkContext.getLocalProperty(KyuubiReservedKeys.KYUUBI_SESSION_USER_KEY)
     val sessionScratch = SparkSessionImpl.getSessionScratchDir(sparkSession, sessionUser, sessionId)

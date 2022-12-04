@@ -22,9 +22,7 @@ import org.apache.commons.lang3.{JavaVersion, SystemUtils}
 import org.apache.kyuubi.{HiveEngineTests, Utils}
 import org.apache.kyuubi.engine.hive.HiveSQLEngine
 import org.apache.kyuubi.jdbc.hive.KyuubiStatement
-import org.apache.kyuubi.tags.HiveTest
 
-@HiveTest
 class HiveOperationSuite extends HiveEngineTests {
 
   override def beforeAll(): Unit = {

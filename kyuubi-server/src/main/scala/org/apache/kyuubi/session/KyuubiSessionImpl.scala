@@ -250,8 +250,8 @@ class KyuubiSessionImpl(
           sessionManager.credentialsManager.sendCredentialsIfNeeded(
             handle.identifier.toString,
             engine.appUser,
-            sessionCluster,
-            client.sendCredentials)
+            client.sendCredentials,
+            sessionCluster)
           client.getInfo(infoType).getInfoValue
         }
       case unknown => throw new IllegalArgumentException(s"Unknown server info provider $unknown")

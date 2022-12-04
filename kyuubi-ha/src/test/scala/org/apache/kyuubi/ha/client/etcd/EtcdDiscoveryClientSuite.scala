@@ -28,9 +28,7 @@ import org.apache.kyuubi.ha.HighAvailabilityConf.{HA_ADDRESSES, HA_CLIENT_CLASS}
 import org.apache.kyuubi.ha.client.DiscoveryClientProvider.withDiscoveryClient
 import org.apache.kyuubi.ha.client.DiscoveryClientTests
 import org.apache.kyuubi.service.NoopTBinaryFrontendServer
-import org.apache.kyuubi.tags.K8sTest
 
-@K8sTest
 class EtcdDiscoveryClientSuite extends DiscoveryClientTests {
 
   private var etcdCluster: EtcdCluster = _

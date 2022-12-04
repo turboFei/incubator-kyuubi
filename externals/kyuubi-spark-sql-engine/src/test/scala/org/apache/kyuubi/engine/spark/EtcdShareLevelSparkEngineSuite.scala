@@ -22,7 +22,6 @@ import org.apache.kyuubi.config.KyuubiConf.ENGINE_SHARE_LEVEL
 import org.apache.kyuubi.config.KyuubiConf.ENGINE_SPARK_MAX_LIFETIME
 import org.apache.kyuubi.engine.ShareLevel
 import org.apache.kyuubi.engine.ShareLevel.ShareLevel
-import org.apache.kyuubi.tags.K8sTest
 
 trait EtcdShareLevelSparkEngineSuite
   extends ShareLevelSparkEngineTests with WithEtcdCluster {
@@ -35,12 +34,10 @@ trait EtcdShareLevelSparkEngineSuite
   }
 }
 
-@K8sTest
 class EtcdConnectionLevelSparkEngineSuite extends EtcdShareLevelSparkEngineSuite {
   override def shareLevel: ShareLevel = ShareLevel.CONNECTION
 }
 
-@K8sTest
 class EtcdUserLevelSparkEngineSuite extends EtcdShareLevelSparkEngineSuite {
   override def shareLevel: ShareLevel = ShareLevel.USER
 }

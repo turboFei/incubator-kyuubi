@@ -93,8 +93,8 @@ abstract class KyuubiOperation(session: Session) extends AbstractOperation(sessi
     sessionManager.credentialsManager.sendCredentialsIfNeeded(
       session.handle.identifier.toString,
       appUser,
-      session.asInstanceOf[KyuubiSessionImpl].sessionCluster,
-      client.sendCredentials)
+      client.sendCredentials,
+      session.asInstanceOf[KyuubiSessionImpl].sessionCluster)
   }
 
   override protected def afterRun(): Unit = {

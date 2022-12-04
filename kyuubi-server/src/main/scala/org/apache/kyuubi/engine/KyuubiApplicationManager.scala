@@ -64,7 +64,7 @@ class KyuubiApplicationManager extends AbstractService("KyuubiApplicationManager
   def killApplication(
       resourceManager: Option[String],
       tag: String,
-      clusterOpt: Option[String]): KillResponse = {
+      clusterOpt: Option[String] = None): KillResponse = {
     var (killed, lastMessage): KillResponse = (false, null)
     for (operation <- operations if !killed) {
       if (operation.isSupported(resourceManager, clusterOpt)) {
@@ -87,7 +87,7 @@ class KyuubiApplicationManager extends AbstractService("KyuubiApplicationManager
   def getApplicationInfo(
       clusterManager: Option[String],
       tag: String,
-      clusterOpt: Option[String]): Option[ApplicationInfo] = {
+      clusterOpt: Option[String] = None): Option[ApplicationInfo] = {
     val operation = operations.find(_.isSupported(clusterManager, clusterOpt))
     operation match {
       case Some(op) => Some(op.getApplicationInfoByTag(tag, clusterOpt))

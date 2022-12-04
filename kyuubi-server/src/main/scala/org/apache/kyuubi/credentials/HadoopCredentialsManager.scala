@@ -181,7 +181,7 @@ class HadoopCredentialsManager private (name: String) extends AbstractService(na
     if (renewalExecutor.isEmpty) {
       return ""
     }
-    val userRef = getOrCreateUserCredentialsRef(appUser, appCluster, true)
+    val userRef = getOrCreateUserCredentialsRef(appUser, true, appCluster)
     userRef.getEncodedCredentials
   }
 
@@ -192,17 +192,18 @@ class HadoopCredentialsManager private (name: String) extends AbstractService(na
    * @param sessionId Specify the session which is talking with SQL engine
    * @param appUser  User identity that the SQL engine uses.
    * @param send     Function to send encoded credentials to SQL engine
+   * @param appCluster session cluster
    */
   def sendCredentialsIfNeeded(
       sessionId: String,
       appUser: String,
-      appCluster: Option[String],
-      send: String => Unit): Unit = {
+      send: String => Unit,
+      appCluster: Option[String] = None): Unit = {
     if (renewalExecutor.isEmpty) {
       return
     }
 
-    val userRef = getOrCreateUserCredentialsRef(appUser, appCluster)
+    val userRef = getOrCreateUserCredentialsRef(appUser, appCluster = appCluster)
     val sessionEpoch = getSessionCredentialsEpoch(sessionId)
 
     if (userRef.getEpoch > sessionEpoch) {
@@ -234,8 +235,8 @@ class HadoopCredentialsManager private (name: String) extends AbstractService(na
   // Visible for testing.
   private[credentials] def getOrCreateUserCredentialsRef(
       appUser: String,
-      appCluster: Option[String] = None,
-      waitUntilCredentialsReady: Boolean = false): CredentialsRef = {
+      waitUntilCredentialsReady: Boolean = false,
+      appCluster: Option[String] = None): CredentialsRef = {
     val appUserCluster = AppUserCluster(appUser, appCluster)
     val ref = userCredentialsRefMap.computeIfAbsent(
       appUserCluster,

@@ -18,6 +18,7 @@
 package org.apache.kyuubi.config
 
 import org.apache.kyuubi.{KyuubiException, KyuubiFunSuite}
+import org.apache.kyuubi.config.KyuubiEbayConf.{SESSION_CLUSTER, SESSION_CLUSTER_MODE_ENABLED}
 import org.apache.kyuubi.session.NoopSessionManager
 
 class KyuubiEbayConfSuite extends KyuubiFunSuite {
@@ -68,5 +69,15 @@ class KyuubiEbayConfSuite extends KyuubiFunSuite {
     assert(KyuubiEbayConf.loadClusterConf(conf, Some("test")).getOption(
       "spark.sql.kyuubi.session.cluster.test")
       === Some("yes"))
+  }
+
+  test("test SESSION_CLUSTER_MODE_ENABLED and SESSION_CLUSTER") {
+    val kyuubiConf = KyuubiConf()
+    assert(!kyuubiConf.get(SESSION_CLUSTER_MODE_ENABLED))
+    kyuubiConf.set(SESSION_CLUSTER_MODE_ENABLED, true)
+    assert(kyuubiConf.get(SESSION_CLUSTER_MODE_ENABLED))
+    assert(kyuubiConf.get(SESSION_CLUSTER).isEmpty)
+    kyuubiConf.set(SESSION_CLUSTER, "test")
+    assert(kyuubiConf.get(SESSION_CLUSTER) == Option("test"))
   }
 }

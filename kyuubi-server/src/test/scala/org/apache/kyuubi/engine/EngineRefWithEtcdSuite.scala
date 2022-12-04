@@ -25,9 +25,7 @@ import io.etcd.jetcd.launcher.EtcdCluster
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.ha.HighAvailabilityConf.HA_CLIENT_CLASS
 import org.apache.kyuubi.ha.client.etcd.EtcdDiscoveryClient
-import org.apache.kyuubi.tags.K8sTest
 
-@K8sTest
 class EngineRefWithEtcdSuite extends EngineRefTests {
 
   private var etcdCluster: EtcdCluster = _

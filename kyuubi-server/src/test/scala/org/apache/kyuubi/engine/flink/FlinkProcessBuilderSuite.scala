@@ -27,9 +27,7 @@ import org.apache.kyuubi.KyuubiFunSuite
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf.{ENGINE_FLINK_EXTRA_CLASSPATH, ENGINE_FLINK_JAVA_OPTIONS, ENGINE_FLINK_MEMORY}
 import org.apache.kyuubi.engine.flink.FlinkProcessBuilder._
-import org.apache.kyuubi.tags.FlinkTest
 
-@FlinkTest
 class FlinkProcessBuilderSuite extends KyuubiFunSuite {
   private def conf = KyuubiConf().set("kyuubi.on", "off")
     .set(ENGINE_FLINK_MEMORY, "512m")

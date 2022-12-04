@@ -211,7 +211,7 @@ class KyuubiOperationPerConnectionSuite extends WithKyuubiServer with HiveJDBCTe
       "spark.master" -> "invalid")) {
       val prop = new Properties()
       prop.setProperty(KyuubiConnection.BEELINE_MODE_PROPERTY, "true")
-      val kyuubiConnection = new KyuubiConnection(jdbcUrlWithConf, prop, null)
+      val kyuubiConnection = new KyuubiConnection(jdbcUrlWithConf(jdbcUrl), prop)
       intercept[SQLException](kyuubiConnection.waitLaunchEngineToComplete())
       assert(kyuubiConnection.isClosed)
     }
@@ -230,9 +230,9 @@ class KyuubiOperationPerConnectionSuite extends WithKyuubiServer with HiveJDBCTe
         }
         val engineId = sessionManager.allSessions().head.handle.identifier.toString
         // kill the engine application and wait the engine terminate
-        sessionManager.applicationManager.killApplication(None, engineId, None)
+        sessionManager.applicationManager.killApplication(None, engineId)
         eventually(timeout(30.seconds), interval(100.milliseconds)) {
-          assert(sessionManager.applicationManager.getApplicationInfo(None, engineId, None)
+          assert(sessionManager.applicationManager.getApplicationInfo(None, engineId)
             .exists(_.state == ApplicationState.NOT_FOUND))
         }
         assert(!conn.isValid(3000))

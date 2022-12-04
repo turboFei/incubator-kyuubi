@@ -107,7 +107,7 @@ class HadoopCredentialsManagerSuite extends KyuubiFunSuite {
     val kyuubiConf = new KyuubiConf(false)
       .set(KyuubiConf.CREDENTIALS_RENEWAL_INTERVAL, 1000L)
     withStartedManager(kyuubiConf) { manager =>
-      val userRef = manager.getOrCreateUserCredentialsRef(appUser, waitUntilCredentialsReady = true)
+      val userRef = manager.getOrCreateUserCredentialsRef(appUser, true)
       assert(userRef.getEpoch == 0)
 
       eventually(timeout(1100.milliseconds), interval(100.milliseconds)) {
@@ -121,9 +121,7 @@ class HadoopCredentialsManagerSuite extends KyuubiFunSuite {
       .set(KyuubiConf.CREDENTIALS_RENEWAL_INTERVAL, 1000L)
     withStartedManager(kyuubiConf) { manager =>
       UnstableDelegationTokenProvider.throwException = true
-      assertThrows[KyuubiException](manager.getOrCreateUserCredentialsRef(
-        appUser,
-        waitUntilCredentialsReady = true))
+      assertThrows[KyuubiException](manager.getOrCreateUserCredentialsRef(appUser, true))
     }
   }
 
@@ -163,7 +161,7 @@ class HadoopCredentialsManagerSuite extends KyuubiFunSuite {
 
       // Last access time is updated
       Thread.sleep(1000L)
-      manager.sendCredentialsIfNeeded(sessionId, appUser, appCluster = None, send)
+      manager.sendCredentialsIfNeeded(sessionId, appUser, send)
       assert(lastAccessTime < userRef.getLastAccessTime)
 
       // Credentials are expired
@@ -195,7 +193,7 @@ class HadoopCredentialsManagerSuite extends KyuubiFunSuite {
         assert(userRef.getEpoch == 0)
       }
 
-      manager.sendCredentialsIfNeeded(sessionId, appUser, appCluster = None, send)
+      manager.sendCredentialsIfNeeded(sessionId, appUser, send)
 
       val sessionEpoch = manager.getSessionCredentialsEpoch(sessionId)
       assert(sessionEpoch == userRef.getEpoch)
@@ -214,7 +212,6 @@ class HadoopCredentialsManagerSuite extends KyuubiFunSuite {
       manager.sendCredentialsIfNeeded(
         sessionId,
         appUser,
-        appCluster = None,
         _ => {
           called = true
           throw new IOException

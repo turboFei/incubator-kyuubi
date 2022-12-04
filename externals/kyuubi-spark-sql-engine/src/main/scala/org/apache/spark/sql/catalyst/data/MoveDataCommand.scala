@@ -24,7 +24,7 @@ import org.apache.spark.sql.execution.command.RunnableCommand
 import org.apache.spark.sql.types.{MetadataBuilder, StringType}
 
 import org.apache.kyuubi.KyuubiSQLException
-import org.apache.kyuubi.config.KyuubiReservedKeys
+import org.apache.kyuubi.config.{KyuubiEbayConf, KyuubiReservedKeys}
 import org.apache.kyuubi.engine.spark.session.SparkSessionImpl
 
 /**
@@ -52,7 +52,7 @@ case class MoveDataCommand(
 
     // Check source file
     val sessionId =
-      sparkSession.sparkContext.getLocalProperty(KyuubiReservedKeys.KYUUBI_SESSION_ID_KEY)
+      sparkSession.sparkContext.getLocalProperty(KyuubiEbayConf.KYUUBI_SESSION_ID_KEY)
     val sessionUser =
       sparkSession.sparkContext.getLocalProperty(KyuubiReservedKeys.KYUUBI_SESSION_USER_KEY)
     val sessionScratch = SparkSessionImpl.getSessionScratchDir(sparkSession, sessionUser, sessionId)

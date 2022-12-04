@@ -447,4 +447,6 @@ object KyuubiEbayConf extends Logging {
   def getTagConfOnly(conf: KyuubiConf, tag: String): Map[String, String] = {
     conf.getAllWithPrefix(s"___${tag}___", "")
   }
+
+  final val KYUUBI_SESSION_ID_KEY = "kyuubi.session.id"
 }

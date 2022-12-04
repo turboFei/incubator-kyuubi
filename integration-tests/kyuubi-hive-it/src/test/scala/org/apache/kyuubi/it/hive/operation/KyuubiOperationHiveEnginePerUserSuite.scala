@@ -22,9 +22,7 @@ import org.apache.hive.service.rpc.thrift.{TGetInfoReq, TGetInfoType}
 import org.apache.kyuubi.{HiveEngineTests, Utils, WithKyuubiServer}
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf._
-import org.apache.kyuubi.tags.HiveTest
 
-@HiveTest
 class KyuubiOperationHiveEnginePerUserSuite extends WithKyuubiServer with HiveEngineTests {
 
   val kyuubiHome: String = Utils.getCodeSourceLocation(getClass).split("integration-tests").head

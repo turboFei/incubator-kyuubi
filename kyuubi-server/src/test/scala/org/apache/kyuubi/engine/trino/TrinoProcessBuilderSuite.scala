@@ -21,9 +21,7 @@ import org.apache.kyuubi.KyuubiFunSuite
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf._
 import org.apache.kyuubi.config.KyuubiReservedKeys.KYUUBI_SESSION_USER_KEY
-import org.apache.kyuubi.tags.TrinoTest
 
-@TrinoTest
 class TrinoProcessBuilderSuite extends KyuubiFunSuite {
 
   test("trino process builder") {
