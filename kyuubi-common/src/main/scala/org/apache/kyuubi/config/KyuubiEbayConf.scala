@@ -305,10 +305,10 @@ object KyuubiEbayConf extends Logging {
       .booleanConf
       .createWithDefault(true)
 
-  val OPERATION_TEMP_TABLE_COLLECT_SORT_LIMIT_SIZE: ConfigEntry[Long] =
+  val OPERATION_TEMP_TABLE_COLLECT_SORT_LIMIT_SIZE: ConfigEntry[Int] =
     buildConf("kyuubi.operation.temp.table.collect.sortLimitSize")
       .internal
-      .longConf
+      .intConf
       .createWithDefault(5000000)
 
   val SESSION_PROGRESS_PLAN_ENABLE: ConfigEntry[Boolean] =

@@ -19,7 +19,9 @@ package org.apache.spark.sql.kyuubi.operation
 
 import org.apache.spark.sql.catalyst.parser.SqlBaseParser
 import org.apache.spark.sql.catalyst.parser.SqlBaseParser.{StatementContext, StatementDefaultContext}
-import org.apache.spark.sql.execution.SparkSqlParser
+import org.apache.spark.sql.execution.{CollectLimitExec, SortExec, SparkPlan, SparkSqlParser, TakeOrderedAndProjectExec}
+import org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanExec
+import org.apache.spark.sql.execution.columnar.InMemoryTableScanExec
 
 import org.apache.kyuubi.Logging
 
@@ -51,5 +53,31 @@ object ExecuteStatementHelper extends Logging {
         debug(s"error checking whether query $statement is DQL: ${e.getMessage}")
         false
     }
+  }
+
+  /**
+   * Sortable for select query, noly
+   */
+  def sortable(sparkPlan: SparkPlan): Boolean = sparkPlan match {
+    case CollectLimitExec(_, child) => sortable(child)
+    case InMemoryTableScanExec(_, _, relation) => relation.outputOrdering.nonEmpty
+    case AdaptiveSparkPlanExec(CollectLimitExec(_, child), _, _, _) => sortable(child)
+    case AdaptiveSparkPlanExec(InMemoryTableScanExec(_, _, relation), _, _, _) =>
+      relation.outputOrdering.nonEmpty
+    case plan => DownloadDataHelper.sortableForWriteData(plan)
+  }
+
+  def existingLimit(sparkPlan: SparkPlan): Option[Int] = sparkPlan match {
+    case TakeOrderedAndProjectExec(limit, _, _, _) => Option(limit)
+    case CollectLimitExec(limit, _: SortExec) => Option(limit)
+    case AdaptiveSparkPlanExec(TakeOrderedAndProjectExec(limit, _, _, _), _, _, _) => Option(limit)
+    case AdaptiveSparkPlanExec(CollectLimitExec(limit, _: SortExec), _, _, _) => Option(limit)
+    case _ => None
+  }
+
+  def isTopKSort(sparkPlan: SparkPlan): Boolean = sparkPlan match {
+    case _: TakeOrderedAndProjectExec => true
+    case AdaptiveSparkPlanExec(_: TakeOrderedAndProjectExec, _, _, _) => true
+    case _ => false
   }
 }

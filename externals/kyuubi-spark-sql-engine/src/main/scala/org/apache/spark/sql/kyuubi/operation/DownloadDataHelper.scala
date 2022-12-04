@@ -21,7 +21,7 @@ import java.util.{Map => JMap}
 
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.sql.{Column, DataFrame, SaveMode, SparkSession}
-import org.apache.spark.sql.execution.{CollectLimitExec, LimitExec, ProjectExec, SortExec, TakeOrderedAndProjectExec}
+import org.apache.spark.sql.execution.{CollectLimitExec, LimitExec, ProjectExec, SortExec, SparkPlan, TakeOrderedAndProjectExec}
 import org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanExec
 import org.apache.spark.sql.execution.exchange.ShuffleExchangeExec
 import org.apache.spark.sql.types.{ArrayType, BinaryType, BooleanType, ByteType, CalendarIntervalType, DoubleType, FloatType, IntegerType, LongType, MapType, NullType, ShortType, StringType, StructType}
@@ -122,7 +122,7 @@ object DownloadDataHelper extends Logging {
     }
 
     val schemaStr = result.schema.map(_.name).mkString(writeOptions("delimiter"))
-    val isSortable = KyuubiOperationHelper.sortable(result.queryExecution.sparkPlan)
+    val isSortable = sortableForWriteData(result.queryExecution.sparkPlan)
     // Background: according to the official Hadoop FileSystem API spec,
     // rename op's destination path must have a parent that exists,
     // otherwise we may get unexpected result on the rename API.
@@ -236,5 +236,18 @@ object DownloadDataHelper extends Logging {
     } else {
       (result, schemaStr, step1Path)
     }
+  }
+
+  /**
+   * Refer carmel org.apache.spark.sql.hive.thriftserver.SparkDownloadDataOperation
+   */
+  private[kyuubi] def sortableForWriteData(sparkPlan: SparkPlan): Boolean = sparkPlan match {
+    case _: SortExec => true
+    case _: TakeOrderedAndProjectExec => true
+    case ProjectExec(_, _: SortExec) => true
+    case AdaptiveSparkPlanExec(_: SortExec, _, _, _) => true
+    case AdaptiveSparkPlanExec(_: TakeOrderedAndProjectExec, _, _, _) => true
+    case AdaptiveSparkPlanExec(ProjectExec(_, _: SortExec), _, _, _) => true
+    case _ => false
   }
 }

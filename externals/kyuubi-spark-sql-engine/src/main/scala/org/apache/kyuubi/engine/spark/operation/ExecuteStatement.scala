@@ -34,7 +34,7 @@ import org.apache.spark.sql.execution.datasources.v2.{AppendDataExecV1, Overwrit
 import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.kyuubi.SparkDatasetHelper
-import org.apache.spark.sql.kyuubi.operation.{ExecuteStatementHelper, KyuubiOperationHelper}
+import org.apache.spark.sql.kyuubi.operation.ExecuteStatementHelper
 import org.apache.spark.sql.types._
 
 import org.apache.kyuubi.{KyuubiSQLException, Logging, Utils}
@@ -171,7 +171,7 @@ class ExecuteStatement(
     }
   private val tempTableCollectSortLimitSize =
     spark.conf.getOption(OPERATION_TEMP_TABLE_COLLECT_SORT_LIMIT_SIZE.key) match {
-      case Some(s) => s.toLong
+      case Some(s) => s.toInt
       case _ => session.sessionManager.getConf.get(OPERATION_TEMP_TABLE_COLLECT_SORT_LIMIT_SIZE)
     }
   private val validIdentifier = statementId.replaceAll("-", "_")
@@ -183,8 +183,12 @@ class ExecuteStatement(
   private var tempTablePath: Path = _
   private var tempCoalescePath: Path = _
   private val filesMiniPartNum = spark.sessionState.conf.getConf(SQLConf.FILES_MIN_PARTITION_NUM)
+  private val topKThreshold = spark.sessionState.conf.getConf(SQLConf.TOP_K_SORT_FALLBACK_THRESHOLD)
   private def setFilesMiniPartitionNum(minPartitionNum: Option[Int]): Unit = {
     spark.sessionState.conf.setConf(SQLConf.FILES_MIN_PARTITION_NUM, minPartitionNum)
+  }
+  private def setTopKThreshold(topKThreshold: Int): Unit = {
+    spark.sessionState.conf.setConf(SQLConf.TOP_K_SORT_FALLBACK_THRESHOLD, topKThreshold)
   }
   private def withStatement[T](statement: String)(f: => T): T = {
     spark.sparkContext.setJobDescription(redact(
@@ -212,8 +216,43 @@ class ExecuteStatement(
         Seq(tempTablePath, tempCoalescePath).filterNot(_ == null).foreach { path =>
           Option(fileSystem).foreach(_.delete(path, true))
         }
+        setTopKThreshold(topKThreshold)
         setFilesMiniPartitionNum(filesMiniPartNum)
       }
+    }
+  }
+  private def saveSortableQueryResult(): Unit = {
+    var savedIntoTempTable = false
+
+    if (tempTableCollectSortLimitEnabled) {
+      try {
+        val rowCount = ExecuteStatementHelper.existingLimit(result.queryExecution.sparkPlan)
+          .map(_.toLong)
+          .filter(_ < tempTableCollectMinFileSize)
+          .getOrElse(result.count())
+        if (rowCount < tempTableCollectSortLimitSize) {
+          if (topKThreshold < tempTableCollectSortLimitSize) {
+            setTopKThreshold(tempTableCollectSortLimitSize)
+          }
+          val topKStatement = s"SELECT * FROM($statement) LIMIT $rowCount"
+          val sparkPlan = spark.sql(topKStatement).queryExecution.sparkPlan
+          if (ExecuteStatementHelper.isTopKSort(sparkPlan)) {
+            // topKSort(TakeOrderedAndProjectExec) can save the result into single file with order
+            require(
+              saveIntoTempTableAndReturnSorted(topKStatement),
+              "The saved result is not sorted")
+            savedIntoTempTable = true
+          }
+        } else {
+          info(s"The row count $rowCount exceeds the sort limit $tempTableCollectSortLimitSize")
+        }
+      } catch {
+        case e: Throwable => error(s"Error saving the sort query into temp table", e)
+      }
+    }
+
+    if (!savedIntoTempTable) {
+      cacheIntoTempView(statement)
     }
   }
   private def cacheIntoTempView(statement: String): Unit = {
@@ -226,37 +265,16 @@ class ExecuteStatement(
       withStatement(createViewDDL)(spark.sql(createViewDDL))
       withStatement(cacheViewDDL)(spark.sql(cacheViewDDL))
       val readViewStatement = s"SELECT * FROM $tempViewName"
-      if (tempTableCollectSortLimitEnabled) {
-        val resultSize = spark.sql(readViewStatement).count()
-        if (resultSize <= tempTableCollectSortLimitSize) {
-          // with limit, we can save the results into single output file
-          val limitStatement = s"SELECT * FROM($readViewStatement) LIMIT $resultSize"
-          try {
-            saveIntoTempTable(limitStatement)
-            // release the cache table in time
-            Utils.tryLogNonFatalError {
-              dropTableIfExists(tempViewName)
-              tempViewName = null
-            }
-          } catch {
-            case e: Throwable =>
-              error(s"Error saving $limitStatement into temp table", e)
-              result = spark.sql(readViewStatement)
-          }
-        } else {
-          result = spark.sql(readViewStatement)
-        }
-      } else {
-        result = spark.sql(readViewStatement)
-      }
+      result = withStatement(readViewStatement)(spark.sql(readViewStatement))
     } catch {
       case e: Throwable => error(s"Error creating view with $createViewDDL", e)
     }
   }
-  private def saveIntoTempTable(statement: String): Unit = {
+  private def saveIntoTempTableAndReturnSorted(statement: String): Boolean = {
     info(s"Using temp table collect for $statement with min file size $tempTableCollectMinFileSize")
     tempTableEnabled = true
     tempTableName = s"$tempTableDb.kyuubi_temp_$validIdentifier"
+    var resultSorted: Boolean = false
     val partitionCol = s"kyuubi_$validIdentifier"
     val validColsSchema = StructType(result.schema.zipWithIndex.map { case (dt, index) =>
       val colType = dt.dataType match {
@@ -289,8 +307,12 @@ class ExecuteStatement(
            |($statement)
            |""".stripMargin
       withStatement(tempTableDDL)(spark.sql(tempTableDDL))
-      withStatement(insertTempTable)(spark.sql(insertTempTable))
-
+      val insertIntoDf = withStatement(insertTempTable)(spark.sql(insertTempTable))
+      insertIntoDf.queryExecution.sparkPlan match {
+        case DataWritingCommandExec(_, child) =>
+          resultSorted = ExecuteStatementHelper.isTopKSort(child)
+        case _ =>
+      }
       val contentSummary = fileSystem.getContentSummary(tempTablePath)
       val dataSize = contentSummary.getLength
       val fileCount = contentSummary.getFileCount
@@ -322,10 +344,9 @@ class ExecuteStatement(
       }
     } catch {
       case e: Throwable =>
-        error(
-          s"Error creating temp table $tempTableName to save the result of $statement",
-          e)
+        error(s"Error creating temp table $tempTableName to save the result of $statement", e)
     }
+    resultSorted
   }
 
   private def executeStatement(): Unit = withLocalProperties {
@@ -338,10 +359,10 @@ class ExecuteStatement(
       schema = result.schema
       // only save to temp table for incremental collect mode
       if (tempTableCollect && incrementalCollect && ExecuteStatementHelper.isDQL(statement)) {
-        if (KyuubiOperationHelper.sortable(result.queryExecution.sparkPlan)) {
-          cacheIntoTempView(statement)
+        if (ExecuteStatementHelper.sortable(result.queryExecution.sparkPlan)) {
+          saveSortableQueryResult()
         } else {
-          saveIntoTempTable(statement)
+          saveIntoTempTableAndReturnSorted(statement)
         }
       }
       withMetrics(result.queryExecution)
