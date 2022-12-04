@@ -79,8 +79,9 @@
         <module>kyuubi-rest-client</module>
         <module>kyuubi-server</module>
         <module>kyuubi-zookeeper</module>
-        <module>kyuubi-data</module>
-        <module>kyuubi-ebay</module>
+        <module>ebay/kyuubi-data</module>
+        <module>ebay/kyuubi-ebay</module>
+        <module>ebay/kyuubi-hive-jdbc-standalone</module>
     </modules>
 
     <scm>

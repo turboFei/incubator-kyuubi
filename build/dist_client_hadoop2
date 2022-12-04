@@ -31,7 +31,7 @@ function usage {
   echo ""
   echo "Usage:"
   echo "+------------------------------------------------------------------------------------------------------+"
-  echo "| ./build/dist_client_hadoop2  --replace  --working-home  --hadoop2-version  --deploy                   |"
+  echo "| ./build/dist_client_hadoop2 --replace --working-home --hadoop2-version --deploy                      |"
   echo "+------------------------------------------------------------------------------------------------------+"
   echo "replace:         -  replace the project without copy, otherwise, will copy it to working dir"
   echo "working-home:    -  the working kyuubi home"
@@ -105,6 +105,7 @@ function replace_hadoop_dep() {
   sed -i -r 's/<artifactId>kyuubi-hive-jdbc<\/artifactId>/<artifactId>kyuubi-hive-jdbc_hadoop2<\/artifactId>/g' $POM
   sed -i -r 's/<artifactId>kyuubi-hive-jdbc-shaded<\/artifactId>/<artifactId>kyuubi-hive-jdbc-shaded_hadoop2<\/artifactId>/g' $POM
   sed -i -r 's/<artifactId>kyuubi-rest-client<\/artifactId>/<artifactId>kyuubi-rest-client_hadoop2<\/artifactId>/g' $POM
+  sed -i -r 's/<artifactId>kyuubi-hive-jdbc-standalone<\/artifactId>/<artifactId>kyuubi-hive-jdbc-standalone_hadoop2<\/artifactId>/g' $POM
 }
 
 replace_hadoop_dep $WORKING_KYUUBI_HOME/pom.xml
@@ -130,7 +131,7 @@ cd $WORKING_KYUUBI_HOME
 if [[ "$DEPLOY" == "false" ]];then
   ./build/dist_client --tgz --name hadoop2
 else
-  ./build/mvn clean deploy -pl kyuubi-hive-jdbc,kyuubi-hive-jdbc-shaded,kyuubi-rest-client  -DskipTests \
+  ./build/mvn clean deploy -pl kyuubi-hive-jdbc,kyuubi-hive-jdbc-shaded,kyuubi-rest-client,ebay/kyuubi-hive-jdbc-standalone  -DskipTests \
       -DdistMgmtReleaseUrl=http://ebaycentral.qa.ebay.com/content/repositories/releases \
       -DdistMgmtSnapshotsUrl=http://ebaycentral.qa.ebay.com/content/repositories/snapshots
 fi

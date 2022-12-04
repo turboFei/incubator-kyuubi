@@ -212,7 +212,7 @@ if [[ "$HIVE_PROVIDED" == "true" ]]; then
   MVN_DIST_OPT="$MVN_DIST_OPT -Phive-provided"
 fi
 
-MVN_DIST_OPT="$MVN_DIST_OPT -pl kyuubi-common,kyuubi-zookeeper,kyuubi-ha,kyuubi-rest-client,kyuubi-ctl,kyuubi-hive-jdbc,kyuubi-hive-beeline,kyuubi-data"
+MVN_DIST_OPT="$MVN_DIST_OPT -pl kyuubi-common,kyuubi-zookeeper,kyuubi-ha,kyuubi-rest-client,kyuubi-ctl,kyuubi-hive-jdbc,kyuubi-hive-beeline,ebay/kyuubi-data"
 
 export MAVEN_OPTS="${MAVEN_OPTS:--Xmx2g}"
 
@@ -250,7 +250,7 @@ echo "Build flags: $@" >> "$DISTDIR/RELEASE"
 cp "$KYUUBI_HOME"/kyuubi-hive-beeline/target/*.jar "$DISTDIR/beeline-jars/"
 
 # Copy kyuubi data jars
-cp "$KYUUBI_HOME"/kyuubi-data/target/*.jar "$DISTDIR/data-jars/"
+cp "$KYUUBI_HOME"/ebay/kyuubi-data/target/*.jar "$DISTDIR/data-jars/"
 
 # Copy kyuubi ctl jars
 cp "$KYUUBI_HOME"/kyuubi-ctl/target/scala-${SCALA_VERSION}/jars/*.jar "$DISTDIR/jars/"

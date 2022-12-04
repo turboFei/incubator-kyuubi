@@ -37,8 +37,8 @@ fi
 if [[ -z "$KYUUBI_DATA_JARS" ]]; then
   KYUUBI_DATA_JARS="$KYUUBI_HOME/data-jars"
   if [[ ! -d ${KYUUBI_DATA_JARS} ]]; then
-    echo -e "\nCandidate Kyuubi data jars $KYUUBI_DATA_JARS doesn't exist, using $KYUUBI_HOME/kyuubi-data/target/"
-    KYUUBI_DATA_JARS="$KYUUBI_HOME/kyuubi-data-api/target"
+    echo -e "\nCandidate Kyuubi data jars $KYUUBI_DATA_JARS doesn't exist, using $KYUUBI_HOME/ebay/kyuubi-data/target/"
+    KYUUBI_DATA_JARS="$KYUUBI_HOME/ebay/kyuubi-data/target"
   fi
 fi
 
