@@ -238,9 +238,7 @@ class ExecuteStatement(
           val sparkPlan = spark.sql(topKStatement).queryExecution.sparkPlan
           if (ExecuteStatementHelper.isTopKSort(sparkPlan)) {
             // topKSort(TakeOrderedAndProjectExec) can save the result into single file with order
-            require(
-              saveIntoTempTableAndReturnSorted(topKStatement),
-              "The saved result is not sorted")
+            saveIntoTempTable(topKStatement)
             savedIntoTempTable = true
           }
         } else {
@@ -270,11 +268,10 @@ class ExecuteStatement(
       case e: Throwable => error(s"Error creating view with $createViewDDL", e)
     }
   }
-  private def saveIntoTempTableAndReturnSorted(statement: String): Boolean = {
+  private def saveIntoTempTable(statement: String): Unit = {
     info(s"Using temp table collect for $statement with min file size $tempTableCollectMinFileSize")
     tempTableEnabled = true
     tempTableName = s"$tempTableDb.kyuubi_temp_$validIdentifier"
-    var resultSorted: Boolean = false
     val partitionCol = s"kyuubi_$validIdentifier"
     val validColsSchema = StructType(result.schema.zipWithIndex.map { case (dt, index) =>
       val colType = dt.dataType match {
@@ -307,12 +304,7 @@ class ExecuteStatement(
            |($statement)
            |""".stripMargin
       withStatement(tempTableDDL)(spark.sql(tempTableDDL))
-      val insertIntoDf = withStatement(insertTempTable)(spark.sql(insertTempTable))
-      insertIntoDf.queryExecution.sparkPlan match {
-        case DataWritingCommandExec(_, child) =>
-          resultSorted = ExecuteStatementHelper.isTopKSort(child)
-        case _ =>
-      }
+      withStatement(insertTempTable)(spark.sql(insertTempTable))
       val contentSummary = fileSystem.getContentSummary(tempTablePath)
       val dataSize = contentSummary.getLength
       val fileCount = contentSummary.getFileCount
@@ -346,7 +338,6 @@ class ExecuteStatement(
       case e: Throwable =>
         error(s"Error creating temp table $tempTableName to save the result of $statement", e)
     }
-    resultSorted
   }
 
   private def executeStatement(): Unit = withLocalProperties {
@@ -362,7 +353,7 @@ class ExecuteStatement(
         if (ExecuteStatementHelper.sortable(result.queryExecution.sparkPlan)) {
           saveSortableQueryResult()
         } else {
-          saveIntoTempTableAndReturnSorted(statement)
+          saveIntoTempTable(statement)
         }
       }
       withMetrics(result.queryExecution)
