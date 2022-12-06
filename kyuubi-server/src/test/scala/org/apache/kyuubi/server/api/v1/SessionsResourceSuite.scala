@@ -145,7 +145,7 @@ class SessionsResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper {
 
     val requestObj = new SessionOpenRequest(
       1,
-      "admin",
+      "anonymous",
       "123456",
       "localhost",
       Map("testConfig" -> "testValue", KyuubiConf.SERVER_INFO_PROVIDER.key -> "SERVER").asJava)

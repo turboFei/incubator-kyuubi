@@ -21,7 +21,7 @@ import java.util.EnumSet
 import java.util.concurrent.{Future, TimeUnit}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import javax.servlet.DispatcherType
-import javax.ws.rs.WebApplicationException
+import javax.ws.rs.{NotAllowedException, WebApplicationException}
 import javax.ws.rs.core.Response.Status
 
 import com.google.common.annotations.VisibleForTesting
@@ -36,7 +36,7 @@ import org.apache.kyuubi.server.http.authentication.{AuthenticationFilter, Kyuub
 import org.apache.kyuubi.server.ui.JettyServer
 import org.apache.kyuubi.service.{AbstractFrontendService, Serverable, Service, ServiceUtils}
 import org.apache.kyuubi.service.authentication.KyuubiAuthenticationFactory
-import org.apache.kyuubi.session.{KyuubiSessionManager, SessionHandle}
+import org.apache.kyuubi.session.{KyuubiSession, KyuubiSessionManager, SessionHandle}
 import org.apache.kyuubi.util.ThreadUtils
 
 /**
@@ -183,6 +183,34 @@ class KyuubiRestFrontendService(override val serverable: Serverable)
     super.stop()
   }
 
+  def checkSessionPermission(userName: String, session: KyuubiSession): Unit = {
+    if (userName != session.user && userName != session.realUser) {
+      try {
+        try {
+          KyuubiAuthenticationFactory.verifyProxyAccess(
+            userName,
+            session.user,
+            AuthenticationFilter.getUserIpAddress,
+            hadoopConf(session.normalizedConf))
+        } catch {
+          case e: Throwable =>
+            try {
+              KyuubiAuthenticationFactory.verifyBatchAccountAccess(
+                userName,
+                session.user,
+                conf)
+            } catch {
+              case be: Throwable =>
+                error("Error fallback to verify batch account access", be)
+                throw e
+            }
+        }
+      } catch {
+        case e: Throwable => throw new NotAllowedException(e.getMessage)
+      }
+    }
+  }
+
   def getRealUser(): String = {
     ServiceUtils.getShortName(
       Option(AuthenticationFilter.getUserName).filter(_.nonEmpty).getOrElse("anonymous"))
@@ -194,7 +222,7 @@ class KyuubiRestFrontendService(override val serverable: Serverable)
     getSessionUser(sessionConf)
   }
 
-  def getSessionUser(sessionConf: Map[String, String]): String = {
+  def getSessionUser(sessionConf: Map[String, String] = Map.empty): String = {
     // using the remote ip address instead of that in proxy http header for authentication
     val ipAddress = AuthenticationFilter.getUserIpAddress
     val realUser: String = getRealUser()
