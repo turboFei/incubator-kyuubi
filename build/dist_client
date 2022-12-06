@@ -255,6 +255,7 @@ cp "$KYUUBI_HOME"/ebay/kyuubi-data/target/*.jar "$DISTDIR/data-jars/"
 # Copy kyuubi ctl jars
 cp "$KYUUBI_HOME"/kyuubi-ctl/target/scala-${SCALA_VERSION}/jars/*.jar "$DISTDIR/jars/"
 cp "$KYUUBI_HOME"/kyuubi-ctl/target/kyuubi-ctl_${SCALA_VERSION}-${VERSION}.jar "$DISTDIR/jars/"
+cp "$KYUUBI_HOME"/kyuubi-ha/target/scala-${SCALA_VERSION}/jars/*.jar "$DISTDIR/jars/"
 
 cp -r "$KYUUBI_HOME/bin" "$DISTDIR"
 cp -r "$KYUUBI_HOME/conf" "$DISTDIR"
@@ -265,6 +266,14 @@ for jar in $(ls "$DISTDIR/jars/"); do
   if [[ -f "$DISTDIR/beeline-jars/$jar" ]]; then
     (cd $DISTDIR/beeline-jars; ln -snf "../jars/$jar" "$DISTDIR/beeline-jars/$jar")
   fi
+done
+
+# copy hadoop jars to jars
+for jar in $(ls "$DISTDIR/beeline-jars/|grep hadoop-"); do
+    if [[ ! -f "$DISTDIR/jars/$jar" ]]; then
+      mv "$DISTDIR/beeline-jars/$jar" "$DISTDIR/jars/$jar"
+      (cd $DISTDIR/beeline-jars; ln -snf "../jars/$jar" "$DISTDIR/beeline-jars/$jar")
+    fi
 done
 
 # Make soft link for data jars to reduce binary size

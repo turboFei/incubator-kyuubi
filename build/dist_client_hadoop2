@@ -129,9 +129,10 @@ rm -rf $WORKING_KYUUBI_HOME/kyuubi-common/src/test/scala/org/apache/kyuubi/util/
 cd $WORKING_KYUUBI_HOME
 
 if [[ "$DEPLOY" == "false" ]];then
-  ./build/dist_client --tgz --name hadoop2
+  ./build/dist_client --tgz --name hadoop2 -Dmaven.scalastyle.skip=true -Dmaven.scaladoc.skip=true -Dspotless.check.skip=true $@
 else
   ./build/mvn clean deploy -pl kyuubi-hive-jdbc,kyuubi-hive-jdbc-shaded,kyuubi-rest-client,ebay/kyuubi-hive-jdbc-standalone  -DskipTests \
       -DdistMgmtReleaseUrl=http://ebaycentral.qa.ebay.com/content/repositories/releases \
-      -DdistMgmtSnapshotsUrl=http://ebaycentral.qa.ebay.com/content/repositories/snapshots
+      -DdistMgmtSnapshotsUrl=http://ebaycentral.qa.ebay.com/content/repositories/snapshots \
+      -DdistMgmtReleaseId=raptor.releases -DdistMgmtSnapshotsId=raptor.snapshots
 fi
