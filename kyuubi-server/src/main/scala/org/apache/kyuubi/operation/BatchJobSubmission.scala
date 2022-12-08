@@ -96,10 +96,11 @@ class BatchJobSubmission(
   }
 
   override private[kyuubi] def currentApplicationInfo: Option[ApplicationInfo] = {
+    // only the ApplicationInfo with non-empty id is valid for the operation
     applicationManager.getApplicationInfo(
       builder.clusterManager(),
       batchId,
-      session.sessionCluster)
+      session.sessionCluster).filter(_.id != null)
   }
 
   private[kyuubi] def killBatchApplication(): KillResponse = {
@@ -116,6 +117,13 @@ class BatchJobSubmission(
       } else {
         0L
       }
+
+    if (isTerminalState(state)) {
+      if (applicationInfo.isEmpty) {
+        applicationInfo =
+          Option(ApplicationInfo(id = null, name = null, state = ApplicationState.NOT_FOUND))
+      }
+    }
 
     applicationInfo.foreach { status =>
       val metadataToUpdate = Metadata(

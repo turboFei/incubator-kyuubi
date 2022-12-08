@@ -28,7 +28,8 @@ import org.apache.hive.service.rpc.thrift.TProtocolVersion
 import org.scalatest.time.SpanSugar.convertIntToGrainOfTime
 
 import org.apache.kyuubi.{BatchTestHelper, RestClientTestHelper, Utils}
-import org.apache.kyuubi.ctl.TestPrematureExit
+import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.ctl.{CtlConf, TestPrematureExit}
 import org.apache.kyuubi.ctl.cmd.create.CreateBatchCommand
 import org.apache.kyuubi.metrics.{MetricsConstants, MetricsSystem}
 import org.apache.kyuubi.session.KyuubiSessionManager
@@ -39,6 +40,10 @@ class BatchCliSuite extends RestClientTestHelper with TestPrematureExit with Bat
   val batchFile: String = s"${basePath}/batch.yaml"
   val batchEtlSqlFile = s"${basePath}/batch.sql"
   val batchEtlFile = s"${basePath}/batch_etl.yaml"
+
+  override protected val otherConfigs: Map[String, String] = {
+    Map(KyuubiConf.BATCH_APPLICATION_CHECK_INTERVAL.key -> "100")
+  }
 
   override def beforeAll(): Unit = {
     super.beforeAll()
@@ -263,12 +268,12 @@ class BatchCliSuite extends RestClientTestHelper with TestPrematureExit with Bat
       "--password",
       ldapUserPasswd,
       "--waitCompletion",
-      "false")
+      "false",
+      "--conf",
+      s"${CtlConf.CTL_BATCH_LOG_QUERY_INTERVAL.key}=100")
     val result = testPrematureExitForControlCli(submitArgs, "")
     assert(result.contains(s"/bin/spark-submit"))
     assert(!result.contains("ShutdownHookManager: Shutdown hook called"))
-    val numberOfRows = result.split("\n").length
-    assert(numberOfRows <= 100)
   }
 
   test("list batch test") {
