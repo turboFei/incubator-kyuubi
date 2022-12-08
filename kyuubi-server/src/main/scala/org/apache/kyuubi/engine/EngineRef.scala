@@ -103,7 +103,8 @@ private[kyuubi] class EngineRef(
             DiscoveryPaths.makePath(
               s"${serverSpace}_${KYUUBI_VERSION}_${shareLevel}_$engineType",
               "seq_num",
-              Array(appUser, clientPoolName))
+              appUser,
+              clientPoolName)
           DiscoveryClientProvider.withDiscoveryClient(conf) { client =>
             client.getAndIncrement(snPath)
           }
@@ -143,8 +144,8 @@ private[kyuubi] class EngineRef(
   private[kyuubi] lazy val engineSpace: String = {
     val commonParent = s"${serverSpace}_${KYUUBI_VERSION}_${shareLevel}_$engineType"
     shareLevel match {
-      case CONNECTION => DiscoveryPaths.makePath(commonParent, appUser, Array(engineRefId))
-      case _ => DiscoveryPaths.makePath(commonParent, appUser, Array(subdomain))
+      case CONNECTION => DiscoveryPaths.makePath(commonParent, appUser, engineRefId)
+      case _ => DiscoveryPaths.makePath(commonParent, appUser, subdomain)
     }
   }
 
@@ -160,7 +161,8 @@ private[kyuubi] class EngineRef(
           DiscoveryPaths.makePath(
             s"${serverSpace}_${shareLevel}_$engineType",
             "lock",
-            Array(appUser, subdomain))
+            appUser,
+            subdomain)
         discoveryClient.tryWithLock(
           lockPath,
           timeout + (LOCK_TIMEOUT_SPAN_FACTOR * timeout).toLong)(f)
