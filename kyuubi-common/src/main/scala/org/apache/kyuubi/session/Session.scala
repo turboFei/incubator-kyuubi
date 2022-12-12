@@ -40,6 +40,7 @@ trait Session {
   def lastAccessTime: Long
   def lastIdleTime: Long
   def getNoOperationTime: Long
+  def sessionIdleTimeoutThreshold: Long
 
   def sessionManager: SessionManager
 
