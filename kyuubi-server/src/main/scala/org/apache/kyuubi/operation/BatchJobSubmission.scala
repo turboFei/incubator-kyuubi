@@ -96,11 +96,10 @@ class BatchJobSubmission(
   }
 
   override private[kyuubi] def currentApplicationInfo: Option[ApplicationInfo] = {
-    // only the ApplicationInfo with non-empty id is valid for the operation
     applicationManager.getApplicationInfo(
       builder.clusterManager(),
       batchId,
-      session.sessionCluster).filter(_.id != null)
+      session.sessionCluster)
   }
 
   private[kyuubi] def killBatchApplication(): KillResponse = {
