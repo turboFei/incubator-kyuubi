@@ -59,15 +59,6 @@ class KyuubiBatchSessionImpl(
 
   override def createTime: Long = recoveryMetadata.map(_.createTime).getOrElse(super.createTime)
 
-  override def getNoOperationTime: Long = {
-    if (batchJobSubmissionOp != null && !OperationState.isTerminal(
-        batchJobSubmissionOp.getStatus.state)) {
-      0L
-    } else {
-      super.getNoOperationTime
-    }
-  }
-
   val sessionCluster =
     KyuubiEbayConf.getSessionCluster(sessionManager, batchRequest.getConf.asScala.toMap)
 
