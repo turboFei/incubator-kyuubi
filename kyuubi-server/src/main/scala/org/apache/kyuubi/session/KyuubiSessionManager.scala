@@ -62,6 +62,7 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
   }
 
   private val limiters = new ConcurrentHashMap[Option[String], SessionLimiter]().asScala
+  private val batchLimiters = new ConcurrentHashMap[Option[String], SessionLimiter]().asScala
   // lazy is required for plugins since the conf is null when this class initialization
   lazy val sessionConfAdvisor: SessionConfAdvisor = PluginLoader.loadSessionConfAdvisor(conf)
   lazy val groupProvider: GroupProvider = PluginLoader.loadGroupProvider(conf)
@@ -126,9 +127,16 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
     try {
       super.closeSession(sessionHandle)
     } finally {
-      limiters.get(session.sessionCluster).foreach(_.decrement(UserIpAddress(
-        session.user,
-        session.ipAddress)))
+      session match {
+        case _: KyuubiBatchSessionImpl =>
+          batchLimiters.get(session.sessionCluster).foreach(_.decrement(UserIpAddress(
+            session.user,
+            session.ipAddress)))
+        case _ =>
+          limiters.get(session.sessionCluster).foreach(_.decrement(UserIpAddress(
+            session.user,
+            session.ipAddress)))
+      }
     }
   }
 
@@ -165,6 +173,7 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
   private[kyuubi] def openBatchSession(batchSession: KyuubiBatchSessionImpl): SessionHandle = {
     val user = batchSession.user
     val ipAddress = batchSession.ipAddress
+    limiters.get(batchSession.sessionCluster).foreach(_.increment(UserIpAddress(user, ipAddress)))
     val handle = batchSession.handle
     try {
       batchSession.open()
@@ -306,12 +315,35 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
       val ipAddressLimit = clusterConf.get(SERVER_LIMIT_CONNECTIONS_PER_IPADDRESS).getOrElse(0)
       val userIpAddressLimit =
         clusterConf.get(SERVER_LIMIT_CONNECTIONS_PER_USER_IPADDRESS).getOrElse(0)
-      if (userLimit > 0 || ipAddressLimit > 0 || userIpAddressLimit > 0) {
-        val whitelist = clusterConf.get(KyuubiEbayConf.SERVER_LIMIT_CONNECTIONS_USER_WHITE_LIST)
-        val limiter = SessionLimiter(userLimit, ipAddressLimit, userIpAddressLimit, whitelist)
-        limiters.put(clusterOpt, limiter)
+      val whitelist = clusterConf.get(KyuubiConf.SERVER_LIMIT_CONNECTIONS_USER_WHITE_LIST)
+      applySessionLimiter(userLimit, ipAddressLimit, userIpAddressLimit, whitelist).foreach {
+        limiter =>
+          limiters.put(clusterOpt, limiter)
+      }
+
+      val userBatchLimit = clusterConf.get(SERVER_LIMIT_BATCH_CONNECTIONS_PER_USER).getOrElse(0)
+      val ipAddressBatchLimit = clusterConf.get(SERVER_LIMIT_BATCH_CONNECTIONS_PER_IPADDRESS)
+        .getOrElse(0)
+      val userIpAddressBatchLimit =
+        clusterConf.get(SERVER_LIMIT_BATCH_CONNECTIONS_PER_USER_IPADDRESS).getOrElse(0)
+      applySessionLimiter(
+        userBatchLimit,
+        ipAddressBatchLimit,
+        userIpAddressBatchLimit,
+        whitelist).foreach {
+        batchLimiter =>
+          batchLimiters.put(clusterOpt, batchLimiter)
       }
     }
+  }
+
+  private def applySessionLimiter(
+      userLimit: Int,
+      ipAddressLimit: Int,
+      userIpAddressLimit: Int,
+      userWhitelist: Seq[String]): Option[SessionLimiter] = {
+    Seq(userLimit, ipAddressLimit, userIpAddressLimit).find(_ > 0).map(_ =>
+      SessionLimiter(userLimit, ipAddressLimit, userIpAddressLimit, userWhitelist.toSet))
   }
 
   /**

@@ -320,13 +320,6 @@ object KyuubiEbayConf extends Logging {
       .booleanConf
       .createWithDefault(false)
 
-  val SERVER_LIMIT_CONNECTIONS_USER_WHITE_LIST: ConfigEntry[Seq[String]] =
-    buildConf("kyuubi.server.limit.connections.user.white.list")
-      .internal
-      .stringConf
-      .toSequence()
-      .createWithDefault(Seq("b_carmel"))
-
   val OPERATION_INTERCEPT_ENABLED: ConfigEntry[Boolean] =
     buildConf("kyuubi.operation.intercept.enabled")
       .internal
