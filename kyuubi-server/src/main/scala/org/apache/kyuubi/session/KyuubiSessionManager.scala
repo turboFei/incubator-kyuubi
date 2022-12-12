@@ -315,8 +315,13 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
       val ipAddressLimit = clusterConf.get(SERVER_LIMIT_CONNECTIONS_PER_IPADDRESS).getOrElse(0)
       val userIpAddressLimit =
         clusterConf.get(SERVER_LIMIT_CONNECTIONS_PER_USER_IPADDRESS).getOrElse(0)
-      val whitelist = clusterConf.get(KyuubiConf.SERVER_LIMIT_CONNECTIONS_USER_WHITE_LIST)
-      applySessionLimiter(userLimit, ipAddressLimit, userIpAddressLimit, whitelist).foreach {
+      val userUnlimitedList =
+        clusterConf.get(KyuubiConf.SERVER_LIMIT_CONNECTIONS_USER_UNLIMITED_LIST)
+      applySessionLimiter(
+        userLimit,
+        ipAddressLimit,
+        userIpAddressLimit,
+        userUnlimitedList).foreach {
         limiter =>
           limiters.put(clusterOpt, limiter)
       }
@@ -330,7 +335,7 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
         userBatchLimit,
         ipAddressBatchLimit,
         userIpAddressBatchLimit,
-        whitelist).foreach {
+        userUnlimitedList).foreach {
         batchLimiter =>
           batchLimiters.put(clusterOpt, batchLimiter)
       }
@@ -341,9 +346,9 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
       userLimit: Int,
       ipAddressLimit: Int,
       userIpAddressLimit: Int,
-      userWhitelist: Seq[String]): Option[SessionLimiter] = {
+      userUnlimitedList: Seq[String]): Option[SessionLimiter] = {
     Seq(userLimit, ipAddressLimit, userIpAddressLimit).find(_ > 0).map(_ =>
-      SessionLimiter(userLimit, ipAddressLimit, userIpAddressLimit, userWhitelist.toSet))
+      SessionLimiter(userLimit, ipAddressLimit, userIpAddressLimit, userUnlimitedList.toSet))
   }
 
   /**
