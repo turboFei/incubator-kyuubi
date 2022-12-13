@@ -26,7 +26,7 @@ import scala.math.BigDecimal.RoundingMode
 
 import org.apache.commons.lang3.StringUtils
 import org.apache.hadoop.fs.{Path, PathFilter}
-import org.apache.hive.service.rpc.thrift.TTableSchema
+import org.apache.hive.service.rpc.thrift.TGetResultSetMetadataResp
 import org.apache.spark.kyuubi.SparkUtilsHelper
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.catalog.HiveTableRelation
@@ -201,12 +201,16 @@ class DownloadDataOperation(
       result.schema
     }
 
-  override def getResultSetSchema: TTableSchema = {
+  override def getResultSetMetadata: TGetResultSetMetadataResp = {
     if (writeOptions.get("useRealSchema").nonEmpty
       && writeOptions("useRealSchema").equalsIgnoreCase("true")) {
-      SchemaHelper.toTTableSchema(realSchema, ZoneId.systemDefault().toString)
+      val schema = SchemaHelper.toTTableSchema(realSchema, ZoneId.systemDefault().toString)
+      val resp = new TGetResultSetMetadataResp
+      resp.setSchema(schema)
+      resp.setStatus(OK_STATUS)
+      resp
     } else {
-      super.getResultSetSchema
+      super.getResultSetMetadata
     }
   }
 

@@ -21,7 +21,7 @@ import java.nio.ByteBuffer
 import java.util.{ArrayList => JArrayList, Collections}
 
 import com.google.common.primitives.Ints
-import org.apache.hive.service.rpc.thrift.{TColumn, TColumnDesc, TI32Column, TPrimitiveTypeEntry, TRow, TRowSet, TTableSchema, TTypeDesc, TTypeEntry, TTypeId}
+import org.apache.hive.service.rpc.thrift.{TColumn, TColumnDesc, TGetResultSetMetadataResp, TI32Column, TPrimitiveTypeEntry, TRow, TRowSet, TTableSchema, TTypeDesc, TTypeEntry, TTypeId}
 
 import org.apache.kyuubi.operation.FetchOrientation.FetchOrientation
 import org.apache.kyuubi.session.Session
@@ -44,7 +44,8 @@ class Select1Operation(session: Session) extends InterceptedOperation(session) {
     tRow
   }
 
-  override def getResultSetSchema: TTableSchema = {
+  override def getResultSetMetadata: TGetResultSetMetadataResp = {
+    val resp = new TGetResultSetMetadataResp
     val schema = new TTableSchema()
     val tColumnDesc = new TColumnDesc()
     tColumnDesc.setColumnName("1")
@@ -54,6 +55,8 @@ class Select1Operation(session: Session) extends InterceptedOperation(session) {
     tColumnDesc.setTypeDesc(tTypeDesc)
     tColumnDesc.setPosition(1)
     schema.addToColumns(tColumnDesc)
-    schema
+    resp.setSchema(schema)
+    resp.setStatus(OK_STATUS)
+    resp
   }
 }

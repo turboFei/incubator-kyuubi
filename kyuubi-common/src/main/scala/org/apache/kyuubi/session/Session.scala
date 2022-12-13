@@ -19,7 +19,7 @@ package org.apache.kyuubi.session
 
 import java.nio.ByteBuffer
 
-import org.apache.hive.service.rpc.thrift.{TGetInfoType, TGetInfoValue, TProtocolVersion, TRowSet, TTableSchema}
+import org.apache.hive.service.rpc.thrift.{TGetInfoType, TGetInfoValue, TGetResultSetMetadataResp, TProtocolVersion, TRowSet}
 
 import org.apache.kyuubi.operation.FetchOrientation.FetchOrientation
 import org.apache.kyuubi.operation.OperationHandle
@@ -88,7 +88,7 @@ trait Session {
 
   def cancelOperation(operationHandle: OperationHandle): Unit
   def closeOperation(operationHandle: OperationHandle): Unit
-  def getResultSetMetadata(operationHandle: OperationHandle): TTableSchema
+  def getResultSetMetadata(operationHandle: OperationHandle): TGetResultSetMetadataResp
   def fetchResults(
       operationHandle: OperationHandle,
       orientation: FetchOrientation,
