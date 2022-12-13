@@ -23,6 +23,7 @@ import scala.util.Random
 
 import com.codahale.metrics.MetricRegistry
 import com.google.common.annotations.VisibleForTesting
+import org.apache.hadoop.security.UserGroupInformation
 
 import org.apache.kyuubi.{KYUUBI_VERSION, KyuubiSQLException, Logging, Utils}
 import org.apache.kyuubi.config.KyuubiConf
@@ -51,7 +52,6 @@ import org.apache.kyuubi.operation.log.OperationLog
 private[kyuubi] class EngineRef(
     conf: KyuubiConf,
     user: String,
-    primaryGroup: String,
     engineRefId: String,
     engineManager: KyuubiApplicationManager,
     clusterOpt: Option[String] = None)
@@ -84,7 +84,16 @@ private[kyuubi] class EngineRef(
   // Launcher of the engine
   private[kyuubi] val appUser: String = shareLevel match {
     case SERVER => Utils.currentUser
-    case GROUP => primaryGroup
+    case GROUP =>
+      val clientUGI = UserGroupInformation.createRemoteUser(user)
+      // Similar to `clientUGI.getPrimaryGroupName` (avoid IOE) to get the Primary GroupName of
+      // the client user mapping to
+      clientUGI.getGroupNames.headOption match {
+        case Some(primaryGroup) => primaryGroup
+        case None =>
+          warn(s"There is no primary group for $user, use the client user name as group directly")
+          user
+      }
     case _ => user
   }
 
