@@ -24,6 +24,7 @@ import scala.concurrent.duration.Duration
 
 import org.apache.hadoop.yarn.client.api.YarnClient
 
+import org.apache.kyuubi.config.KyuubiEbayConf
 import org.apache.kyuubi.config.KyuubiEbayConf._
 import org.apache.kyuubi.engine.{ApplicationInfo, ApplicationState}
 import org.apache.kyuubi.operation.log.OperationLog
@@ -81,7 +82,7 @@ class LaunchEngine(session: KyuubiSessionImpl, override val shouldRunAsync: Bool
   }
 
   private def moveEngineYarnQueueIfNeeded(): Unit = {
-    if (session.sessionConf.get(SESSION_ENGINE_LAUNCH_MOVE_QUEUE_ENABLED)) {
+    if (KyuubiEbayConf.moveQueueEnabled(session.sessionConf)) {
       val queueToMove = session.sessionConf.getOption("spark.yarn.queue")
       session.client.engineId.zip(queueToMove).foreach { case (engineId, finalQueue) =>
         val moveQueueTimeout = session.sessionConf.get(SESSION_ENGINE_LAUNCH_MOVE_QUEUE_TIMEOUT)

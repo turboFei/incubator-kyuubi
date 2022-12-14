@@ -80,6 +80,12 @@ object KyuubiEbayConf extends Logging {
       .stringConf
       .createOptional
 
+  val SESSION_TAG: OptionalConfigEntry[String] =
+    buildConf("kyuubi.session.tag")
+      .internal
+      .stringConf
+      .createOptional
+
   val SESSION_ENGINE_LAUNCH_MOVE_QUEUE_ENABLED: ConfigEntry[Boolean] =
     buildConf("kyuubi.session.engine.launch.moveQueue.enabled")
       .doc("When opening kyuubi session, whether to launch engine at first and then move queue." +
@@ -441,5 +447,11 @@ object KyuubiEbayConf extends Logging {
     conf.getAllWithPrefix(s"___${tag}___", "")
   }
 
+  def moveQueueEnabled(conf: KyuubiConf): Boolean = {
+    conf.get(SESSION_TAG) == Some(ZETA_TAG_KEY) && conf.get(
+      SESSION_ENGINE_LAUNCH_MOVE_QUEUE_ENABLED)
+  }
+
   final val KYUUBI_SESSION_ID_KEY = "kyuubi.session.id"
+  final val ZETA_TAG_KEY = "zeta"
 }

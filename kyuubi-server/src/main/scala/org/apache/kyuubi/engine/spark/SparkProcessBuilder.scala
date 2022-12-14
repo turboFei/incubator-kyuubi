@@ -104,7 +104,7 @@ class SparkProcessBuilder(
         setSparkUserName(name, buffer)
     }
 
-    if (conf.get(SESSION_ENGINE_LAUNCH_MOVE_QUEUE_ENABLED)) {
+    if (KyuubiEbayConf.moveQueueEnabled(conf)) {
       // only use init queue if the spark.yarn.queue is specified
       if (allConf.get(YARN_QUEUE).isDefined) {
         conf.get(SESSION_ENGINE_LAUNCH_MOVE_QUEUE_INIT_QUEUE).foreach { initQueue =>

@@ -80,4 +80,15 @@ class KyuubiEbayConfSuite extends KyuubiFunSuite {
     kyuubiConf.set(SESSION_CLUSTER, "test")
     assert(kyuubiConf.get(SESSION_CLUSTER) == Option("test"))
   }
+
+  test("only enable move queue for zeta connection") {
+    val kyuubiConf = KyuubiConf()
+    kyuubiConf.set(KyuubiEbayConf.SESSION_TAG, "zeta")
+    kyuubiConf.set(KyuubiEbayConf.SESSION_ENGINE_LAUNCH_MOVE_QUEUE_ENABLED, true)
+    assert(KyuubiEbayConf.moveQueueEnabled(kyuubiConf))
+    kyuubiConf.set(KyuubiEbayConf.SESSION_TAG, "other")
+    assert(!KyuubiEbayConf.moveQueueEnabled(kyuubiConf))
+    kyuubiConf.unset(KyuubiEbayConf.SESSION_TAG)
+    assert(!KyuubiEbayConf.moveQueueEnabled(kyuubiConf))
+  }
 }

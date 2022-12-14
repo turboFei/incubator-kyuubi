@@ -26,6 +26,7 @@ import scala.collection.JavaConverters._
 import org.apache.kyuubi.{Logging, Utils}
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiConf.KYUUBI_HOME
+import org.apache.kyuubi.config.KyuubiEbayConf.SESSION_TAG
 import org.apache.kyuubi.plugin.SessionConfAdvisor
 import org.apache.kyuubi.util.ThreadUtils
 
@@ -76,7 +77,7 @@ class TagBasedSessionConfAdvisor extends SessionConfAdvisor with Logging {
   override def getConfOverlay(
       user: String,
       sessionConf: JMap[String, String]): JMap[String, String] = {
-    val sessionTag = sessionConf.asScala.get(SESSION_TAG_KEY).getOrElse(KYUUBI_DEFAULT_TAG)
+    val sessionTag = sessionConf.asScala.get(SESSION_TAG.key).getOrElse(KYUUBI_DEFAULT_TAG)
     val tagLevelConfOverlay = KyuubiEbayConf.getTagConfOnly(tagConf, sessionTag)
     val serviceOverwriteConfOverlay = KyuubiEbayConf.getTagConfOnly(tagConf, KYUUBI_OVERWRITE_TAG)
     (tagLevelConfOverlay ++ serviceOverwriteConfOverlay).asJava
@@ -84,11 +85,10 @@ class TagBasedSessionConfAdvisor extends SessionConfAdvisor with Logging {
 }
 
 object TagBasedSessionConfAdvisor {
-  val SESSION_TAG_KEY = "kyuubi.session.tag"
   val SESSION_TAG_CONF_FILE_KEY = "kyuubi.session.tag.conf.file"
   val SESSION_TAG_REFRESH_INTERVAL_KEY = "kyuubi.session.tag.refresh.interval"
   val DEFAULT_SESSION_TAG_CONF_FILE = KyuubiConf.KYUUBI_CONF_FILE_NAME + ".tag"
-  val DEFAULT_SESSION_TAG_REFRESH_INTERVAL = 600 * 1000L
+  val DEFAULT_SESSION_TAG_REFRESH_INTERVAL = 300 * 1000L
 
   // for kyuubi service side conf
   val KYUUBI_DEFAULT_TAG = "kyuubi_default"

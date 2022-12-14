@@ -35,6 +35,7 @@ import org.scalatest.time.SpanSugar.convertIntToGrainOfTime
 
 import org.apache.kyuubi.{Utils, WithKyuubiServer}
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
+import org.apache.kyuubi.ebay.TagBasedSessionConfAdvisor
 import org.apache.kyuubi.jdbc.hive.KyuubiConnection
 import org.apache.kyuubi.jdbc.hive.logs.KyuubiEngineLogListener
 import org.apache.kyuubi.service.authentication.KyuubiAuthenticationFactory
@@ -49,6 +50,7 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper 
       .set(KyuubiEbayConf.SESSION_CLUSTER, "invalid-cluster")
       .set(KyuubiEbayConf.OPERATION_INTERCEPT_ENABLED, true)
       .set(KyuubiEbayConf.SESSION_CLUSTER_LIST, Seq("test"))
+      .set(KyuubiConf.SESSION_CONF_ADVISOR, classOf[TagBasedSessionConfAdvisor].getName)
   }
 
   test("open session with cluster selector") {
@@ -479,6 +481,21 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper 
         val resultUnLimit = statement.executeQuery("select * from va")
         assert(resultUnLimit.next())
         assert(resultUnLimit.next())
+      }
+    }
+  }
+
+  test("[HADP-44876][FOLLOWUP]: support to disable move queue for zeta connection") {
+    Seq("zeta", "non-zeta").foreach { tag =>
+      withSessionConf()(Map.empty)(Map(
+        KyuubiEbayConf.SESSION_CLUSTER.key -> "test",
+        KyuubiEbayConf.SESSION_TAG.key -> tag,
+        KyuubiEbayConf.SESSION_ENGINE_LAUNCH_MOVE_QUEUE_ENABLED.key -> "true")) {
+        withJdbcStatement() { _ =>
+          val session =
+            server.backendService.sessionManager.allSessions().head.asInstanceOf[KyuubiSessionImpl]
+          assert(!KyuubiEbayConf.moveQueueEnabled(session.sessionConf))
+        }
       }
     }
   }
