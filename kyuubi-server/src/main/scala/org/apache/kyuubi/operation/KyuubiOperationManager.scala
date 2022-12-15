@@ -30,6 +30,7 @@ import org.apache.kyuubi.metrics.MetricsSystem
 import org.apache.kyuubi.operation.FetchOrientation.FetchOrientation
 import org.apache.kyuubi.server.metadata.api.Metadata
 import org.apache.kyuubi.session.{KyuubiBatchSessionImpl, KyuubiSessionImpl, Session}
+import org.apache.kyuubi.sql.plan.command.RunnableCommand
 import org.apache.kyuubi.util.ThriftUtils
 
 class KyuubiOperationManager private (name: String) extends OperationManager(name) {
@@ -71,6 +72,14 @@ class KyuubiOperationManager private (name: String) extends OperationManager(nam
           runAsync,
           getQueryTimeout(queryTimeout))
       }
+    addOperation(operation)
+  }
+
+  def newExecuteOnServerOperation(
+      session: KyuubiSessionImpl,
+      runAsync: Boolean,
+      command: RunnableCommand): Operation = {
+    val operation = new ExecutedCommandExec(session, runAsync, command)
     addOperation(operation)
   }
 

@@ -41,11 +41,14 @@ import org.apache.kyuubi.plugin.{GroupProvider, PluginLoader, SessionConfAdvisor
 import org.apache.kyuubi.server.BatchLogAggManager
 import org.apache.kyuubi.server.metadata.{MetadataManager, MetadataRequestsRetryRef}
 import org.apache.kyuubi.server.metadata.api.Metadata
+import org.apache.kyuubi.sql.parser.KyuubiParser
 import org.apache.kyuubi.util.SignUtils
 
 class KyuubiSessionManager private (name: String) extends SessionManager(name) {
 
   def this() = this(classOf[KyuubiSessionManager].getSimpleName)
+
+  private val parser = new KyuubiParser()
 
   val operationManager = new KyuubiOperationManager()
   val credentialsManager = new HadoopCredentialsManager()
@@ -96,7 +99,8 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
       ipAddress,
       conf,
       this,
-      sessionConf.getUserDefaults(user))
+      sessionConf.getUserDefaults(user),
+      parser)
   }
 
   override def openSession(
