@@ -43,5 +43,22 @@ class TagBasedSessionConfAdvisorSuite extends KyuubiFunSuite {
       === downGradeConf.asJava)
     assert(sessionConfAdvisor.getConfOverlay("b_stf", Map.empty[String, String].asJava)
       === (defaultConf ++ downGradeConf).asJava)
+
+    // session tag conf with different clusters
+    val apolloZetaConf = Map("spark.jars" -> "viewfs://apollo-rno/path/to/zeta-ext.jar")
+    val herculesZetaConf = Map("spark.jars" -> "hdfs://hercules/path/to/zeta-ext.jar")
+
+    assert(sessionConfAdvisor.getConfOverlay(
+      "kyuubi",
+      Map("kyuubi.session.tag" -> "zeta-kyuubi").asJava)
+      === (zetaConf ++ downGradeConf).asJava)
+    assert(sessionConfAdvisor.getConfOverlay(
+      "kyuubi",
+      Map("kyuubi.session.tag" -> "zeta-kyuubi", "kyuubi.session.cluster" -> "apollorno").asJava)
+      === (zetaConf ++ apolloZetaConf ++ downGradeConf).asJava)
+    assert(sessionConfAdvisor.getConfOverlay(
+      "kyuubi",
+      Map("kyuubi.session.tag" -> "zeta-kyuubi", "kyuubi.session.cluster" -> "herculeslvs").asJava)
+      === (zetaConf ++ herculesZetaConf ++ downGradeConf).asJava)
   }
 }

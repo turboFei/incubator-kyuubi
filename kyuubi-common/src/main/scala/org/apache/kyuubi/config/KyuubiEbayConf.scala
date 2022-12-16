@@ -354,6 +354,13 @@ object KyuubiEbayConf extends Logging {
       .timeConf
       .createWithDefaultString("PT336H")
 
+  val SESSION_TAG_CONF_FILE: ConfigEntry[String] =
+    buildConf("kyuubi.session.tag.conf.file")
+      .internal
+      .serverOnly
+      .stringConf
+      .createWithDefault("kyuubi-defaults.conf.tag")
+
   def getDefaultPropertiesFileForCluster(
       clusterOpt: Option[String],
       conf: KyuubiConf = KyuubiConf().loadFileDefaults(),

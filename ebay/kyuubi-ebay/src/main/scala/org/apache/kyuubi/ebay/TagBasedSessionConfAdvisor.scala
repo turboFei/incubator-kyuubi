@@ -17,80 +17,72 @@
 
 package org.apache.kyuubi.ebay
 
-import java.io.File
 import java.util.{Map => JMap}
 import java.util.concurrent.TimeUnit
 
 import scala.collection.JavaConverters._
 
+import com.google.common.cache.{CacheBuilder, CacheLoader, LoadingCache}
+
 import org.apache.kyuubi.{Logging, Utils}
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
-import org.apache.kyuubi.config.KyuubiConf.KYUUBI_HOME
-import org.apache.kyuubi.config.KyuubiEbayConf.SESSION_TAG
+import org.apache.kyuubi.config.KyuubiEbayConf.{SESSION_CLUSTER, SESSION_TAG, SESSION_TAG_CONF_FILE}
 import org.apache.kyuubi.plugin.SessionConfAdvisor
-import org.apache.kyuubi.util.ThreadUtils
 
 class TagBasedSessionConfAdvisor extends SessionConfAdvisor with Logging {
   import TagBasedSessionConfAdvisor._
 
-  private val kyuubiConf = KyuubiConf()
-  private val tagConfFile = kyuubiConf.getOption(SESSION_TAG_CONF_FILE_KEY)
-    .getOrElse(DEFAULT_SESSION_TAG_CONF_FILE)
-  private val refreshInterval = kyuubiConf.getOption(SESSION_TAG_REFRESH_INTERVAL_KEY)
-    .map(_.toLong).getOrElse(DEFAULT_SESSION_TAG_REFRESH_INTERVAL)
-
-  @volatile
-  private var tagConf: KyuubiConf = KyuubiConf(false)
-
-  private def loadTagConf(env: Map[String, String] = sys.env): Unit = {
-    try {
-      val configFile = env.get(KyuubiConf.KYUUBI_CONF_DIR)
-        .orElse(env.get(KYUUBI_HOME).map(_ + File.separator + "conf"))
-        .map(d => new File(d + File.separator + tagConfFile))
-        .filter(_.exists())
-        .orElse {
-          Option(getClass.getClassLoader.getResource(tagConfFile)).map { url =>
-            new File(url.getFile)
-          }.filter(_.exists())
-        }
-      val _tagConf = KyuubiConf(false)
-      Utils.getPropertiesFromFile(configFile).foreach { case (k, v) =>
-        _tagConf.set(k, v)
-      }
-      tagConf = _tagConf
-    } catch {
-      case e: Exception => error("Error loading tag conf", e)
-    }
+  private val tagConfFile = KyuubiConf().get(SESSION_TAG_CONF_FILE)
+  private def clusterTagConfFile(cluster: Option[String]): Option[String] = {
+    cluster.map(c => s"$tagConfFile.$c")
   }
-
-  loadTagConf()
-
-  private val tagConfReNewer =
-    ThreadUtils.newDaemonSingleThreadScheduledExecutor("tag-conf-renewer")
-
-  tagConfReNewer.scheduleWithFixedDelay(
-    () => loadTagConf(),
-    refreshInterval,
-    refreshInterval,
-    TimeUnit.MILLISECONDS)
 
   override def getConfOverlay(
       user: String,
       sessionConf: JMap[String, String]): JMap[String, String] = {
     val sessionTag = sessionConf.asScala.get(SESSION_TAG.key).getOrElse(KYUUBI_DEFAULT_TAG)
-    val tagLevelConfOverlay = KyuubiEbayConf.getTagConfOnly(tagConf, sessionTag)
-    val serviceOverwriteConfOverlay = KyuubiEbayConf.getTagConfOnly(tagConf, KYUUBI_OVERWRITE_TAG)
+    val sessionCluster = sessionConf.asScala.get(SESSION_CLUSTER.key)
+
+    val tagConf = tagFileConfCache.get(tagConfFile)
+    val clusterTagConf = clusterTagConfFile(sessionCluster).map(tagFileConfCache.get)
+
+    val tagLevelConfOverlay = KyuubiEbayConf.getTagConfOnly(tagConf, sessionTag) ++
+      clusterTagConf.map(KyuubiEbayConf.getTagConfOnly(_, sessionTag)).getOrElse(Map.empty)
+    val serviceOverwriteConfOverlay =
+      KyuubiEbayConf.getTagConfOnly(tagConf, KYUUBI_OVERWRITE_TAG) ++
+        clusterTagConf.map(KyuubiEbayConf.getTagConfOnly(_, KYUUBI_OVERWRITE_TAG)).getOrElse(
+          Map.empty)
     (tagLevelConfOverlay ++ serviceOverwriteConfOverlay).asJava
   }
 }
 
-object TagBasedSessionConfAdvisor {
-  val SESSION_TAG_CONF_FILE_KEY = "kyuubi.session.tag.conf.file"
-  val SESSION_TAG_REFRESH_INTERVAL_KEY = "kyuubi.session.tag.refresh.interval"
-  val DEFAULT_SESSION_TAG_CONF_FILE = KyuubiConf.KYUUBI_CONF_FILE_NAME + ".tag"
-  val DEFAULT_SESSION_TAG_REFRESH_INTERVAL = 300 * 1000L
+object TagBasedSessionConfAdvisor extends Logging {
+  private val reloadInterval: Long = KyuubiConf().get(KyuubiConf.SESSION_CONF_FILE_RELOAD_INTERVAL)
 
   // for kyuubi service side conf
   val KYUUBI_DEFAULT_TAG = "kyuubi_default"
   val KYUUBI_OVERWRITE_TAG = "kyuubi_overwrite"
+
+  private lazy val tagFileConfCache: LoadingCache[String, KyuubiConf] =
+    CacheBuilder.newBuilder()
+      .expireAfterWrite(
+        reloadInterval,
+        TimeUnit.MILLISECONDS)
+      .build(new CacheLoader[String, KyuubiConf] {
+        override def load(tagFile: String): KyuubiConf = {
+          val conf = KyuubiConf(false)
+          Utils.tryLogNonFatalError {
+            val propsFile = Utils.getPropertiesFile(tagFile)
+            propsFile match {
+              case None =>
+                error(s"File not found $tagFile")
+              case Some(_) =>
+                Utils.getPropertiesFromFile(propsFile).foreach { case (k, v) =>
+                  conf.set(k, v)
+                }
+            }
+          }
+          conf
+        }
+      })
 }
