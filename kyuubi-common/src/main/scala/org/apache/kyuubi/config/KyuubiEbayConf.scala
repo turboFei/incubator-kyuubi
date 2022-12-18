@@ -361,6 +361,83 @@ object KyuubiEbayConf extends Logging {
       .stringConf
       .createWithDefault("kyuubi-defaults.conf.tag")
 
+  val ELASTIC_SEARCH_CREDENTIAL_PROVIDER_CLASS: ConfigEntry[String] =
+    buildConf("kyuubi.elastic.search.credential.provider.class")
+      .internal
+      .serverOnly
+      .stringConf
+      .createWithDefault("org.apache.kyuubi.ebay.server.events.FileBasedCredentialsProvider")
+
+  val ELASTIC_SEARCH_CREDENTIAL_FILE: ConfigEntry[String] =
+    buildConf("kyuubi.elastic.search.credential.file")
+      .internal
+      .serverOnly
+      .stringConf
+      .createWithDefault("/etc/security/keytabs/elasticsearch.key")
+
+  val ELASTIC_SEARCH_CREDENTIAL_REFRESH_INTERVAL: ConfigEntry[Long] =
+    buildConf("kyuubi.elastic.search.credential.refresh.interval")
+      .internal
+      .serverOnly
+      .timeConf
+      .createWithDefault(Duration.ofMinutes(10).toMillis)
+
+  val ELASTIC_SEARCH_CREDENTIAL_MAX_ATTEMPTS: ConfigEntry[Int] =
+    buildConf("kyuubi.elastic.search.credential.max.attempts")
+      .internal
+      .serverOnly
+      .intConf
+      .createWithDefault(3)
+
+  val ELASTIC_SEARCH_CREDENTIAL_RETRY_WAIT: ConfigEntry[Long] =
+    buildConf("kyuubi.elastic.search.credential.retry.wait")
+      .internal
+      .serverOnly
+      .timeConf
+      .createWithDefault(Duration.ofSeconds(5).toMillis)
+
+  val ELASTIC_SEARCH_HOST: ConfigEntry[String] =
+    buildConf("kyuubi.elastic.search.host")
+      .internal
+      .serverOnly
+      .stringConf
+      .createWithDefault("localhost")
+
+  val ELASTIC_SEARCH_PORT: ConfigEntry[Int] =
+    buildConf("kyuubi.elastic.search.port")
+      .internal
+      .serverOnly
+      .intConf
+      .createWithDefault(9200)
+
+  val ELASTIC_SEARCH_SCHEMA: ConfigEntry[String] =
+    buildConf("kyuubi.elastic.search.schema")
+      .internal
+      .serverOnly
+      .stringConf
+      .createWithDefault("http")
+
+  val ELASTIC_SEARCH_SESSION_EVENT_INDEX: ConfigEntry[String] =
+    buildConf("kyuubi.elastic.search.session.event.index")
+      .internal
+      .serverOnly
+      .stringConf
+      .createWithDefault("kyuubi-session-events")
+
+  val ELASTIC_SEARCH_OPERATION_EVENT_INDEX: ConfigEntry[String] =
+    buildConf("kyuubi.elastic.search.operation.event.index")
+      .internal
+      .serverOnly
+      .stringConf
+      .createWithDefault("kyuubi-operation-events")
+
+  val ELASTIC_SEARCH_SERVER_EVENT_INDEX: ConfigEntry[String] =
+    buildConf("kyuubi.elastic.search.server.event.index")
+      .internal
+      .serverOnly
+      .stringConf
+      .createWithDefault("kyuubi-server-events")
+
   def getDefaultPropertiesFileForCluster(
       clusterOpt: Option[String],
       conf: KyuubiConf = KyuubiConf().loadFileDefaults(),

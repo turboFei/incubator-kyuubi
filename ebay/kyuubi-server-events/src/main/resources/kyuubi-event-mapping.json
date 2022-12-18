@@ -1,0 +1,153 @@
+{
+  "kyuubi-server-event": {
+    "mappings": {
+      "properties": {
+        "serverName": {
+          "type": "keyword"
+        },
+        "startTime": {
+          "type": "date",
+          "format": "date_optional_time||epoch_millis"
+        },
+        "eventTime": {
+          "type": "date",
+          "format": "date_optional_time||epoch_millis"
+        },
+        "state": {
+          "type": "keyword"
+        },
+        "serverIP": {
+          "type": "text"
+        },
+        "serverConf": {
+          "type": "text"
+        },
+        "serverEnv": {
+          "type": "text"
+        },
+        "BUILD_USER": {
+          "type": "keyword"
+        },
+        "BUILD_DATE": {
+          "type": "keyword"
+        },
+        "REPO_URL": {
+          "type": "keyword"
+        },
+        "VERSION_INFO": {
+          "type": "keyword"
+        }
+      }
+    }
+  },
+  "kyuubi-session-event": {
+    "mappings": {
+      "properties": {
+        "sessionId": {
+          "type": "keyword"
+        },
+        "clientVersion": {
+          "type": "integer"
+        },
+        "sessionType": {
+          "type": "keyword"
+        },
+        "sessionName": {
+          "type": "keyword"
+        },
+        "user": {
+          "type": "keyword"
+        },
+        "clientIP": {
+          "type": "ip"
+        },
+        "serverIP": {
+          "type": "text"
+        },
+        "conf": {
+          "type": "text"
+        },
+        "eventTime": {
+          "type": "date",
+          "format": "date_optional_time||epoch_millis"
+        },
+        "startTime": {
+          "type": "date",
+          "format": "date_optional_time||epoch_millis"
+        },
+        "sessionCluster": {
+          "type": "keyword"
+        },
+        "remoteSessionId": {
+          "type": "keyword"
+        },
+        "engineId": {
+          "type": "keyword"
+        },
+        "openedTime": {
+          "type": "date",
+          "format": "date_optional_time||epoch_millis"
+        },
+        "endTime": {
+          "type": "date",
+          "format": "date_optional_time||epoch_millis"
+        },
+        "totalOperations": {
+          "type": "integer"
+        },
+        "exception": {
+          "type": "text"
+        }
+      }
+    }
+  },
+  "kyuubi-operation-event": {
+    "mappings": {
+      "properties": {
+        "statementId": {
+          "type": "keyword"
+        },
+        "remoteId": {
+          "type": "keyword"
+        },
+        "statement": {
+          "type": "text"
+        },
+        "shouldRunAsync": {
+          "type": "boolean"
+        },
+        "state": {
+          "type": "keyword"
+        },
+        "eventTime": {
+          "type": "date",
+          "format": "date_optional_time||epoch_millis"
+        },
+        "createTime": {
+          "type": "date",
+          "format": "date_optional_time||epoch_millis"
+        },
+        "startTime": {
+          "type": "date",
+          "format": "date_optional_time||epoch_millis"
+        },
+        "completeTime": {
+          "type": "date",
+          "format": "date_optional_time||epoch_millis"
+        },
+        "exception": {
+          "type": "text"
+        },
+        "sessionId": {
+          "type": "keyword"
+        },
+        "sessionUser": {
+          "type": "keyword"
+        },
+        "operationType": {
+          "type": "keyword"
+        }
+      }
+    }
+  }
+}
