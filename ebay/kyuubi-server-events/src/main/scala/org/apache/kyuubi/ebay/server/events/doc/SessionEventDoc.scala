@@ -37,5 +37,5 @@ case class SessionEventDoc(
     var exception: String)
   extends EventDoc {
   override def docId: String = sessionId
-  override def indexSuffix: String = s"_${EventDoc.dateFormat.format(startTime)}"
+  override def indexPartitionTime: Long = startTime
 }

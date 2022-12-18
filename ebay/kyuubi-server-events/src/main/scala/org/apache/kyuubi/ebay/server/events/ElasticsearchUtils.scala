@@ -19,7 +19,12 @@ package org.apache.kyuubi.ebay.server.events
 
 import java.util.{Map => JMap}
 
+import scala.collection.JavaConverters._
+
 import org.apache.http.HttpHost
+import org.elasticsearch.action.admin.indices.alias.IndicesAliasesRequest
+import org.elasticsearch.action.admin.indices.alias.get.GetAliasesRequest
+import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest
 import org.elasticsearch.action.bulk.BulkRequest
 import org.elasticsearch.action.get.GetRequest
 import org.elasticsearch.action.index.IndexRequest
@@ -33,12 +38,26 @@ import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 
 object ElasticsearchUtils extends Logging {
   @volatile private var CLIENT: RestHighLevelClient = _
+  private var _conf: KyuubiConf = _
+  private def conf: KyuubiConf = Option(_conf).getOrElse(KyuubiConf())
+  private lazy val requestMaxAttempts =
+    conf.get(KyuubiEbayConf.ELASTIC_SEARCH_REQUEST_MAX_ATTEMPTS)
+  private lazy val requestRetryWait =
+    conf.get(KyuubiEbayConf.ELASTIC_SEARCH_REQUEST_RETRY_WAIT)
+
+  private[kyuubi] def init(conf: KyuubiConf): Unit = synchronized {
+    this._conf = conf
+    getClient()
+  }
+
+  private[kyuubi] def shutdown(): Unit = {
+    Option(CLIENT).foreach(_ => Utils.tryLogNonFatalError(CLIENT.close()))
+  }
 
   def getClient(): RestHighLevelClient = {
     if (CLIENT == null) {
       this.synchronized {
         if (CLIENT == null) {
-          val conf = KyuubiConf()
           val credentialsProvider =
             ElasticsearchCredentialsProvider.getElasticCredentialsProvider(conf)
           val host = conf.get(KyuubiEbayConf.ELASTIC_SEARCH_HOST)
@@ -54,7 +73,7 @@ object ElasticsearchUtils extends Logging {
     CLIENT
   }
 
-  def indexExists(index: String): Boolean = {
+  def indexExists(index: String): Boolean = withRetry {
     try {
       val request = new GetIndexRequest(index)
       getClient().indices().exists(request, RequestOptions.DEFAULT)
@@ -65,7 +84,7 @@ object ElasticsearchUtils extends Logging {
     }
   }
 
-  def createIndex(index: String, source: String): Unit = {
+  def createIndex(index: String, source: String): Unit = withRetry {
     try {
       val request = new CreateIndexRequest(index)
       request.source(source, XContentType.JSON)
@@ -77,7 +96,18 @@ object ElasticsearchUtils extends Logging {
     }
   }
 
-  def createDoc(index: String, id: String, doc: String): Unit = {
+  def deleteIndex(index: String): Boolean = withRetry {
+    try {
+      val request = new DeleteIndexRequest(index)
+      getClient().indices().delete(request, RequestOptions.DEFAULT).isAcknowledged
+    } catch {
+      case e: Throwable =>
+        error(s"Error deleting index[$index]", e)
+        throw e
+    }
+  }
+
+  def createDoc(index: String, id: String, doc: String): Unit = withRetry {
     try {
       val request = new IndexRequest(index).id(id)
       request.source(doc, XContentType.JSON)
@@ -90,7 +120,7 @@ object ElasticsearchUtils extends Logging {
   }
 
   // visible for testing
-  def getDoc(index: String, id: String): JMap[String, AnyRef] = {
+  def getDoc(index: String, id: String): JMap[String, AnyRef] = withRetry {
     try {
       val request = new GetRequest().index(index).id(id)
       getClient().get(request, RequestOptions.DEFAULT).getSource
@@ -101,7 +131,7 @@ object ElasticsearchUtils extends Logging {
     }
   }
 
-  def updateDoc(index: String, id: String, doc: String): Unit = {
+  def updateDoc(index: String, id: String, doc: String): Unit = withRetry {
     try {
       val request = new UpdateRequest(index, id)
       request.doc(doc)
@@ -113,7 +143,7 @@ object ElasticsearchUtils extends Logging {
     }
   }
 
-  def bulkUpdate(docsToUpdate: List[(String, String, String)]): Unit = {
+  def bulkUpdate(docsToUpdate: List[(String, String, String)]): Unit = withRetry {
     try {
       val request = new BulkRequest()
       docsToUpdate.foreach { case (index, id, doc) =>
@@ -127,7 +157,53 @@ object ElasticsearchUtils extends Logging {
     }
   }
 
-  def shutdown(): Unit = {
-    Option(CLIENT).foreach(_ => Utils.tryLogNonFatalError(CLIENT.close()))
+  /**
+   * This method is idempotent.
+   */
+  def addIndexAlias(index: String, alias: String): Boolean = withRetry {
+    try {
+      val request = new IndicesAliasesRequest().addAliasAction(
+        IndicesAliasesRequest.AliasActions.add().index(index).alias(alias))
+      getClient().indices().updateAliases(request, RequestOptions.DEFAULT).isAcknowledged
+    } catch {
+      case e: Throwable =>
+        error(s"Error adding alias [$index -> $alias]", e)
+        throw e
+    }
+  }
+
+  def getAliasIndexes(alias: String): Seq[String] = withRetry {
+    try {
+      val request = new GetAliasesRequest(alias)
+      val response = getClient().indices().getAlias(request, RequestOptions.DEFAULT)
+      response.getAliases.asScala.map(_._1).toSeq
+    } catch {
+      case e: Throwable =>
+        error(s"Error getting alias[$alias]", e)
+        throw e
+    }
+  }
+
+  def withRetry[T](f: => T): T = {
+    var attempt = 0
+    var shouldRetry = true
+    var result: T = null.asInstanceOf[T]
+    while (attempt < requestMaxAttempts && shouldRetry) {
+      try {
+        result = f
+        shouldRetry = false
+      } catch {
+        case e: Throwable if attempt < requestMaxAttempts =>
+          warn(
+            s"Failed to open elasticsearch request after" +
+              s" [$attempt/$requestMaxAttempts] times, retrying",
+            e)
+          Thread.sleep(requestRetryWait)
+          shouldRetry = true
+      } finally {
+        attempt += 1
+      }
+    }
+    result
   }
 }

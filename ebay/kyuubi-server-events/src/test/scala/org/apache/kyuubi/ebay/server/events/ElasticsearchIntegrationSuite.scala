@@ -17,6 +17,8 @@
 
 package org.apache.kyuubi.ebay.server.events
 
+import java.util.UUID
+
 import org.scalatest.tags.Slow
 
 import org.apache.kyuubi.{BatchTestHelper, WithKyuubiServer}
@@ -54,7 +56,8 @@ class ElasticsearchIntegrationSuite extends WithKyuubiServer with HiveJDBCTestHe
       val serverEvent = KyuubiServerInfoEvent(server, ServiceState.STARTED).get
       val serverEventDoc = EventDoc(serverEvent)
       val serverDoc = ElasticsearchUtils.getDoc(
-        conf.get(KyuubiEbayConf.ELASTIC_SEARCH_SERVER_EVENT_INDEX),
+        serverEventDoc.formatPartitionIndex(
+          conf.get(KyuubiEbayConf.ELASTIC_SEARCH_SERVER_EVENT_INDEX)),
         serverEventDoc.docId)
       assert(serverDoc.get("serverIP") === serverEvent.serverIP)
       assert(serverDoc.get("state") === serverEvent.state)
@@ -65,7 +68,8 @@ class ElasticsearchIntegrationSuite extends WithKyuubiServer with HiveJDBCTestHe
       var sessionEvent = KyuubiSessionEvent(session)
       var sessionEventDoc = EventDoc(sessionEvent)
       var sessionDoc = ElasticsearchUtils.getDoc(
-        conf.get(KyuubiEbayConf.ELASTIC_SEARCH_SESSION_EVENT_INDEX) + sessionEventDoc.indexSuffix,
+        serverEventDoc.formatPartitionIndex(
+          conf.get(KyuubiEbayConf.ELASTIC_SEARCH_SESSION_EVENT_INDEX)),
         sessionId)
       assert(sessionDoc.get("sessionId") === sessionId)
       assert(sessionDoc.get("sessionType") === "SQL")
@@ -81,8 +85,8 @@ class ElasticsearchIntegrationSuite extends WithKyuubiServer with HiveJDBCTestHe
       var operationEventDoc = EventDoc(operationEvent)
       var opId = operation.getHandle.identifier.toString
       var opDoc = ElasticsearchUtils.getDoc(
-        conf.get(KyuubiEbayConf.ELASTIC_SEARCH_OPERATION_EVENT_INDEX) +
-          operationEventDoc.indexSuffix,
+        operationEventDoc.formatPartitionIndex(conf.get(
+          KyuubiEbayConf.ELASTIC_SEARCH_OPERATION_EVENT_INDEX)),
         opId)
       assert(opDoc.get("sessionId") === sessionId)
       assert(opDoc.get("statementId") === opId)
@@ -112,22 +116,54 @@ class ElasticsearchIntegrationSuite extends WithKyuubiServer with HiveJDBCTestHe
       EventBus.post(operationEvent)
       sessionEventDoc = EventDoc(sessionEvent)
       sessionId = batchSessionHandle.identifier.toString
-      sessionDoc = ElasticsearchUtils.getDoc(
-        conf.get(KyuubiEbayConf.ELASTIC_SEARCH_SESSION_EVENT_INDEX) + sessionEventDoc.indexSuffix,
-        sessionId)
+      sessionDoc =
+        ElasticsearchUtils.getDoc(
+          sessionEventDoc.formatPartitionIndex(
+            conf.get(KyuubiEbayConf.ELASTIC_SEARCH_SESSION_EVENT_INDEX)),
+          sessionId)
       assert(sessionDoc.get("sessionId") === sessionId)
       assert(sessionDoc.get("sessionType") === "BATCH")
 
       operationEventDoc = EventDoc(operationEvent)
       opId = batchOperation.getHandle.identifier.toString
       opDoc = ElasticsearchUtils.getDoc(
-        conf.get(KyuubiEbayConf.ELASTIC_SEARCH_OPERATION_EVENT_INDEX) +
-          operationEventDoc.indexSuffix,
+        operationEventDoc.formatPartitionIndex(
+          conf.get(KyuubiEbayConf.ELASTIC_SEARCH_OPERATION_EVENT_INDEX)),
         opId)
       assert(opDoc.get("sessionId") === batchSessionHandle.identifier.toString)
       assert(opDoc.get("statementId") === opId)
       assert(opDoc.get("statement") === "BatchJobSubmission")
       assert(opDoc.get("operationType") === "BATCH")
     }
+  }
+
+  test("get alias indexes and delete index") {
+    assert(ElasticsearchUtils.getAliasIndexes("non_exists_" + UUID.randomUUID()).isEmpty)
+
+    var serverEventIndexes = ElasticsearchUtils.getAliasIndexes(
+      conf.get(KyuubiEbayConf.ELASTIC_SEARCH_SERVER_EVENT_ALIAS))
+    var sessionEventIndexes = ElasticsearchUtils.getAliasIndexes(
+      conf.get(KyuubiEbayConf.ELASTIC_SEARCH_SESSION_EVENT_ALIAS))
+    var operationEventIndexes = ElasticsearchUtils.getAliasIndexes(
+      conf.get(KyuubiEbayConf.ELASTIC_SEARCH_OPERATION_EVENT_ALIAS))
+
+    assert(serverEventIndexes.nonEmpty)
+    assert(sessionEventIndexes.nonEmpty)
+    assert(operationEventIndexes.nonEmpty)
+
+    serverEventIndexes.foreach(ElasticsearchUtils.deleteIndex)
+    sessionEventIndexes.foreach(ElasticsearchUtils.deleteIndex)
+    operationEventIndexes.foreach(ElasticsearchUtils.deleteIndex)
+
+    serverEventIndexes = ElasticsearchUtils.getAliasIndexes(
+      conf.get(KyuubiEbayConf.ELASTIC_SEARCH_SERVER_EVENT_ALIAS))
+    sessionEventIndexes = ElasticsearchUtils.getAliasIndexes(
+      conf.get(KyuubiEbayConf.ELASTIC_SEARCH_SESSION_EVENT_ALIAS))
+    operationEventIndexes = ElasticsearchUtils.getAliasIndexes(
+      conf.get(KyuubiEbayConf.ELASTIC_SEARCH_OPERATION_EVENT_ALIAS))
+
+    assert(serverEventIndexes.isEmpty)
+    assert(sessionEventIndexes.isEmpty)
+    assert(operationEventIndexes.isEmpty)
   }
 }

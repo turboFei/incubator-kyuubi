@@ -24,18 +24,23 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.apache.commons.lang3.time.FastDateFormat
 
+import org.apache.kyuubi.ebay.server.events.doc.EventDoc.{dateFormat, indexDelimiter}
 import org.apache.kyuubi.events.{KyuubiEvent, KyuubiOperationEvent, KyuubiServerInfoEvent, KyuubiSessionEvent}
 
 trait EventDoc {
   def docId: String
-  def indexSuffix: String
-  def toJson: String = EventDoc.mapper.writeValueAsString(this)
+  def indexPartitionTime: Long
+  final def formatPartitionIndex(index: String): String = {
+    index + indexDelimiter + dateFormat.format(indexPartitionTime)
+  }
+  final def toJson: String = EventDoc.mapper.writeValueAsString(this)
 }
 
 object EventDoc {
   final val mapper = new ObjectMapper().registerModule(DefaultScalaModule)
   final val dateFormat = FastDateFormat.getInstance("yyyyMMdd", TimeZone.getDefault)
   final val timestampFormat = FastDateFormat.getInstance("yyyyMMddHHmmss", TimeZone.getDefault)
+  final val indexDelimiter = "_"
 
   /**
    * Copied from org.apache.spark.util.Utils::exceptionString

@@ -417,6 +417,20 @@ object KyuubiEbayConf extends Logging {
       .stringConf
       .createWithDefault("http")
 
+  val ELASTIC_SEARCH_REQUEST_MAX_ATTEMPTS: ConfigEntry[Int] =
+    buildConf("kyuubi.elastic.search.request.max.attempts")
+      .internal
+      .serverOnly
+      .intConf
+      .createWithDefault(3)
+
+  val ELASTIC_SEARCH_REQUEST_RETRY_WAIT: ConfigEntry[Long] =
+    buildConf("kyuubi.elastic.search.request.retry.wait")
+      .internal
+      .serverOnly
+      .timeConf
+      .createWithDefault(Duration.ofSeconds(5).toMillis)
+
   val ELASTIC_SEARCH_SESSION_EVENT_INDEX: ConfigEntry[String] =
     buildConf("kyuubi.elastic.search.session.event.index")
       .internal
@@ -437,6 +451,69 @@ object KyuubiEbayConf extends Logging {
       .serverOnly
       .stringConf
       .createWithDefault("kyuubi-server-events")
+
+  val ELASTIC_SEARCH_SESSION_EVENT_ALIAS: ConfigEntry[String] =
+    buildConf("kyuubi.elastic.search.session.event.alias")
+      .internal
+      .serverOnly
+      .stringConf
+      .createWithDefault("kyuubi_session_events")
+
+  val ELASTIC_SEARCH_OPERATION_EVENT_ALIAS: ConfigEntry[String] =
+    buildConf("kyuubi.elastic.search.operation.event.alias")
+      .internal
+      .serverOnly
+      .stringConf
+      .createWithDefault("kyuubi_operation_events")
+
+  val ELASTIC_SEARCH_SERVER_EVENT_ALIAS: ConfigEntry[String] =
+    buildConf("kyuubi.elastic.search.server.event.alias")
+      .internal
+      .serverOnly
+      .stringConf
+      .createWithDefault("kyuubi_server_events")
+
+  val ELASTIC_SEARCH_SERVER_EVENT_PURGE_ENABLED: ConfigEntry[Boolean] =
+    buildConf("kyuubi.elastic.search.server.event.purge.enabled")
+      .internal
+      .serverOnly
+      .booleanConf
+      .createWithDefault(false)
+
+  val ELASTIC_SEARCH_SESSION_EVENT_PURGE_ENABLED: ConfigEntry[Boolean] =
+    buildConf("kyuubi.elastic.search.session.event.purge.enabled")
+      .internal
+      .serverOnly
+      .booleanConf
+      .createWithDefault(false)
+
+  val ELASTIC_SEARCH_OPERATION_EVENT_PURGE_ENABLED: ConfigEntry[Boolean] =
+    buildConf("kyuubi.elastic.search.operation.event.purge.enabled")
+      .internal
+      .serverOnly
+      .booleanConf
+      .createWithDefault(false)
+
+  val ELASTIC_SEARCH_SERVER_EVENT_MAX_DAYS: ConfigEntry[Int] =
+    buildConf("kyuubi.elastic.search.server.event.max.days")
+      .internal
+      .serverOnly
+      .intConf
+      .createWithDefault(1095) // 3 years
+
+  val ELASTIC_SEARCH_SESSION_EVENT_MAX_DAYS: ConfigEntry[Int] =
+    buildConf("kyuubi.elastic.search.session.event.max.days")
+      .internal
+      .serverOnly
+      .intConf
+      .createWithDefault(90) // 3 months
+
+  val ELASTIC_SEARCH_OPERATION_EVENT_MAX_DAYS: ConfigEntry[Int] =
+    buildConf("kyuubi.elastic.search.operation.event.max.days")
+      .internal
+      .serverOnly
+      .intConf
+      .createWithDefault(90) // 3 months
 
   def getDefaultPropertiesFileForCluster(
       clusterOpt: Option[String],

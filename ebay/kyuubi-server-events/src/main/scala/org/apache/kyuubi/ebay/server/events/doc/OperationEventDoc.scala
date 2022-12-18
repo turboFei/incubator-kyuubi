@@ -38,7 +38,7 @@ case class OperationEventDoc(
     if (statement == BATCH_CLASS_NAME) BATCH_OPERATION_TYPE else SQL_OPERATION_TYPE
   }
   override def docId: String = statementId
-  override def indexSuffix: String = s"_${EventDoc.dateFormat.format(createTime)}"
+  override def indexPartitionTime: Long = createTime
 }
 
 object OperationEventDoc {

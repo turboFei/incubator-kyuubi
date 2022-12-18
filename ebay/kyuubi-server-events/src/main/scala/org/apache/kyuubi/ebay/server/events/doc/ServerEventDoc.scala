@@ -31,5 +31,5 @@ case class ServerEventDoc(
     VERSION_INFO: String)
   extends EventDoc {
   override def docId: String = serverIP + "_" + EventDoc.timestampFormat.format(startTime)
-  override def indexSuffix: String = ""
+  override def indexPartitionTime: Long = startTime
 }
