@@ -35,7 +35,7 @@ import org.scalatest.time.SpanSugar.convertIntToGrainOfTime
 
 import org.apache.kyuubi.{Utils, WithKyuubiServer}
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
-import org.apache.kyuubi.ebay.TagBasedSessionConfAdvisor
+import org.apache.kyuubi.ebay.{NoopGroupProvider, TagBasedSessionConfAdvisor}
 import org.apache.kyuubi.jdbc.hive.KyuubiConnection
 import org.apache.kyuubi.jdbc.hive.logs.KyuubiEngineLogListener
 import org.apache.kyuubi.service.authentication.KyuubiAuthenticationFactory
@@ -51,6 +51,7 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper 
       .set(KyuubiEbayConf.OPERATION_INTERCEPT_ENABLED, true)
       .set(KyuubiEbayConf.SESSION_CLUSTER_LIST, Seq("test"))
       .set(KyuubiConf.SESSION_CONF_ADVISOR, classOf[TagBasedSessionConfAdvisor].getName)
+      .set(KyuubiConf.GROUP_PROVIDER, classOf[NoopGroupProvider].getName)
   }
 
   test("open session with cluster selector") {
