@@ -129,7 +129,7 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
 
     batches = jdbcMetadataStore.getMetadataList(
       MetadataFilter(
-        sessionType = SessionType.SQL,
+        sessionType = SessionType.INTERACTIVE,
         engineType = "Spark",
         username = "kyuubi",
         state = "PENDING"),

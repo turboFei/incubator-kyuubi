@@ -53,7 +53,7 @@ class KyuubiSessionImpl(
     parser: KyuubiParser)
   extends KyuubiSession(protocol, user, password, ipAddress, conf, sessionManager) {
 
-  override val sessionType: SessionType = SessionType.SQL
+  override val sessionType: SessionType = SessionType.INTERACTIVE
 
   val sessionCluster = KyuubiEbayConf.getSessionCluster(sessionManager, normalizedConf)
 
