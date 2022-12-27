@@ -25,7 +25,7 @@ import scala.collection.JavaConverters._
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 
-import org.apache.kyuubi.Logging
+import org.apache.kyuubi.{Logging, Utils}
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiEbayConf._
 import org.apache.kyuubi.ebay.server.events.doc.{EventDoc, OperationEventDoc, ServerEventDoc, SessionEventDoc}
@@ -52,8 +52,10 @@ class ElasticsearchEventHandler(conf: KyuubiConf) extends EventHandler[KyuubiEve
 
   private def initialize(): Unit = {
     Seq(serverEventAlias, sessionEventAlias, operationEventAlias).foreach { alias =>
-      val indexes = ElasticsearchUtils.getAliasIndexes(alias)
-      indexSet.addAll(indexes.asJava)
+      Utils.tryLogNonFatalError {
+        val indexes = ElasticsearchUtils.getAliasIndexes(alias)
+        indexSet.addAll(indexes.asJava)
+      }
     }
     startEventIndexPurger()
   }

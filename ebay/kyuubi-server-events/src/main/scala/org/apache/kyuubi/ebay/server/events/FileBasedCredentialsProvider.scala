@@ -18,9 +18,9 @@
 package org.apache.kyuubi.ebay.server.events
 
 import java.io.{FileNotFoundException, IOException}
+import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
 
-import org.apache.hadoop.shaded.com.nimbusds.jose.util.StandardCharset
 import org.apache.http.auth.{AuthScope, Credentials, UsernamePasswordCredentials}
 import org.apache.http.client.CredentialsProvider
 
@@ -71,7 +71,7 @@ class FileBasedCredentialsProvider(conf: KyuubiConf) extends CredentialsProvider
   }
 
   private def refreshOnce(): Unit = {
-    val userPassword = new String(Files.readAllBytes(keyFilePath), StandardCharset.UTF_8).trim
+    val userPassword = new String(Files.readAllBytes(keyFilePath), StandardCharsets.UTF_8).trim
     userPassword.split(":", 2) match {
       case Array(user, password) =>
         credentials = new UsernamePasswordCredentials(user.trim, password.trim)

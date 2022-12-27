@@ -200,6 +200,12 @@ object ElasticsearchUtils extends Logging {
             e)
           Thread.sleep(requestRetryWait)
           shouldRetry = true
+        case e: Throwable =>
+          warn(
+            s"Failed to open elasticsearch request after" +
+              s" [$attempt/$requestMaxAttempts] times, aborting",
+            e)
+          throw e
       } finally {
         attempt += 1
       }

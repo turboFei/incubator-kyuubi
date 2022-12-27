@@ -72,7 +72,7 @@ class ElasticsearchIntegrationSuite extends WithKyuubiServer with HiveJDBCTestHe
           conf.get(KyuubiEbayConf.ELASTIC_SEARCH_SESSION_EVENT_INDEX)),
         sessionId)
       assert(sessionDoc.get("sessionId") === sessionId)
-      assert(sessionDoc.get("sessionType") === "SQL")
+      assert(sessionDoc.get("sessionType") === SessionType.INTERACTIVE.toString)
       assert(sessionDoc.get("engineId").asInstanceOf[String].startsWith("local-"))
 
       val operation = sessionMgr.operationManager.newExecuteStatementOperation(
