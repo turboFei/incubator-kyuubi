@@ -34,7 +34,8 @@ case class SessionEventDoc(
     var openedTime: Long,
     var endTime: Long,
     var totalOperations: Int,
-    var exception: String)
+    var exception: String,
+    eventType: String)
   extends EventDoc {
   override def docId: String = sessionId
   override def indexPartitionTime: Long = startTime

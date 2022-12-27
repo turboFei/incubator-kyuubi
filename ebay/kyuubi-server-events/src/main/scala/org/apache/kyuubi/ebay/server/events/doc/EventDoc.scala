@@ -68,7 +68,8 @@ object EventDoc {
           e.BUILD_USER,
           e.BUILD_DATE,
           e.REPO_URL,
-          mapper.writeValueAsString(e.VERSION_INFO))
+          mapper.writeValueAsString(e.VERSION_INFO),
+          e.eventType)
       case e: KyuubiSessionEvent =>
         SessionEventDoc(
           e.sessionId,
@@ -87,7 +88,8 @@ object EventDoc {
           e.openedTime,
           e.endTime,
           e.totalOperations,
-          exceptionString(e.exception))
+          exceptionString(e.exception),
+          e.eventType)
       case e: KyuubiOperationEvent =>
         OperationEventDoc(
           e.statementId,
@@ -101,7 +103,9 @@ object EventDoc {
           e.completeTime,
           exceptionString(e.exception),
           e.sessionId,
-          e.sessionUser)
+          e.sessionUser,
+          e.sessionType,
+          e.eventType)
       case _ => throw new RuntimeException(s"Unknown kyuubi event: $event")
     }
   }

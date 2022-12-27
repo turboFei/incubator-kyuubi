@@ -28,7 +28,7 @@ import org.apache.kyuubi.ebay.server.events.doc.EventDoc
 import org.apache.kyuubi.events.{EventBus, KyuubiOperationEvent, KyuubiServerInfoEvent, KyuubiSessionEvent}
 import org.apache.kyuubi.operation.{ExecuteStatement, HiveJDBCTestHelper}
 import org.apache.kyuubi.service.ServiceState
-import org.apache.kyuubi.session.{KyuubiSessionImpl, KyuubiSessionManager}
+import org.apache.kyuubi.session.{KyuubiSessionImpl, KyuubiSessionManager, SessionType}
 
 /**
  * A local elastic search environment is needed.
@@ -91,7 +91,7 @@ class ElasticsearchIntegrationSuite extends WithKyuubiServer with HiveJDBCTestHe
       assert(opDoc.get("sessionId") === sessionId)
       assert(opDoc.get("statementId") === opId)
       assert(opDoc.get("statement") == "select 123")
-      assert(opDoc.get("operationType") === "SQL")
+      assert(opDoc.get("sessionType") === SessionType.INTERACTIVE.toString)
 
       val batchRequest = newSparkBatchRequest()
       val batchSessionHandle = sessionMgr.openBatchSession(
@@ -133,7 +133,7 @@ class ElasticsearchIntegrationSuite extends WithKyuubiServer with HiveJDBCTestHe
       assert(opDoc.get("sessionId") === batchSessionHandle.identifier.toString)
       assert(opDoc.get("statementId") === opId)
       assert(opDoc.get("statement") === "BatchJobSubmission")
-      assert(opDoc.get("operationType") === "BATCH")
+      assert(opDoc.get("sessionType") === SessionType.BATCH.toString)
     }
   }
 

@@ -17,8 +17,6 @@
 
 package org.apache.kyuubi.ebay.server.events.doc
 
-import org.apache.kyuubi.operation.BatchJobSubmission
-
 case class OperationEventDoc(
     statementId: String,
     remoteId: String,
@@ -31,18 +29,10 @@ case class OperationEventDoc(
     completeTime: Long,
     exception: String,
     sessionId: String,
-    sessionUser: String)
+    sessionUser: String,
+    sessionType: String,
+    eventType: String)
   extends EventDoc {
-  import OperationEventDoc._
-  final lazy val operationType: String = {
-    if (statement == BATCH_CLASS_NAME) BATCH_OPERATION_TYPE else SQL_OPERATION_TYPE
-  }
   override def docId: String = statementId
   override def indexPartitionTime: Long = createTime
-}
-
-object OperationEventDoc {
-  final val BATCH_CLASS_NAME = classOf[BatchJobSubmission].getSimpleName
-  final val BATCH_OPERATION_TYPE = "BATCH"
-  final val SQL_OPERATION_TYPE = "SQL"
 }

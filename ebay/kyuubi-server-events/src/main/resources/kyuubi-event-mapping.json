@@ -36,6 +36,9 @@
         },
         "VERSION_INFO": {
           "type": "keyword"
+        },
+        "eventType": {
+          "type": "keyword"
         }
       }
     }
@@ -97,6 +100,9 @@
         },
         "exception": {
           "type": "text"
+        },
+        "eventType": {
+          "type": "keyword"
         }
       }
     }
@@ -144,7 +150,10 @@
         "sessionUser": {
           "type": "keyword"
         },
-        "operationType": {
+        "sessionType": {
+          "type": "keyword"
+        },
+        "eventType": {
           "type": "keyword"
         }
       }
