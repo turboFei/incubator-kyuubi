@@ -188,7 +188,7 @@ object ElasticsearchUtils extends Logging {
     var attempt = 0
     var shouldRetry = true
     var result: T = null.asInstanceOf[T]
-    while (attempt < requestMaxAttempts && shouldRetry) {
+    while (attempt <= requestMaxAttempts && shouldRetry) {
       try {
         result = f
         shouldRetry = false
