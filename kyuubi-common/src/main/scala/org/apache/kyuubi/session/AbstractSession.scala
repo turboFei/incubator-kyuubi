@@ -217,16 +217,17 @@ abstract class AbstractSession(
     queryId
   }
 
-  override def transferData(values: ByteBuffer, path: String): OperationHandle = {
-    val operation = sessionManager.operationManager.newTransferDataOperation(this, values, path)
-    runOperation(operation)
-  }
+  override def transferData(values: ByteBuffer, path: String): OperationHandle =
+    withAcquireRelease() {
+      val operation = sessionManager.operationManager.newTransferDataOperation(this, values, path)
+      runOperation(operation)
+    }
 
   override def downloadData(
       tableName: String,
       query: String,
       format: String,
-      options: Map[String, String]): OperationHandle = {
+      options: Map[String, String]): OperationHandle = withAcquireRelease() {
     val operation = sessionManager.operationManager
       .newDownloadDataOperation(
         this,
