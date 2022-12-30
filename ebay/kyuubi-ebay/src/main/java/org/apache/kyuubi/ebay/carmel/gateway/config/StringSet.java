@@ -15,23 +15,32 @@
  * limitations under the License.
  */
 
-package org.apache.kyuubi.operation
+package org.apache.kyuubi.ebay.carmel.gateway.config;
 
-import org.apache.kyuubi.KyuubiSQLException
-import org.apache.kyuubi.carmel.gateway.session.{CarmelSession, CarmelSessionStatus}
-import org.apache.kyuubi.session.Session
+import java.util.LinkedHashSet;
+import java.util.Set;
 
-abstract class InterceptedOperation(session: Session) extends KyuubiOperation(session) {
-  override protected def runInternal(): Unit = {
-    session match {
-      case carmelSession: CarmelSession =>
-        if (carmelSession.getBackendSessionStatus == CarmelSessionStatus.INACTIVE) {
-          throw KyuubiSQLException(
-            "The session has been closed due to the backend session has been dropped")
-        }
-      case _ =>
+public class StringSet implements Validator {
+
+  private final boolean caseSensitive;
+  private final Set<String> expected = new LinkedHashSet<>();
+
+  public StringSet(String... values) {
+    this(true, values);
+  }
+
+  public StringSet(boolean caseSensitive, String... values) {
+    this.caseSensitive = caseSensitive;
+    for (String value : values) {
+      expected.add(caseSensitive ? value : value.toLowerCase());
     }
-    setState(OperationState.FINISHED)
-    setHasResultSet(true)
+  }
+
+  @Override
+  public String validate(String value) {
+    if (value == null || !expected.contains(caseSensitive ? value : value.toLowerCase())) {
+      return "Invalid value.. expects one of " + expected;
+    }
+    return null;
   }
 }

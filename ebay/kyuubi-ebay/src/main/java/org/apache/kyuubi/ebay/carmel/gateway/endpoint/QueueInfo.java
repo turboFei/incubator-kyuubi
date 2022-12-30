@@ -14,24 +14,39 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kyuubi.ebay.carmel.gateway.endpoint;
 
-package org.apache.kyuubi.operation
+public class QueueInfo {
+  private String name;
+  private boolean defaultQueue;
 
-import org.apache.kyuubi.KyuubiSQLException
-import org.apache.kyuubi.carmel.gateway.session.{CarmelSession, CarmelSessionStatus}
-import org.apache.kyuubi.session.Session
+  public QueueInfo(String name) {
+    this.name = name;
+  }
 
-abstract class InterceptedOperation(session: Session) extends KyuubiOperation(session) {
-  override protected def runInternal(): Unit = {
-    session match {
-      case carmelSession: CarmelSession =>
-        if (carmelSession.getBackendSessionStatus == CarmelSessionStatus.INACTIVE) {
-          throw KyuubiSQLException(
-            "The session has been closed due to the backend session has been dropped")
-        }
-      case _ =>
-    }
-    setState(OperationState.FINISHED)
-    setHasResultSet(true)
+  public QueueInfo(String name, boolean defaultQueue) {
+    this.name = name;
+    this.defaultQueue = defaultQueue;
+  }
+
+  public String getName() {
+    return name;
+  }
+
+  public void setName(String name) {
+    this.name = name;
+  }
+
+  public boolean isDefaultQueue() {
+    return defaultQueue;
+  }
+
+  public void setDefaultQueue(boolean defaultQueue) {
+    this.defaultQueue = defaultQueue;
+  }
+
+  @Override
+  public String toString() {
+    return "QueueInfo{" + "name='" + name + '\'' + ", defaultQueue=" + defaultQueue + '}';
   }
 }

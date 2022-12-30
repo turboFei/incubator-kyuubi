@@ -14,24 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kyuubi.ebay.carmel.gateway.endpoint;
 
-package org.apache.kyuubi.operation
+import java.util.List;
+import java.util.Set;
 
-import org.apache.kyuubi.KyuubiSQLException
-import org.apache.kyuubi.carmel.gateway.session.{CarmelSession, CarmelSessionStatus}
-import org.apache.kyuubi.session.Session
+public interface AccessManager extends Cacheable {
+  List<QueueInfo> getUserQueues(String user) throws Exception;
 
-abstract class InterceptedOperation(session: Session) extends KyuubiOperation(session) {
-  override protected def runInternal(): Unit = {
-    session match {
-      case carmelSession: CarmelSession =>
-        if (carmelSession.getBackendSessionStatus == CarmelSessionStatus.INACTIVE) {
-          throw KyuubiSQLException(
-            "The session has been closed due to the backend session has been dropped")
-        }
-      case _ =>
-    }
-    setState(OperationState.FINISHED)
-    setHasResultSet(true)
-  }
+  List<String> getBatchAccountsForServiceAccount(String serviceAccount) throws Exception;
+
+  Set<String> getGroupUsers(String groupName) throws Exception;
 }

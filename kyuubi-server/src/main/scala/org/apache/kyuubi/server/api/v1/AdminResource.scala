@@ -117,8 +117,7 @@ private[v1] class AdminResource extends ApiRequestContext with Logging {
       @QueryParam("cluster") cluster: String): Seq[Engine] = {
     val userName = fe.getSessionUser(hs2ProxyUser)
     val clusterOptList = Option(cluster).map(c => Seq(Option(c))).getOrElse {
-      val clusterList = KyuubiEbayConf.getClusterList(fe.getConf)
-      if (clusterList.isEmpty) Seq(None) else clusterList.map(Option(_))
+      KyuubiEbayConf.getNonCarmelClusterOptList(fe.getConf)
     }
 
     clusterOptList.flatMap { clusterOpt =>

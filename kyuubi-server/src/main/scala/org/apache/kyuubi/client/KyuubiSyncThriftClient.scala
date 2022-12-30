@@ -40,7 +40,7 @@ import org.apache.kyuubi.service.authentication.PlainSASLHelper
 import org.apache.kyuubi.session.SessionHandle
 import org.apache.kyuubi.util.{ThreadUtils, ThriftUtils}
 
-class KyuubiSyncThriftClient private (
+class KyuubiSyncThriftClient(
     protocol: TProtocol,
     engineAliveProbeProtocol: Option[TProtocol],
     engineAliveProbeInterval: Long,
@@ -450,9 +450,9 @@ class KyuubiSyncThriftClient private (
   }
 }
 
-private[kyuubi] object KyuubiSyncThriftClient extends Logging {
+object KyuubiSyncThriftClient extends Logging {
 
-  private def createTProtocol(
+  def createTProtocol(
       user: String,
       passwd: String,
       host: String,
@@ -490,5 +490,9 @@ private[kyuubi] object KyuubiSyncThriftClient extends Logging {
       aliveProbeProtocol,
       aliveProbeInterval,
       aliveTimeout)
+  }
+
+  def createClient(tProtocol: TProtocol): KyuubiSyncThriftClient = {
+    new KyuubiSyncThriftClient(tProtocol, None, 0, 0)
   }
 }
