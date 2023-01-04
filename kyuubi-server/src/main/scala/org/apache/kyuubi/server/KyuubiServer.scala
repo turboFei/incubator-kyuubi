@@ -22,6 +22,7 @@ import java.util.concurrent.ConcurrentHashMap
 import scala.collection.JavaConverters._
 import scala.util.Properties
 
+import org.apache.commons.lang3.StringUtils
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.security.UserGroupInformation
 
@@ -124,6 +125,28 @@ object KyuubiServer extends Logging {
 
   def getHadoopConf(clusterOpt: Option[String]): Configuration = {
     clusterHadoopConf.get(clusterOpt).get
+  }
+
+  private[kyuubi] def refreshUserDefaultsConf(): Unit = kyuubiServer.conf.synchronized {
+    val existedUserDefaults = kyuubiServer.conf.getAllUserDefaults
+    val refreshedUserDefaults = KyuubiConf().loadFileDefaults().getAllUserDefaults
+    var (unsetCount, updatedCount, addedCount) = (0, 0, 0)
+    for ((k, _) <- existedUserDefaults if !refreshedUserDefaults.contains(k)) {
+      kyuubiServer.conf.unset(k)
+      unsetCount = unsetCount + 1
+    }
+    for ((k, v) <- refreshedUserDefaults) {
+      if (existedUserDefaults.contains(k)) {
+        if (!StringUtils.equals(existedUserDefaults.get(k).orNull, v)) {
+          updatedCount = updatedCount + 1
+        }
+      } else {
+        addedCount = addedCount + 1
+      }
+      kyuubiServer.conf.set(k, v)
+    }
+    info(s"Refreshed user defaults configs with changes of " +
+      s"unset: $unsetCount, updated: $updatedCount, added: $addedCount")
   }
 }
 
