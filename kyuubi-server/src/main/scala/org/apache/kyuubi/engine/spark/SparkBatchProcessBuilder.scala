@@ -53,6 +53,8 @@ class SparkBatchProcessBuilder(
     }
 
     val batchKyuubiConf = new KyuubiConf(false)
+    // complete `spark.master` if absent on kubernetes
+    completeMasterUrl(batchKyuubiConf)
     batchConf.foreach(entry => { batchKyuubiConf.set(entry._1, entry._2) })
 
     // for spark batch etl sql jobs
