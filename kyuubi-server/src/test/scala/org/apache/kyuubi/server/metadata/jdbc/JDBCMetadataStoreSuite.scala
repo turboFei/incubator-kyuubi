@@ -60,6 +60,12 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
     assert(jdbcMetadataStore.getHikariDataSource.getIdleTimeout == 60000)
   }
 
+  test("test get init schema stream") {
+    assert(jdbcMetadataStore.getInitSchema(DatabaseType.DERBY).isDefined)
+    assert(jdbcMetadataStore.getInitSchema(DatabaseType.MYSQL).isDefined)
+    assert(jdbcMetadataStore.getInitSchema(DatabaseType.CUSTOM).isEmpty)
+  }
+
   test("jdbc metadata store") {
     val batchId = UUID.randomUUID().toString
     val kyuubiInstance = "localhost:10099"
