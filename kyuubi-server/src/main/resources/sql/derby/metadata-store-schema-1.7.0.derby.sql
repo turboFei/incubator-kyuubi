@@ -20,6 +20,7 @@ CREATE TABLE metadata(
     engine_type varchar(32) NOT NULL, -- the engine type
     cluster varchar(128), -- the engine cluster
     cluster_manager varchar(128), -- the engine cluster manager
+    engine_open_time bigint, -- the engine open time
     engine_id varchar(128), -- the engine application id
     engine_name clob, -- the engine application name
     engine_url varchar(1024), -- the engine tracking url

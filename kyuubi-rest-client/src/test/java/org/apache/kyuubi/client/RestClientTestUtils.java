@@ -52,6 +52,7 @@ public class RestClientTestUtils {
             "spark",
             "batch_name",
             "cluster",
+            0,
             id,
             null,
             "RUNNING",

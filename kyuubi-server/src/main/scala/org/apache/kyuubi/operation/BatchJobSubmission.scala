@@ -75,6 +75,9 @@ class BatchJobSubmission(
   private var killMessage: KillResponse = (false, "UNKNOWN")
   def getKillMessage: KillResponse = killMessage
 
+  @volatile private var _appSubmissionTime = recoveryMetadata.map(_.engineOpenTime).getOrElse(0L)
+  def appSubmissionTime: Long = _appSubmissionTime
+
   @VisibleForTesting
   private[kyuubi] val builder: ProcBuilder = {
     Option(batchType).map(_.toUpperCase(Locale.ROOT)) match {
@@ -97,10 +100,16 @@ class BatchJobSubmission(
 
   override private[kyuubi] def currentApplicationInfo: Option[ApplicationInfo] = {
     // only the ApplicationInfo with non-empty id is valid for the operation
-    applicationManager.getApplicationInfo(
+    val applicationInfo = applicationManager.getApplicationInfo(
       builder.clusterManager(),
       batchId,
       session.sessionCluster).filter(_.id != null)
+    applicationInfo.foreach { _ =>
+      if (_appSubmissionTime <= 0) {
+        _appSubmissionTime = System.currentTimeMillis()
+      }
+    }
+    applicationInfo
   }
 
   private[kyuubi] def killBatchApplication(): KillResponse = {
@@ -131,6 +140,7 @@ class BatchJobSubmission(
       val metadataToUpdate = Metadata(
         identifier = batchId,
         state = state.toString,
+        engineOpenTime = appSubmissionTime,
         engineId = status.id,
         engineName = status.name,
         engineUrl = status.url.orNull,

@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS metadata(
     engine_type varchar(32) NOT NULL COMMENT 'the engine type',
     cluster varchar(128) COMMENT 'the engine cluster',
     cluster_manager varchar(128) COMMENT 'the engine cluster manager',
+    engine_open_time bigint COMMENT 'the engine open time',
     engine_id varchar(128) COMMENT 'the engine application id',
     engine_name mediumtext COMMENT 'the engine application name',
     engine_url varchar(1024) COMMENT 'the engine tracking url',

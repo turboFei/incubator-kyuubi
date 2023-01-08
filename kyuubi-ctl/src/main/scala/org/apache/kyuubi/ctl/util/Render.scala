@@ -114,6 +114,10 @@ private[ctl] object Render {
     Option(batch.getCluster).foreach { _ =>
       batchAppInfo += s"App Cluster: ${batch.getCluster}"
     }
+    if (batch.getAppSubmissionTime > 0) {
+      batchAppInfo += s"App Submission Time:" +
+        s" ${millisToDateString(batch.getAppSubmissionTime, "yyyy-MM-dd HH:mm:ss")}"
+    }
     Option(batch.getAppId).foreach { _ =>
       batchAppInfo += s"App Id: ${batch.getAppId}"
     }
