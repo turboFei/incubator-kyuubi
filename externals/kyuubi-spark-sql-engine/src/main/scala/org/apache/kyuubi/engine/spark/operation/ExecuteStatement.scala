@@ -83,30 +83,33 @@ class ExecuteStatement(
     }
   }
 
-  private def withMetrics(qe: QueryExecution): Unit = {
-    val checkedSparkPlan = qe.executedPlan match {
-      case a: AdaptiveSparkPlanExec =>
-        a.executedPlan
-      case plan => plan
+  private def withMetrics(qe: QueryExecution): Unit =
+    try {
+      val checkedSparkPlan = qe.executedPlan match {
+        case a: AdaptiveSparkPlanExec =>
+          a.executedPlan
+        case plan => plan
+      }
+      checkedSparkPlan match {
+        case DataWritingCommandExec(cmd, _) =>
+          setNumOutputRows(cmd.metrics, "numOutputRows")
+        case ExecutedCommandExec(cmd) =>
+          cmd match {
+            case c: InsertIntoDataSourceCommand =>
+              setNumOutputRows(c.metrics, "numOutputRows")
+            case _ => // TODO: Support delta Update(WithJoin)Command/Delete(WithJoin)Command
+          }
+        case a: AppendDataExecV1 =>
+          setNumOutputRows(a.metrics, "numOutputRows")
+        case a: OverwriteByExpressionExecV1 =>
+          setNumOutputRows(a.metrics, "numOutputRows")
+        case a: V2TableWriteExec =>
+          setNumOutputRows(a.metrics, "numOutputRows")
+        case _ =>
+      }
+    } catch {
+      case e: Throwable => error("Error updating query metrics", e)
     }
-    checkedSparkPlan match {
-      case DataWritingCommandExec(cmd, _) =>
-        setNumOutputRows(cmd.metrics, "numOutputRows")
-      case ExecutedCommandExec(cmd) =>
-        cmd match {
-          case c: InsertIntoDataSourceCommand =>
-            setNumOutputRows(c.metrics, "numOutputRows")
-          case _ => // TODO: Support delta Update(WithJoin)Command/Delete(WithJoin)Command
-        }
-      case a: AppendDataExecV1 =>
-        setNumOutputRows(a.metrics, "numOutputRows")
-      case a: OverwriteByExpressionExecV1 =>
-        setNumOutputRows(a.metrics, "numOutputRows")
-      case a: V2TableWriteExec =>
-        setNumOutputRows(a.metrics, "numOutputRows")
-      case _ =>
-    }
-  }
 
   // temp table collect
   private val tempTableDb =
