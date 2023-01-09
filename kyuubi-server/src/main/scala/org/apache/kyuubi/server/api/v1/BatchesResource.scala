@@ -96,7 +96,7 @@ private[v1] class BatchesResource extends ApiRequestContext with Logging {
       batchOp.batchType,
       name,
       session.sessionCluster.orNull,
-      batchOp.appSubmissionTime,
+      batchOp.appStartTime,
       appId,
       appUrl,
       appState,
