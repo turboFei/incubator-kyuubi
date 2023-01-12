@@ -94,7 +94,7 @@ class KyuubiSessionImpl(
   private lazy val sessionUserSignBase64: String =
     SignUtils.signWithPrivateKey(user, sessionManager.signingPrivateKey)
 
-  protected val sessionEvent = KyuubiSessionEvent(this)
+  private val sessionEvent = KyuubiSessionEvent(this)
   EventBus.post(sessionEvent)
 
   override def getSessionEvent: Option[KyuubiSessionEvent] = {
@@ -108,10 +108,10 @@ class KyuubiSessionImpl(
       sessionManager.getConf)
   }
 
-  protected var _client: KyuubiSyncThriftClient = _
+  private var _client: KyuubiSyncThriftClient = _
   def client: KyuubiSyncThriftClient = _client
 
-  protected var _engineSessionHandle: SessionHandle = _
+  private var _engineSessionHandle: SessionHandle = _
 
   override def open(): Unit = handleSessionException {
     MetricsSystem.tracing { ms =>
@@ -127,7 +127,7 @@ class KyuubiSessionImpl(
     runOperation(launchEngineOp)
   }
 
-  protected[kyuubi] def openEngineSession(extraEngineLog: Option[OperationLog] = None): Unit = {
+  private[kyuubi] def openEngineSession(extraEngineLog: Option[OperationLog] = None): Unit = {
     withDiscoveryClient(sessionConf) { discoveryClient =>
       var openEngineSessionConf = optimizedConf
       if (engineCredentials.nonEmpty) {

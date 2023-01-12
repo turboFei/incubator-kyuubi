@@ -17,20 +17,10 @@
 
 package org.apache.kyuubi.operation
 
-import org.apache.kyuubi.KyuubiSQLException
-import org.apache.kyuubi.carmel.gateway.session.{CarmelSession, CarmelSessionStatus}
 import org.apache.kyuubi.session.Session
 
 abstract class InterceptedOperation(session: Session) extends KyuubiOperation(session) {
   override protected def runInternal(): Unit = {
-    session match {
-      case carmelSession: CarmelSession =>
-        if (carmelSession.getBackendSessionStatus == CarmelSessionStatus.INACTIVE) {
-          throw KyuubiSQLException(
-            "The session has been closed due to the backend session has been dropped")
-        }
-      case _ =>
-    }
     setState(OperationState.FINISHED)
     setHasResultSet(true)
   }

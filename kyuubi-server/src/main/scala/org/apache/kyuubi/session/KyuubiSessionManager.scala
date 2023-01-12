@@ -27,7 +27,6 @@ import com.google.common.cache.{CacheBuilder, CacheLoader, LoadingCache}
 import org.apache.hive.service.rpc.thrift.TProtocolVersion
 
 import org.apache.kyuubi.KyuubiSQLException
-import org.apache.kyuubi.carmel.gateway.session.{CarmelEndpointManager, CarmelSession}
 import org.apache.kyuubi.client.api.v1.dto.{Batch, BatchRequest}
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiConf._
@@ -73,8 +72,6 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
 
   lazy val (signingPrivateKey, signingPublicKey) = SignUtils.generateKeyPair()
 
-  val carmelEndpointManager = new CarmelEndpointManager(this)
-
   override def initialize(conf: KyuubiConf): Unit = {
     this.conf = conf
     addService(applicationManager)
@@ -85,7 +82,6 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
     }
     metadataManager.foreach(addService)
     initSessionLimiter(conf)
-    addService(carmelEndpointManager)
     super.initialize(conf)
   }
 
@@ -95,31 +91,16 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
       password: String,
       ipAddress: String,
       conf: Map[String, String]): Session = {
-    val sessionCluster = getSessionCluster(conf)
-    limiters.get(sessionCluster).foreach(_.increment(UserIpAddress(user, ipAddress)))
     val sessionConf = getSessionConf(conf)
-
-    if (KyuubiEbayConf.isCarmelCluster(getConf, sessionCluster)) {
-      new CarmelSession(
-        protocol,
-        user,
-        password,
-        ipAddress,
-        conf,
-        this,
-        sessionConf.getUserDefaults(user),
-        parser)
-    } else {
-      new KyuubiSessionImpl(
-        protocol,
-        user,
-        password,
-        ipAddress,
-        conf,
-        this,
-        sessionConf.getUserDefaults(user),
-        parser)
-    }
+    new KyuubiSessionImpl(
+      protocol,
+      user,
+      password,
+      ipAddress,
+      conf,
+      this,
+      sessionConf.getUserDefaults(user),
+      parser)
   }
 
   override def openSession(
@@ -129,6 +110,8 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
       ipAddress: String,
       conf: Map[String, String]): SessionHandle = {
     val username = Option(user).filter(_.nonEmpty).getOrElse("anonymous")
+    val sessionCluster = getSessionCluster(conf)
+    limiters.get(sessionCluster).foreach(_.increment(UserIpAddress(username, ipAddress)))
     try {
       super.openSession(protocol, username, password, ipAddress, conf)
     } catch {

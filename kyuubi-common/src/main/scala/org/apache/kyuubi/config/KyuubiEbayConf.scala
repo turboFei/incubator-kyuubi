@@ -23,7 +23,7 @@ import java.time.Duration
 import scala.collection.JavaConverters._
 
 import org.apache.kyuubi.{KyuubiException, KyuubiSQLException, Logging, Utils}
-import org.apache.kyuubi.config.KyuubiConf.{KYUUBI_CONF_DIR, KYUUBI_CONF_FILE_NAME, KYUUBI_HOME, OPERATION_INCREMENTAL_COLLECT, SESSION_IDLE_TIMEOUT}
+import org.apache.kyuubi.config.KyuubiConf.{KYUUBI_CONF_DIR, KYUUBI_CONF_FILE_NAME, KYUUBI_HOME, OPERATION_INCREMENTAL_COLLECT}
 import org.apache.kyuubi.session.SessionManager
 
 object KyuubiEbayConf extends Logging {
@@ -515,20 +515,6 @@ object KyuubiEbayConf extends Logging {
       .intConf
       .createWithDefault(90) // 3 months
 
-  val CARMEL_CLUSTER_LIST: ConfigEntry[Seq[String]] =
-    buildConf("kyuubi.carmel.cluster.list")
-      .internal
-      .serverOnly
-      .stringConf
-      .toSequence()
-      .createWithDefault(Nil)
-
-  val CARMEL_SESSION_IDLE_TIME: ConfigEntry[Long] =
-    buildConf("kyuubi.carmel.session.idle.timeout")
-      .internal
-      .serverOnly
-      .fallbackConf(SESSION_IDLE_TIMEOUT)
-
   def getDefaultPropertiesFileForCluster(
       clusterOpt: Option[String],
       conf: KyuubiConf = KyuubiConf().loadFileDefaults(),
@@ -586,18 +572,6 @@ object KyuubiEbayConf extends Logging {
         }
         clusterList
       }
-  }
-
-  def isCarmelCluster(conf: KyuubiConf, sessionCluster: Option[String]): Boolean = {
-    sessionCluster.exists(conf.get(CARMEL_CLUSTER_LIST).contains)
-  }
-
-  def getNonCarmelClusterOptList(conf: KyuubiConf): Seq[Option[String]] = {
-    if (conf.get(SESSION_CLUSTER_MODE_ENABLED)) {
-      getClusterList(conf).filterNot(conf.get(SESSION_CLUSTER_LIST).contains).map(Option(_))
-    } else {
-      Seq(None)
-    }
   }
 
   def getClusterList(conf: KyuubiConf = KyuubiConf().loadFileDefaults()): Seq[String] = {

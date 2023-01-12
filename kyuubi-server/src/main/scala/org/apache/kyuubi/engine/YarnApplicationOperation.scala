@@ -37,7 +37,12 @@ class YarnApplicationOperation extends ApplicationOperation with Logging {
   private val yarnClients = new ConcurrentHashMap[Option[String], YarnClient]()
 
   override def initialize(conf: KyuubiConf): Unit = {
-    val clusterOptList = KyuubiEbayConf.getNonCarmelClusterOptList(conf)
+    val clusterOptList =
+      if (conf.get(KyuubiEbayConf.SESSION_CLUSTER_MODE_ENABLED)) {
+        KyuubiEbayConf.getClusterList(conf).map(Option(_))
+      } else {
+        List(None)
+      }
 
     clusterOptList.foreach { clusterOpt =>
       val yarnConf = KyuubiHadoopUtils.newYarnConfiguration(conf, clusterOpt = clusterOpt)
