@@ -281,6 +281,7 @@ public class KyuubiStatement implements SQLStatement, KyuubiLoggable {
                 .setScrollable(isScrollableResultset)
                 .setSchema(columnNames, columnTypes, columnAttributes)
                 .build();
+        break;
       default:
         resultSet =
             new KyuubiQueryResultSet.Builder(this)
