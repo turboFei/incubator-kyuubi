@@ -102,18 +102,20 @@ class SparkSessionImpl(
     sessionManager.operationManager.asInstanceOf[SparkSQLOperationManager].closeILoop(handle)
     sessionManager.operationManager.asInstanceOf[SparkSQLOperationManager].closePythonProcess(
       handle)
-    cleanupSessionScratchDir()
+    cleanupSessionScratch()
   }
 
   private[kyuubi] val sessionScratchDir: Path = {
     getSessionScratchDir(spark, user, handle.identifier.toString)
   }
 
-  private def cleanupSessionScratchDir(): Unit = {
+  private def cleanupSessionScratch(): Unit = {
     val fileSystem = sessionScratchDir.getFileSystem(spark.sparkContext.hadoopConfiguration)
     if (fileSystem.exists(sessionScratchDir)) {
       fileSystem.delete(sessionScratchDir, true)
     }
+    // clear the temp tables
+    spark.sqlContext.clearTempTables()
   }
 }
 
