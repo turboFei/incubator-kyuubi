@@ -20,6 +20,8 @@ package org.apache.kyuubi
 import java.nio.file.Path
 
 trait DeltaSuiteMixin extends DataLakeSuiteMixin {
+  // set spark.testing for ebay delta
+  System.setProperty("spark.testing", "true")
 
   override protected def format: String = "delta"
 

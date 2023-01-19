@@ -30,5 +30,9 @@ class DeltaOperationSuite extends WithKyuubiServer with DeltaMetadataTests {
     kyuubiConf
   }
 
+  override protected def extraConfigs: Map[String, String] = {
+    super.extraConfigs ++ Map("kyuubi.engineEnv.SPARK_TESTING" -> "true")
+  }
+
   override def jdbcUrl: String = getJdbcUrl
 }

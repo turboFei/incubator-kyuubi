@@ -38,76 +38,79 @@ trait RowLevelOperationTests extends HiveJDBCTestHelper with DataLakeSuiteMixin 
          |""".stripMargin)
   }
 
-  test("update operation") {
-    val testTbl = s"${format}_update"
-    withJdbcStatement(testTbl) { stmt =>
-      createAndInitTable(stmt, testTbl) {
-        (1, "HangZhou") :: (2, "Seattle") :: (3, "Beijing") :: Nil
-      }
-      stmt.execute(s"UPDATE $testTbl SET city = 'Shanghai' WHERE id IN (1)")
-      stmt.execute(s"UPDATE $testTbl SET id = -1 WHERE city = 'Seattle'")
+  // TODO: enable for iceberg after spark-3.1.1.0.13.0
+  if (format != "iceberg") {
+    test("update operation") {
+      val testTbl = s"${format}_update"
+      withJdbcStatement(testTbl) { stmt =>
+        createAndInitTable(stmt, testTbl) {
+          (1, "HangZhou") :: (2, "Seattle") :: (3, "Beijing") :: Nil
+        }
+        stmt.execute(s"UPDATE $testTbl SET city = 'Shanghai' WHERE id IN (1)")
+        stmt.execute(s"UPDATE $testTbl SET id = -1 WHERE city = 'Seattle'")
 
-      val rs1 = stmt.executeQuery(s"SELECT * FROM $testTbl ORDER BY id")
-      assert(rs1.next())
-      assert(rs1.getInt("id") === -1)
-      assert(rs1.getString("city") === "Seattle")
-      assert(rs1.next())
-      assert(rs1.getInt("id") === 1)
-      assert(rs1.getString("city") === "Shanghai")
-      assert(rs1.next())
-      assert(rs1.getInt("id") === 3)
-      assert(rs1.getString("city") === "Beijing")
-      assert(!rs1.next())
+        val rs1 = stmt.executeQuery(s"SELECT * FROM $testTbl ORDER BY id")
+        assert(rs1.next())
+        assert(rs1.getInt("id") === -1)
+        assert(rs1.getString("city") === "Seattle")
+        assert(rs1.next())
+        assert(rs1.getInt("id") === 1)
+        assert(rs1.getString("city") === "Shanghai")
+        assert(rs1.next())
+        assert(rs1.getInt("id") === 3)
+        assert(rs1.getString("city") === "Beijing")
+        assert(!rs1.next())
+      }
     }
-  }
 
-  test("delete operation") {
-    val testTbl = s"${format}_delete"
-    withJdbcStatement(testTbl) { stmt =>
-      createAndInitTable(stmt, testTbl) {
-        (1, "HangZhou") :: (2, "Seattle") :: (3, "Beijing") :: Nil
+    test("delete operation") {
+      val testTbl = s"${format}_delete"
+      withJdbcStatement(testTbl) { stmt =>
+        createAndInitTable(stmt, testTbl) {
+          (1, "HangZhou") :: (2, "Seattle") :: (3, "Beijing") :: Nil
+        }
+        stmt.execute(s"DELETE FROM $testTbl WHERE WHERE id = 1")
+        stmt.execute(s"DELETE FROM $testTbl WHERE WHERE city = 'Seattle'")
+
+        val rs1 = stmt.executeQuery(s"SELECT * FROM $testTbl ORDER BY id")
+        assert(rs1.next())
+        assert(rs1.getInt("id") === 3)
+        assert(rs1.getString("city") === "Beijing")
+        assert(!rs1.next())
       }
-      stmt.execute(s"DELETE FROM $testTbl WHERE WHERE id = 1")
-      stmt.execute(s"DELETE FROM $testTbl WHERE WHERE city = 'Seattle'")
-
-      val rs1 = stmt.executeQuery(s"SELECT * FROM $testTbl ORDER BY id")
-      assert(rs1.next())
-      assert(rs1.getInt("id") === 3)
-      assert(rs1.getString("city") === "Beijing")
-      assert(!rs1.next())
     }
-  }
 
-  test("merge into operation") {
-    val testTblBase = s"${format}_merge_into_base"
-    val testTblDelta = s"${format}_merge_into_delta"
-    withJdbcStatement(testTblBase, testTblDelta) { stmt =>
-      createAndInitTable(stmt, testTblBase) {
-        (1, "HangZhou") :: (2, "Seattle") :: (3, "Beijing") :: Nil
-      }
-      createAndInitTable(stmt, testTblDelta) {
-        (2, "Chicago") :: (3, "HongKong") :: (4, "London") :: Nil
-      }
-      stmt.execute(
-        s"""MERGE INTO $testTblBase t
-           |USING (SELECT * FROM $testTblDelta) s
-           |ON t.id = s.id
-           |WHEN MATCHED AND t.id = 2 THEN UPDATE SET *
-           |WHEN MATCHED AND t.city = 'Beijing' THEN DELETE
-           |WHEN NOT MATCHED THEN INSERT *
-           |""".stripMargin)
+    test("merge into operation") {
+      val testTblBase = s"${format}_merge_into_base"
+      val testTblDelta = s"${format}_merge_into_delta"
+      withJdbcStatement(testTblBase, testTblDelta) { stmt =>
+        createAndInitTable(stmt, testTblBase) {
+          (1, "HangZhou") :: (2, "Seattle") :: (3, "Beijing") :: Nil
+        }
+        createAndInitTable(stmt, testTblDelta) {
+          (2, "Chicago") :: (3, "HongKong") :: (4, "London") :: Nil
+        }
+        stmt.execute(
+          s"""MERGE INTO $testTblBase t
+             |USING (SELECT * FROM $testTblDelta) s
+             |ON t.id = s.id
+             |WHEN MATCHED AND t.id = 2 THEN UPDATE SET *
+             |WHEN MATCHED AND t.city = 'Beijing' THEN DELETE
+             |WHEN NOT MATCHED THEN INSERT *
+             |""".stripMargin)
 
-      val rs1 = stmt.executeQuery(s"SELECT * FROM $testTblBase ORDER BY id")
-      assert(rs1.next())
-      assert(rs1.getInt("id") === 1)
-      assert(rs1.getString("city") === "HangZhou")
-      assert(rs1.next())
-      assert(rs1.getInt("id") === 2)
-      assert(rs1.getString("city") === "Chicago")
-      assert(rs1.next())
-      assert(rs1.getInt("id") === 4)
-      assert(rs1.getString("city") === "London")
-      assert(!rs1.next())
+        val rs1 = stmt.executeQuery(s"SELECT * FROM $testTblBase ORDER BY id")
+        assert(rs1.next())
+        assert(rs1.getInt("id") === 1)
+        assert(rs1.getString("city") === "HangZhou")
+        assert(rs1.next())
+        assert(rs1.getInt("id") === 2)
+        assert(rs1.getString("city") === "Chicago")
+        assert(rs1.next())
+        assert(rs1.getInt("id") === 4)
+        assert(rs1.getString("city") === "London")
+        assert(!rs1.next())
+      }
     }
   }
 }
