@@ -105,7 +105,8 @@ object EventDoc {
           e.sessionId,
           e.sessionUser,
           e.sessionType,
-          e.eventType)
+          e.eventType,
+          e.sessionCluster)
       case _ => throw new RuntimeException(s"Unknown kyuubi event: $event")
     }
   }

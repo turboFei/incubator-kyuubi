@@ -153,6 +153,9 @@
         "sessionType": {
           "type": "keyword"
         },
+        "sessionCluster": {
+          "type": "keyword"
+        },
         "eventType": {
           "type": "keyword"
         }
