@@ -17,23 +17,20 @@
 
 package org.apache.kyuubi.ebay.server.events.doc
 
-case class OperationEventDoc(
-    statementId: String,
-    remoteId: String,
-    statement: String,
-    shouldRunAsync: Boolean,
-    state: String,
-    eventTime: Long,
-    createTime: Long,
-    startTime: Long,
-    completeTime: Long,
-    exception: String,
-    sessionId: String,
-    sessionUser: String,
-    sessionType: String,
-    eventType: String,
-    sessionCluster: String)
+/**
+ * The daily trend event for session or operation.
+ * @param date the event date
+ * @param sessionCluster the session cluster
+ * @param count the session/operation count
+ * @param users the user count
+ * @param sessionTypeCounts the session type and count map
+ */
+case class DailyTrendEvent(
+    date: String,
+    sessionCluster: String,
+    count: Long,
+    users: Long,
+    sessionTypeCounts: Map[String, Long])
   extends EventDoc {
-  override def docId: String = statementId
-  override def indexPartitionTime: Option[Long] = Some(createTime)
+  override def docId: String = s"${date}_$sessionCluster"
 }

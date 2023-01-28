@@ -28,10 +28,15 @@ import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest
 import org.elasticsearch.action.bulk.BulkRequest
 import org.elasticsearch.action.get.GetRequest
 import org.elasticsearch.action.index.IndexRequest
+import org.elasticsearch.action.search.SearchRequest
 import org.elasticsearch.action.update.UpdateRequest
 import org.elasticsearch.client.{RequestOptions, RestClient, RestHighLevelClient}
 import org.elasticsearch.client.indices.{CreateIndexRequest, GetIndexRequest}
 import org.elasticsearch.common.xcontent.XContentType
+import org.elasticsearch.search.aggregations.{AggregationBuilders, BucketOrder}
+import org.elasticsearch.search.aggregations.bucket.terms.Terms
+import org.elasticsearch.search.aggregations.metrics.Cardinality
+import org.elasticsearch.search.builder.SearchSourceBuilder
 
 import org.apache.kyuubi.{Logging, Utils}
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
@@ -120,7 +125,7 @@ object ElasticsearchUtils extends Logging {
   }
 
   // visible for testing
-  def getDoc(index: String, id: String): JMap[String, AnyRef] = withRetry {
+  def getDocById(index: String, id: String): JMap[String, AnyRef] = withRetry {
     try {
       val request = new GetRequest().index(index).id(id)
       getClient().get(request, RequestOptions.DEFAULT).getSource
@@ -129,6 +134,13 @@ object ElasticsearchUtils extends Logging {
         error(s"Error getting doc [$index/$id]", e)
         throw e
     }
+  }
+
+  // visible for testing
+  def getAllDocs(index: String): Seq[String] = {
+    val searchRequest = new SearchRequest(index)
+    val searchResponse = getClient().search(searchRequest, RequestOptions.DEFAULT)
+    searchResponse.getHits.getHits.map(_.getSourceAsString).toSeq
   }
 
   def updateDoc(index: String, id: String, doc: String): Unit = withRetry {
@@ -143,7 +155,7 @@ object ElasticsearchUtils extends Logging {
     }
   }
 
-  def bulkUpdate(docsToUpdate: List[(String, String, String)]): Unit = withRetry {
+  def bulkUpdate(docsToUpdate: Seq[(String, String, String)]): Unit = withRetry {
     try {
       val request = new BulkRequest()
       docsToUpdate.foreach { case (index, id, doc) =>
@@ -180,6 +192,152 @@ object ElasticsearchUtils extends Logging {
     } catch {
       case e: Throwable =>
         error(s"Error getting alias[$alias]", e)
+        throw e
+    }
+  }
+
+  /**
+   * To get the count aggregation result for session/operation.
+   * For cluster aggregation.
+   * {
+   *  "size": 0,
+   *  "aggs": {
+   *    "clusterAgg": {
+   *      "terms": {
+   *        "size": $size,
+   *        "field": "sessionCluster",
+   *        "order": {
+   *          "_count": "desc"
+   *        }
+   *      },
+   *      "aggs": {
+   *        "uniqueUsers": {
+   *          "cardinality": {
+   *            "field": "$userField"
+   *          }
+   *        },
+   *        "sessionTypeAgg": {
+   *          "terms": {
+   *            "field": "sessionType",
+   *            "size": $size
+   *          }
+   *        }
+   *      }
+   *    }
+   *  }
+   * }
+   * For cluster user aggregation.
+   * {
+   *  "size": 0,
+   *  "aggs": {
+   *    "clusterAgg": {
+   *      "terms": {
+   *        "size": $size,
+   *        "field": "sessionCluster",
+   *        "order": {
+   *          "_count": "desc"
+   *        }
+   *      },
+   *      "aggs": {
+   *        "userAgg": {
+   *          "terms": {
+   *            "field": "$userField",
+   *            "size": $size,
+   *            "min_doc_count": $userMiniDocCount,
+   *            "order": {
+   *              "_count": "desc"
+   *            }
+   *          },
+   *          "aggs": {
+   *            "sessionTypeAgg": {
+   *              "terms": {
+   *                "field": "sessionType",
+   *                "size": $size
+   *              }
+   *            }
+   *          }
+   *        }
+   *      }
+   *    }
+   *  }
+   * }
+   * @param index the elastic search index name
+   * @param size the max aggregation result size
+   * @param userField if it is defined, it is for user aggregation.
+   *                  For session event index, it is `user`.
+   *                  For operation event index, it is `sessionUser`.
+   * @return the aggregation result.
+   */
+  def getCountAggregation(
+      index: String,
+      userField: String,
+      aggByUser: Boolean,
+      size: Int = Int.MaxValue,
+      userMiniDocCount: Int = 1): Seq[CountAggResult] = withRetry {
+    try {
+      val clusterAgg = AggregationBuilders.terms("clusterAgg")
+        .field("sessionCluster")
+        .size(size)
+
+      val sessionTypeAgg = AggregationBuilders.terms("sessionTypeAgg")
+        .field("sessionType")
+        .size(size)
+
+      val uniqueUsersAgg = AggregationBuilders.cardinality("uniqueUsers").field(userField)
+
+      val userAgg = if (aggByUser) {
+        val uAgg = AggregationBuilders.terms("userAgg")
+          .field(userField)
+          .size(size)
+          .minDocCount(userMiniDocCount)
+          .order(BucketOrder.count(false))
+        uAgg.subAggregation(sessionTypeAgg)
+        clusterAgg.subAggregation(uAgg)
+        Some(uAgg)
+      } else {
+        clusterAgg.subAggregation(uniqueUsersAgg)
+        clusterAgg.subAggregation(sessionTypeAgg)
+        None
+      }
+
+      getClient().search(
+        new SearchRequest(index).source(new SearchSourceBuilder().aggregation(clusterAgg).size(0)),
+        RequestOptions.DEFAULT)
+        .getAggregations.get(clusterAgg.getName).asInstanceOf[Terms].getBuckets.asScala.flatMap {
+          clusterBucket =>
+            userAgg match {
+              case Some(uAgg) =>
+                clusterBucket.getAggregations.get(uAgg.getName).asInstanceOf[
+                  Terms].getBuckets.asScala.map { userBucket =>
+                  val userSessionTypeCounts = userBucket.getAggregations.get(sessionTypeAgg.getName)
+                    .asInstanceOf[Terms].getBuckets.asScala.map { sessionTypeBucket =>
+                      sessionTypeBucket.getKeyAsString -> sessionTypeBucket.getDocCount
+                    }.toMap
+                  CountAggResult(
+                    clusterBucket.getKeyAsString,
+                    userBucket.getDocCount,
+                    userSessionTypeCounts,
+                    user = userBucket.getKeyAsString)
+                }
+
+              case None =>
+                val clusterSessionTypeCounts =
+                  clusterBucket.getAggregations.get(sessionTypeAgg.getName)
+                    .asInstanceOf[Terms].getBuckets.asScala.map { sessionTypeBucket =>
+                      sessionTypeBucket.getKeyAsString -> sessionTypeBucket.getDocCount
+                    }.toMap
+                val clusterUserCount = clusterBucket.getAggregations.get(
+                  uniqueUsersAgg.getName).asInstanceOf[Cardinality].getValue
+                CountAggResult(
+                  clusterBucket.getKeyAsString,
+                  clusterBucket.getDocCount,
+                  clusterSessionTypeCounts,
+                  userCount = clusterUserCount) :: Nil
+            }
+        }
+    } catch {
+      case e: Throwable =>
+        error(s"Error getting aggregation for $index [$size/$userField/$userMiniDocCount]")
         throw e
     }
   }

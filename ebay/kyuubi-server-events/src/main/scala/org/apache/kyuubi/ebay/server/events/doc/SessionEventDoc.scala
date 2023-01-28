@@ -38,5 +38,5 @@ case class SessionEventDoc(
     eventType: String)
   extends EventDoc {
   override def docId: String = sessionId
-  override def indexPartitionTime: Long = startTime
+  override def indexPartitionTime: Option[Long] = Some(startTime)
 }

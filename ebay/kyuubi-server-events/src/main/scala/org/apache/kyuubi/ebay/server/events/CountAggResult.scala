@@ -15,25 +15,11 @@
  * limitations under the License.
  */
 
-package org.apache.kyuubi.ebay.server.events.doc
+package org.apache.kyuubi.ebay.server.events
 
-case class OperationEventDoc(
-    statementId: String,
-    remoteId: String,
-    statement: String,
-    shouldRunAsync: Boolean,
-    state: String,
-    eventTime: Long,
-    createTime: Long,
-    startTime: Long,
-    completeTime: Long,
-    exception: String,
-    sessionId: String,
-    sessionUser: String,
-    sessionType: String,
-    eventType: String,
-    sessionCluster: String)
-  extends EventDoc {
-  override def docId: String = statementId
-  override def indexPartitionTime: Option[Long] = Some(createTime)
-}
+case class CountAggResult(
+    cluster: String,
+    count: Long,
+    sessionTypeCounts: Map[String, Long],
+    user: String = "",
+    userCount: Long = 0L)

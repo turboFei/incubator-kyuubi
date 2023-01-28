@@ -29,9 +29,10 @@ import org.apache.kyuubi.events.{KyuubiEvent, KyuubiOperationEvent, KyuubiServer
 
 trait EventDoc {
   def docId: String
-  def indexPartitionTime: Long
-  final def formatPartitionIndex(index: String): String = {
-    index + indexDelimiter + dateFormat.format(indexPartitionTime)
+  def indexPartitionTime: Option[Long] = None
+  final def formatPartitionIndex(index: String): String = indexPartitionTime match {
+    case Some(partitionTime) => index + indexDelimiter + dateFormat.format(partitionTime)
+    case _ => index
   }
   final def toJson: String = EventDoc.mapper.writeValueAsString(this)
 }

@@ -515,6 +515,69 @@ object KyuubiEbayConf extends Logging {
       .intConf
       .createWithDefault(90) // 3 months
 
+  val ELASTIC_SEARCH_DAILY_SESSION_INDEX: ConfigEntry[String] =
+    buildConf("kyuubi.elastic.search.daily.session.index")
+      .internal
+      .serverOnly
+      .stringConf
+      .createWithDefault("kyuubi_daily_session")
+
+  val ELASTIC_SEARCH_DAILY_OPERATION_INDEX: ConfigEntry[String] =
+    buildConf("kyuubi.elastic.search.daily.operation.index")
+      .internal
+      .serverOnly
+      .stringConf
+      .createWithDefault("kyuubi_daily_operation")
+
+  val ELASTIC_SEARCH_USER_DAILY_SESSION_INDEX: ConfigEntry[String] =
+    buildConf("kyuubi.elastic.search.user.daily.session.index")
+      .internal
+      .serverOnly
+      .stringConf
+      .createWithDefault("kyuubi_user_daily_session")
+
+  val ELASTIC_SEARCH_USER_DAILY_OPERATION_INDEX: ConfigEntry[String] =
+    buildConf("kyuubi.elastic.search.user.daily.operation.index")
+      .internal
+      .serverOnly
+      .stringConf
+      .createWithDefault("kyuubi_user_daily_operation")
+
+  val ELASTIC_SEARCH_AGG_ENABLED: ConfigEntry[Boolean] =
+    buildConf("kyuubi.elastic.search.agg.enabled")
+      .internal
+      .serverOnly
+      .booleanConf
+      .createWithDefault(false)
+
+  val ELASTIC_SEARCH_AGG_DAYS: ConfigEntry[Int] =
+    buildConf("kyuubi.elastic.search.agg.days")
+      .internal
+      .serverOnly
+      .intConf
+      .createWithDefault(2)
+
+  val ELASTIC_SEARCH_AGG_INTERVAL: ConfigEntry[Long] =
+    buildConf("kyuubi.elastic.search.agg.interval")
+      .internal
+      .serverOnly
+      .timeConf
+      .createWithDefaultString("PT1H")
+
+  val ELASTIC_SEARCH_AGG_SIZE: ConfigEntry[Int] =
+    buildConf("kyuubi.elastic.search.agg.size")
+      .internal
+      .serverOnly
+      .intConf
+      .createWithDefault(Int.MaxValue)
+
+  val ELASTIC_SEARCH_AGG_MIN_DOC_COUNT: ConfigEntry[Int] =
+    buildConf("kyuubi.elastic.search.agg.min.doc.count")
+      .internal
+      .serverOnly
+      .intConf
+      .createWithDefault(1)
+
   def getDefaultPropertiesFileForCluster(
       clusterOpt: Option[String],
       conf: KyuubiConf = KyuubiConf().loadFileDefaults(),

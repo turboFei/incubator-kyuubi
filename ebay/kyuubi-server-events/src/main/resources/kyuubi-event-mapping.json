@@ -161,5 +161,117 @@
         }
       }
     }
+  },
+  "session-daily-trend-event" : {
+    "mappings" : {
+      "properties" : {
+        "date" : {
+          "type" : "keyword"
+        },
+        "sessionCluster" : {
+          "type" : "keyword"
+        },
+        "count" : {
+          "type" : "long"
+        },
+        "users" : {
+          "type" : "long"
+        },
+        "sessionTypeCounts" : {
+          "properties" : {
+            "BATCH" : {
+              "type" : "long"
+            },
+            "INTERACTIVE" : {
+              "type" : "long"
+            }
+          }
+        }
+      }
+    }
+  },
+  "user-session-daily-trend-event" : {
+    "mappings" : {
+      "properties" : {
+        "user": {
+          "type": "keyword"
+        },
+        "date" : {
+          "type" : "keyword"
+        },
+        "sessionCluster" : {
+          "type" : "keyword"
+        },
+        "count" : {
+          "type" : "long"
+        },
+        "sessionTypeCounts" : {
+          "properties" : {
+            "BATCH" : {
+              "type" : "long"
+            },
+            "INTERACTIVE" : {
+              "type" : "long"
+            }
+          }
+        }
+      }
+    }
+  },
+  "operation-daily-trend-event" : {
+    "mappings" : {
+      "properties" : {
+        "date" : {
+          "type" : "keyword"
+        },
+        "sessionCluster" : {
+          "type" : "keyword"
+        },
+        "count" : {
+          "type" : "long"
+        },
+        "users" : {
+          "type" : "long"
+        },
+        "sessionTypeCounts" : {
+          "properties" : {
+            "BATCH" : {
+              "type" : "long"
+            },
+            "INTERACTIVE" : {
+              "type" : "long"
+            }
+          }
+        }
+      }
+    }
+  },
+  "user-operation-daily-trend-event" : {
+    "mappings" : {
+      "properties" : {
+        "user": {
+          "type": "keyword"
+        },
+        "date" : {
+          "type" : "keyword"
+        },
+        "sessionCluster" : {
+          "type" : "keyword"
+        },
+        "count" : {
+          "type" : "long"
+        },
+        "sessionTypeCounts" : {
+          "properties" : {
+            "BATCH" : {
+              "type" : "long"
+            },
+            "INTERACTIVE" : {
+              "type" : "long"
+            }
+          }
+        }
+      }
+    }
   }
 }

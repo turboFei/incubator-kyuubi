@@ -19,7 +19,9 @@ package org.apache.kyuubi.ebay.server.events
 
 import java.util.UUID
 
+import org.scalatest.concurrent.PatienceConfiguration.Timeout
 import org.scalatest.tags.Slow
+import org.scalatest.time.SpanSugar._
 
 import org.apache.kyuubi.{BatchTestHelper, WithKyuubiServer}
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
@@ -40,6 +42,7 @@ class ElasticsearchIntegrationSuite extends WithKyuubiServer with HiveJDBCTestHe
     KyuubiEbayConf.ELASTIC_SEARCH_CREDENTIAL_FILE.key,
     getClass.getClassLoader.getResource("elasticsearch.md").getFile)
   override protected def jdbcUrl: String = getJdbcUrl
+  private val indexUUID = UUID.randomUUID().toString
   override protected val conf: KyuubiConf = {
     KyuubiConf().set(KyuubiConf.ENGINE_SHARE_LEVEL, "connection")
       .set(KyuubiEbayConf.SESSION_CLUSTER_MODE_ENABLED, true)
@@ -48,6 +51,14 @@ class ElasticsearchIntegrationSuite extends WithKyuubiServer with HiveJDBCTestHe
       .set(KyuubiEbayConf.SESSION_CLUSTER_LIST, Seq("test"))
       .set(KyuubiConf.SESSION_CONF_ADVISOR, classOf[TagBasedSessionConfAdvisor].getName)
       .set(KyuubiConf.SERVER_EVENT_LOGGERS, Seq("CUSTOM"))
+      .set(KyuubiEbayConf.ELASTIC_SEARCH_SERVER_EVENT_INDEX, s"$indexUUID-server-index")
+      .set(KyuubiEbayConf.ELASTIC_SEARCH_SESSION_EVENT_INDEX, s"$indexUUID-session-index")
+      .set(KyuubiEbayConf.ELASTIC_SEARCH_OPERATION_EVENT_INDEX, s"$indexUUID-operation-index")
+      .set(KyuubiEbayConf.ELASTIC_SEARCH_SERVER_EVENT_ALIAS, s"$indexUUID-server-alias")
+      .set(KyuubiEbayConf.ELASTIC_SEARCH_SESSION_EVENT_ALIAS, s"$indexUUID-session-alias")
+      .set(KyuubiEbayConf.ELASTIC_SEARCH_OPERATION_EVENT_ALIAS, s"$indexUUID-operation-alias")
+      .set(KyuubiEbayConf.ELASTIC_SEARCH_AGG_ENABLED, true)
+      .set(KyuubiEbayConf.ELASTIC_SEARCH_AGG_INTERVAL, 1000L)
   }
 
   test("test server/session/operations events") {
@@ -55,7 +66,7 @@ class ElasticsearchIntegrationSuite extends WithKyuubiServer with HiveJDBCTestHe
     withJdbcStatement() { statement =>
       val serverEvent = KyuubiServerInfoEvent(server, ServiceState.STARTED).get
       val serverEventDoc = EventDoc(serverEvent)
-      val serverDoc = ElasticsearchUtils.getDoc(
+      val serverDoc = ElasticsearchUtils.getDocById(
         serverEventDoc.formatPartitionIndex(
           conf.get(KyuubiEbayConf.ELASTIC_SEARCH_SERVER_EVENT_INDEX)),
         serverEventDoc.docId)
@@ -67,7 +78,7 @@ class ElasticsearchIntegrationSuite extends WithKyuubiServer with HiveJDBCTestHe
       var sessionId = session.handle.identifier.toString
       var sessionEvent = KyuubiSessionEvent(session)
       var sessionEventDoc = EventDoc(sessionEvent)
-      var sessionDoc = ElasticsearchUtils.getDoc(
+      var sessionDoc = ElasticsearchUtils.getDocById(
         serverEventDoc.formatPartitionIndex(
           conf.get(KyuubiEbayConf.ELASTIC_SEARCH_SESSION_EVENT_INDEX)),
         sessionId)
@@ -84,7 +95,7 @@ class ElasticsearchIntegrationSuite extends WithKyuubiServer with HiveJDBCTestHe
       var operationEvent = KyuubiOperationEvent(operation)
       var operationEventDoc = EventDoc(operationEvent)
       var opId = operation.getHandle.identifier.toString
-      var opDoc = ElasticsearchUtils.getDoc(
+      var opDoc = ElasticsearchUtils.getDocById(
         operationEventDoc.formatPartitionIndex(conf.get(
           KyuubiEbayConf.ELASTIC_SEARCH_OPERATION_EVENT_INDEX)),
         opId)
@@ -117,7 +128,7 @@ class ElasticsearchIntegrationSuite extends WithKyuubiServer with HiveJDBCTestHe
       sessionEventDoc = EventDoc(sessionEvent)
       sessionId = batchSessionHandle.identifier.toString
       sessionDoc =
-        ElasticsearchUtils.getDoc(
+        ElasticsearchUtils.getDocById(
           sessionEventDoc.formatPartitionIndex(
             conf.get(KyuubiEbayConf.ELASTIC_SEARCH_SESSION_EVENT_INDEX)),
           sessionId)
@@ -126,7 +137,7 @@ class ElasticsearchIntegrationSuite extends WithKyuubiServer with HiveJDBCTestHe
 
       operationEventDoc = EventDoc(operationEvent)
       opId = batchOperation.getHandle.identifier.toString
-      opDoc = ElasticsearchUtils.getDoc(
+      opDoc = ElasticsearchUtils.getDocById(
         operationEventDoc.formatPartitionIndex(
           conf.get(KyuubiEbayConf.ELASTIC_SEARCH_OPERATION_EVENT_INDEX)),
         opId)
@@ -134,6 +145,76 @@ class ElasticsearchIntegrationSuite extends WithKyuubiServer with HiveJDBCTestHe
       assert(opDoc.get("statementId") === opId)
       assert(opDoc.get("statement") === "BatchJobSubmission")
       assert(opDoc.get("sessionType") === SessionType.BATCH.toString)
+    }
+
+    // test aggregation
+    val sessionEventIndex = ElasticsearchUtils.getAliasIndexes(
+      conf.get(KyuubiEbayConf.ELASTIC_SEARCH_SESSION_EVENT_ALIAS)).head
+    val clusterSessionAggRes =
+      ElasticsearchUtils.getCountAggregation(sessionEventIndex, "user", false)
+    val userSessionAggRes =
+      ElasticsearchUtils.getCountAggregation(sessionEventIndex, "user", true)
+    val operationEventIndex = ElasticsearchUtils.getAliasIndexes(
+      conf.get(KyuubiEbayConf.ELASTIC_SEARCH_OPERATION_EVENT_ALIAS)).head
+    val clusterOpAggRes =
+      ElasticsearchUtils.getCountAggregation(operationEventIndex, "sessionUser", false)
+    val userOpAggRes =
+      ElasticsearchUtils.getCountAggregation(operationEventIndex, "sessionUser", true)
+
+    assert(clusterSessionAggRes.nonEmpty)
+    assert(clusterOpAggRes.nonEmpty)
+    assert(userSessionAggRes.nonEmpty)
+    assert(userOpAggRes.nonEmpty)
+
+    clusterSessionAggRes.forall(_.cluster.nonEmpty)
+    userSessionAggRes.forall(_.user.nonEmpty)
+    clusterSessionAggRes.exists { res =>
+      res.cluster.nonEmpty && res.count > 0 && res.sessionTypeCounts.forall(
+        _._2 > 0) && res.userCount > 0
+    }
+    userSessionAggRes.exists { res =>
+      res.cluster.nonEmpty && res.count > 0 && res.sessionTypeCounts.forall(_._2 > 0) &&
+      res.user.nonEmpty
+    }
+
+    clusterOpAggRes.forall(_.cluster.nonEmpty)
+    userOpAggRes.forall(_.user.nonEmpty)
+    clusterOpAggRes.exists { res =>
+      res.cluster.nonEmpty && res.count > 0 && res.sessionTypeCounts.forall(_._2 > 0) &&
+      res.userCount > 0
+    }
+    userOpAggRes.exists { res =>
+      res.cluster.nonEmpty && res.count > 0 && res.sessionTypeCounts.forall(_._2 > 0) &&
+      res.user.nonEmpty
+    }
+    // scalastyle:off println
+    println(clusterSessionAggRes.mkString("", "\n", "\n"))
+    println(userSessionAggRes.mkString("", "\n", "\n"))
+    println(clusterOpAggRes.mkString("", "\n", "\n"))
+    println(userOpAggRes.mkString("", "\n", "\n"))
+    // scalastyle:on println
+
+    val dailySession = conf.get(KyuubiEbayConf.ELASTIC_SEARCH_DAILY_SESSION_INDEX)
+    val userDailySession = conf.get(KyuubiEbayConf.ELASTIC_SEARCH_USER_DAILY_SESSION_INDEX)
+    val dailyOp = conf.get(KyuubiEbayConf.ELASTIC_SEARCH_DAILY_OPERATION_INDEX)
+    val userDailyOp = conf.get(KyuubiEbayConf.ELASTIC_SEARCH_USER_DAILY_OPERATION_INDEX)
+    eventually(Timeout(1.minutes)) {
+      val dailySessionTrend = ElasticsearchUtils.getAllDocs(dailySession)
+      val userDailySessionTrend = ElasticsearchUtils.getAllDocs(userDailySession)
+      val dailyOpTrend = ElasticsearchUtils.getAllDocs(dailyOp)
+      val userDailyOpTrend = ElasticsearchUtils.getAllDocs(userDailyOp)
+
+      assert(dailySessionTrend.nonEmpty)
+      assert(userDailySessionTrend.nonEmpty)
+      assert(dailyOpTrend.nonEmpty)
+      assert(userDailyOpTrend.nonEmpty)
+
+      // scalastyle:off println
+      println(dailySessionTrend.mkString("", "\n", "\n"))
+      println(userDailySessionTrend.mkString("", "\n", "\n"))
+      println(dailyOpTrend.mkString("", "\n", "\n"))
+      println(userDailyOpTrend.mkString("", "\n", "\n"))
+      // scalastyle:on println
     }
   }
 
