@@ -40,7 +40,7 @@ import org.apache.kyuubi.service.authentication.PlainSASLHelper
 import org.apache.kyuubi.session.SessionHandle
 import org.apache.kyuubi.util.{ThreadUtils, ThriftUtils}
 
-class KyuubiSyncThriftClient private (
+class KyuubiSyncThriftClient(
     protocol: TProtocol,
     engineAliveProbeProtocol: Option[TProtocol],
     engineAliveProbeInterval: Long,
@@ -48,9 +48,9 @@ class KyuubiSyncThriftClient private (
   extends TCLIService.Client(protocol) with Logging {
 
   @volatile private var _remoteSessionHandle: TSessionHandle = _
-  @volatile private var _engineId: Option[String] = _
-  @volatile private var _engineUrl: Option[String] = _
-  @volatile private var _engineName: Option[String] = _
+  @volatile private[kyuubi] var _engineId: Option[String] = _
+  @volatile private[kyuubi] var _engineUrl: Option[String] = _
+  @volatile private[kyuubi] var _engineName: Option[String] = _
 
   private val lock = new ReentrantLock()
 
@@ -450,9 +450,9 @@ class KyuubiSyncThriftClient private (
   }
 }
 
-private[kyuubi] object KyuubiSyncThriftClient extends Logging {
+object KyuubiSyncThriftClient extends Logging {
 
-  private def createTProtocol(
+  def createTProtocol(
       user: String,
       passwd: String,
       host: String,
@@ -490,5 +490,9 @@ private[kyuubi] object KyuubiSyncThriftClient extends Logging {
       aliveProbeProtocol,
       aliveProbeInterval,
       aliveTimeout)
+  }
+
+  def createClient(tProtocol: TProtocol): KyuubiSyncThriftClient = {
+    new KyuubiSyncThriftClient(tProtocol, None, 0, 0)
   }
 }

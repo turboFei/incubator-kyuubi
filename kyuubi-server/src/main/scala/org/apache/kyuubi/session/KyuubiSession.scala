@@ -19,6 +19,7 @@ package org.apache.kyuubi.session
 import com.codahale.metrics.MetricRegistry
 import org.apache.hive.service.rpc.thrift.TProtocolVersion
 
+import org.apache.kyuubi.config.KyuubiConf.SESSION_NAME
 import org.apache.kyuubi.config.KyuubiReservedKeys.{KYUUBI_SESSION_CONNECTION_URL_KEY, KYUUBI_SESSION_REAL_USER_KEY}
 import org.apache.kyuubi.events.KyuubiSessionEvent
 import org.apache.kyuubi.metrics.MetricsConstants.{CONN_OPEN, CONN_TOTAL}
@@ -41,6 +42,9 @@ abstract class KyuubiSession(
   val realUser = conf.get(KYUUBI_SESSION_REAL_USER_KEY).getOrElse(user)
 
   val sessionCluster: Option[String]
+
+  def defaultName: Option[String] = sessionCluster.map(c => s"$c ${getClass.getSimpleName}")
+  override lazy val name: Option[String] = normalizedConf.get(SESSION_NAME.key).orElse(defaultName)
 
   def getSessionEvent: Option[KyuubiSessionEvent]
 

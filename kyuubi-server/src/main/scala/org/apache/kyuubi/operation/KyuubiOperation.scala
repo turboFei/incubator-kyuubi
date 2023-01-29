@@ -26,6 +26,7 @@ import org.apache.thrift.TException
 import org.apache.thrift.transport.TTransportException
 
 import org.apache.kyuubi.{KyuubiSQLException, Utils}
+import org.apache.kyuubi.carmel.gateway.session.CarmelSessionImpl
 import org.apache.kyuubi.events.{EventBus, KyuubiOperationEvent}
 import org.apache.kyuubi.metrics.MetricsConstants.{OPERATION_FAIL, OPERATION_OPEN, OPERATION_STATE, OPERATION_TOTAL}
 import org.apache.kyuubi.metrics.MetricsSystem
@@ -89,6 +90,9 @@ abstract class KyuubiOperation(session: Session) extends AbstractOperation(sessi
   }
 
   protected def sendCredentialsIfNeeded(): Unit = {
+    // renew credentials is not needed for carmel session
+    if (session.isInstanceOf[CarmelSessionImpl]) return
+
     val appUser = session.asInstanceOf[KyuubiSessionImpl].engine.appUser
     val sessionManager = session.sessionManager.asInstanceOf[KyuubiSessionManager]
     sessionManager.credentialsManager.sendCredentialsIfNeeded(

@@ -15,23 +15,9 @@
  * limitations under the License.
  */
 
-package org.apache.kyuubi.operation
+package org.apache.kyuubi.ebay.carmel.gateway.config;
 
-import org.apache.kyuubi.KyuubiSQLException
-import org.apache.kyuubi.carmel.gateway.session.{CarmelSessionImpl, CarmelSessionStatus}
-import org.apache.kyuubi.session.Session
+public interface Validator {
 
-abstract class InterceptedOperation(session: Session) extends KyuubiOperation(session) {
-  override protected def runInternal(): Unit = {
-    session match {
-      case carmelSession: CarmelSessionImpl =>
-        if (carmelSession.getBackendSessionStatus == CarmelSessionStatus.INACTIVE) {
-          throw KyuubiSQLException(
-            "The session has been closed due to the backend session has been dropped")
-        }
-      case _ =>
-    }
-    setState(OperationState.FINISHED)
-    setHasResultSet(true)
-  }
+  String validate(String value);
 }
