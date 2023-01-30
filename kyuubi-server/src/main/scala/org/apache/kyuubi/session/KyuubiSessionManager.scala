@@ -26,7 +26,7 @@ import com.google.common.annotations.VisibleForTesting
 import com.google.common.cache.{CacheBuilder, CacheLoader, LoadingCache}
 import org.apache.hive.service.rpc.thrift.TProtocolVersion
 
-import org.apache.kyuubi.KyuubiSQLException
+import org.apache.kyuubi.{KyuubiException, KyuubiSQLException}
 import org.apache.kyuubi.carmel.gateway.session.{CarmelEndpointManager, CarmelSessionImpl}
 import org.apache.kyuubi.client.api.v1.dto.{Batch, BatchRequest}
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
@@ -228,6 +228,9 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
       ipAddress: String,
       conf: Map[String, String],
       batchRequest: BatchRequest): SessionHandle = {
+    if (KyuubiEbayConf.isCarmelCluster(getConf, getSessionCluster(conf))) {
+      throw new KyuubiException(s"Batch function is disallowed for carmel cluster.")
+    }
     val batchSession = createBatchSession(user, password, ipAddress, conf, batchRequest)
     openBatchSession(batchSession)
   }
