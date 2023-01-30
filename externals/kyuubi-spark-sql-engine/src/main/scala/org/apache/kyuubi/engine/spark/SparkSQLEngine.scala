@@ -362,6 +362,7 @@ object SparkSQLEngine extends Logging {
         case t: Throwable => error(s"Failed to instantiate SparkSession: ${t.getMessage}", t)
       } finally {
         if (spark != null) {
+          spark.sqlContext.clearTempTables()
           spark.stop()
         }
       }

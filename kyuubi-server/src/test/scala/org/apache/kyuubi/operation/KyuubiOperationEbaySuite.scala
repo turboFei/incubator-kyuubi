@@ -500,4 +500,36 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper 
       }
     }
   }
+
+  test("HADP-48118: cleanup the temp tables") {
+    withSessionConf()(Map.empty)(Map(KyuubiEbayConf.SESSION_CLUSTER.key -> "test")) {
+      withJdbcStatement() { statement =>
+        statement.executeQuery("create temporary table ta(a int) using parquet")
+        withJdbcStatement() { statement2 =>
+          val result = statement2.executeQuery("show tables")
+          assert(!result.next())
+        }
+      }
+    }
+
+    withSessionConf()(Map.empty)(Map(
+      KyuubiEbayConf.SESSION_CLUSTER.key -> "test",
+      KyuubiConf.ENGINE_SINGLE_SPARK_SESSION.key -> "true")) {
+      withJdbcStatement() { statement =>
+        statement.executeQuery("create temporary table ta(a int) using parquet")
+        withJdbcStatement() { statement2 =>
+          val result = statement2.executeQuery("show tables")
+          assert(!result.next())
+        }
+      }
+
+      withJdbcStatement() { statement =>
+        statement.executeQuery("create temporary table ta(a int) using parquet")
+      }
+      withJdbcStatement() { statement =>
+        val result = statement.executeQuery("show tables")
+        assert(!result.next())
+      }
+    }
+  }
 }

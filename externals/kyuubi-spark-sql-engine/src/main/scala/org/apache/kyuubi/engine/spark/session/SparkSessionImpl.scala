@@ -23,6 +23,7 @@ import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.sql.internal.StaticSQLConf
 
 import org.apache.kyuubi.KyuubiSQLException
+import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.engine.spark.events.SessionEvent
 import org.apache.kyuubi.engine.spark.operation.SparkSQLOperationManager
 import org.apache.kyuubi.engine.spark.shim.SparkCatalogShim
@@ -114,8 +115,10 @@ class SparkSessionImpl(
     if (fileSystem.exists(sessionScratchDir)) {
       fileSystem.delete(sessionScratchDir, true)
     }
-    // clear the temp tables
-    spark.sqlContext.clearTempTables()
+    if (!sessionManager.getConf.get(KyuubiConf.ENGINE_SINGLE_SPARK_SESSION)) {
+      // clear the temp tables
+      spark.sqlContext.clearTempTables()
+    }
   }
 }
 
