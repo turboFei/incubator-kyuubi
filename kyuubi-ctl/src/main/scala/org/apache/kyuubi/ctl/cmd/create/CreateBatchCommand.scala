@@ -16,7 +16,8 @@
  */
 package org.apache.kyuubi.ctl.cmd.create
 
-import java.util.{Collections, HashMap => JHashMap, List => JList, Map => JMap}
+import java.nio.charset.StandardCharsets
+import java.util.{Base64, Collections, HashMap => JHashMap, List => JList, Map => JMap}
 
 import scala.collection.JavaConverters._
 
@@ -57,7 +58,9 @@ class CreateBatchCommand(cliConfig: CliConfig) extends Command[Batch](cliConfig)
         val sparkEtlStatements = BatchUtils.getStatementsFromFiles(sparkEtlFiles.toSeq.asJava)
         val newConfig = new JHashMap[String, String]()
         newConfig.putAll(config)
-        newConfig.put(BatchUtils.SPARK_BATCH_ETL_SQL_STATEMENTS_KEY, sparkEtlStatements)
+        newConfig.put(
+          BatchUtils.SPARK_BATCH_ETL_SQL_ENCODED_STATEMENTS_KEY,
+          Base64.getEncoder.encodeToString(sparkEtlStatements.getBytes(StandardCharsets.UTF_8)))
         config = newConfig
       }
       val batchRequest = new BatchRequest(

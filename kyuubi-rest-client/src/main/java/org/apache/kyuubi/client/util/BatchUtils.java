@@ -62,8 +62,13 @@ public final class BatchUtils {
     return state != null && terminalBatchStates.contains(state.toUpperCase(Locale.ROOT));
   }
 
-  /** ebay batch etl sql */
+  /** Using SPARK_BATCH_ETL_SQL_ENCODED_STATEMENTS_KEY instead */
+  @Deprecated
   public static String SPARK_BATCH_ETL_SQL_STATEMENTS_KEY = "spark.kyuubi.batch.etl.sql.statements";
+
+  /** Base64 encoded etl sql statements. */
+  public static String SPARK_BATCH_ETL_SQL_ENCODED_STATEMENTS_KEY =
+      "spark.kyuubi.batch.etl.sql.encoded.statements";
 
   public static String getStatementsFromFiles(List<String> fileNames) {
     StringBuilder sb = new StringBuilder();

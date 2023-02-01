@@ -20,10 +20,11 @@ package org.apache.kyuubi.engine.spark
 import java.io.File
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
+import java.util.Base64
 
 import scala.collection.mutable.ArrayBuffer
 
-import org.apache.kyuubi.Utils
+import org.apache.kyuubi.{KyuubiException, Utils}
 import org.apache.kyuubi.client.util.BatchUtils
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.engine.KyuubiApplicationManager
@@ -58,10 +59,23 @@ class SparkBatchProcessBuilder(
     batchConf.foreach(entry => { batchKyuubiConf.set(entry._1, entry._2) })
 
     // for spark batch etl sql jobs
-    batchConf.get(BatchUtils.SPARK_BATCH_ETL_SQL_STATEMENTS_KEY).foreach { etlStatements =>
+    val encodedEtlStatements = batchConf.get(BatchUtils.SPARK_BATCH_ETL_SQL_ENCODED_STATEMENTS_KEY)
+    val rawEtlStatements = batchConf.get(BatchUtils.SPARK_BATCH_ETL_SQL_STATEMENTS_KEY)
+    if (encodedEtlStatements.isDefined || rawEtlStatements.isDefined) {
+      val etlStatements = if (encodedEtlStatements.isDefined) {
+        try {
+          new String(Base64.getDecoder.decode(encodedEtlStatements.get), StandardCharsets.UTF_8)
+        } catch {
+          case e: Throwable =>
+            throw new KyuubiException("Failed to decode the encoded etl statements", e)
+        }
+      } else {
+        rawEtlStatements.get
+      }
       batchSqlFileDir = Utils.createTempDir("kyuubi-batch").toFile
       val etlSqlFile = new File(batchSqlFileDir, s"kyuubi-batch-$batchId.sql")
       Files.write(etlSqlFile.toPath(), etlStatements.getBytes(StandardCharsets.UTF_8))
+      batchKyuubiConf.unset(BatchUtils.SPARK_BATCH_ETL_SQL_ENCODED_STATEMENTS_KEY)
       batchKyuubiConf.unset(BatchUtils.SPARK_BATCH_ETL_SQL_STATEMENTS_KEY)
       batchKyuubiConf.set("spark.etl.sql.files", etlSqlFile.getAbsolutePath)
       // TODO: revert it after typo fixed
