@@ -178,6 +178,16 @@ object KyuubiEbayConf extends Logging {
       .toSequence()
       .createWithDefault(Nil)
 
+  val KYUUBI_SESSION_BATCH_SPARK_FILES: ConfigEntry[Seq[String]] =
+    buildConf("kyuubi.session.batch.spark.files")
+      .internal
+      .fallbackConf(KYUUBI_SESSION_SPARK_FILES)
+
+  val KYUUBI_SESSION_BATCH_SPARK_JARS: ConfigEntry[Seq[String]] =
+    buildConf("kyuubi.session.batch.spark.jars")
+      .internal
+      .fallbackConf(KYUUBI_SESSION_SPARK_JARS)
+
   val METADATA_STORE_JDBC_TABLE: OptionalConfigEntry[String] =
     buildConf("kyuubi.metadata.store.jdbc.table")
       .internal

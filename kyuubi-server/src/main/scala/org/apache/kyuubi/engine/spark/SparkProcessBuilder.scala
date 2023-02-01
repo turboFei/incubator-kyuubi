@@ -190,8 +190,16 @@ class SparkProcessBuilder(
     }
   }
 
+  protected def getSessionBatchFiles(): Seq[String] = {
+    conf.get(KyuubiEbayConf.KYUUBI_SESSION_SPARK_FILES)
+  }
+
+  protected def getSessionBatchJars(): Seq[String] = {
+    conf.get(KyuubiEbayConf.KYUUBI_SESSION_SPARK_JARS)
+  }
+
   protected def mergeKyuubiFiles(sparkConf: Map[String, String]): Map[String, String] = {
-    val batchFiles = conf.get(KyuubiEbayConf.KYUUBI_SESSION_SPARK_FILES)
+    val batchFiles = getSessionBatchFiles()
     if (batchFiles.nonEmpty) {
       sparkConf.get(SPARK_FILES) match {
         case Some(files) =>
@@ -205,7 +213,7 @@ class SparkProcessBuilder(
   }
 
   protected def mergeKyuubiJars(sparkConf: Map[String, String]): Map[String, String] = {
-    val batchJars = conf.get(KyuubiEbayConf.KYUUBI_SESSION_SPARK_JARS)
+    val batchJars = getSessionBatchJars()
     if (batchJars.nonEmpty) {
       sparkConf.get(SPARK_JARS) match {
         case Some(jars) =>

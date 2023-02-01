@@ -25,7 +25,7 @@ import scala.collection.mutable.ArrayBuffer
 
 import org.apache.kyuubi.Utils
 import org.apache.kyuubi.client.util.BatchUtils
-import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.engine.KyuubiApplicationManager
 import org.apache.kyuubi.operation.log.OperationLog
 
@@ -106,5 +106,13 @@ class SparkBatchProcessBuilder(
     Option(batchSqlFileDir).foreach { dir =>
       Utils.tryLogNonFatalError(Utils.deleteDirectoryRecursively(dir))
     }
+  }
+
+  override protected def getSessionBatchFiles(): Seq[String] = {
+    conf.get(KyuubiEbayConf.KYUUBI_SESSION_BATCH_SPARK_FILES)
+  }
+
+  override protected def getSessionBatchJars(): Seq[String] = {
+    conf.get(KyuubiEbayConf.KYUUBI_SESSION_BATCH_SPARK_JARS)
   }
 }
