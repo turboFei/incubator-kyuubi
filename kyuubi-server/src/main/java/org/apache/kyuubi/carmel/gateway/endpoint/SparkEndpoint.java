@@ -105,6 +105,10 @@ public class SparkEndpoint implements Comparable<SparkEndpoint> {
     this.id = id;
   }
 
+  public String getId() {
+    return id;
+  }
+
   @Override
   public String toString() {
     return "SparkEndpoint{"

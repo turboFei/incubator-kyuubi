@@ -84,6 +84,7 @@ object EventDoc {
           e.eventTime,
           e.startTime,
           e.sessionCluster,
+          e.queue,
           e.remoteSessionId,
           e.engineId,
           e.openedTime,

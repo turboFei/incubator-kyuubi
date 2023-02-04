@@ -51,6 +51,7 @@ case class KyuubiSessionEvent(
     eventTime: Long,
     startTime: Long,
     sessionCluster: String,
+    var queue: String = "",
     var remoteSessionId: String = "",
     var engineId: String = "",
     var openedTime: Long = -1L,

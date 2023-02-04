@@ -81,6 +81,9 @@
         "sessionCluster": {
           "type": "keyword"
         },
+        "queue": {
+          "type": "keyword"
+        },
         "remoteSessionId": {
           "type": "keyword"
         },
