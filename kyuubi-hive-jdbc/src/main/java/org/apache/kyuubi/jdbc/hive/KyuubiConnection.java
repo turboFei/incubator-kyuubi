@@ -1460,6 +1460,49 @@ public class KyuubiConnection implements SQLConnection, KyuubiLoggable {
   /** Upload and Download data api. */
   public final Integer TRANSFROM_DATA_BATCH_BYTE_SIZE = 5 * 1024 * 1024;
 
+  public static String DATA_SILENT_MODE_PROPERTY = "DATA_API_SILENT_MODE";
+
+  private boolean isDataApiSilent() {
+    return System.getProperty(DATA_SILENT_MODE_PROPERTY) != null;
+  }
+
+  final int logInterval = 3000;
+  final int logThreadTimeout = 3000;
+
+  /** To close the engine log thread to prevent confuse. */
+  public void markLaunchEngineOpCompleted() {
+    launchEngineOpCompleted = true;
+  }
+
+  private Thread getUploadStatementLogThread(KyuubiStatement statement) {
+    Thread logThread =
+        new Thread("statement-log-" + statement) {
+          @Override
+          public void run() {
+            if (isDataApiSilent()) return;
+            while (statement.hasMoreLogs()) {
+              boolean logsFetched = false;
+              try {
+                List<String> logs = statement.getExecLog();
+                logsFetched = !logs.isEmpty();
+                logs.forEach(log -> LOG.info(log));
+              } catch (Throwable e) {
+                LOG.debug("Error when getting statement log: " + e, e);
+              }
+              if (!logsFetched) {
+                try {
+                  Thread.sleep(logInterval);
+                } catch (Throwable e) {
+                  // do nothing
+                }
+              }
+            }
+          }
+        };
+    logThread.setDaemon(true);
+    return logThread;
+  }
+
   public String uploadFile(String localPath, String remoteDir, Boolean isOverwrite)
       throws SQLException {
     return uploadFile(localPath, remoteDir, null, isOverwrite);
@@ -1507,7 +1550,18 @@ public class KyuubiConnection implements SQLConnection, KyuubiLoggable {
     ResultSet resultSet = null;
     try {
       preparedStatement = prepareStatement(sql);
-      resultSet = preparedStatement.executeQuery();
+      Thread logThread = getUploadStatementLogThread((KyuubiStatement) preparedStatement);
+      try {
+        logThread.start();
+        resultSet = preparedStatement.executeQuery();
+      } finally {
+        try {
+          logThread.interrupt();
+          logThread.join(logThreadTimeout);
+        } catch (Throwable e) {
+          LOG.warn("Error terminating download operation log thread", e);
+        }
+      }
       if (resultSet.next()) {
         // Remote file path
         return resultSet.getString(2);
@@ -1574,7 +1628,19 @@ public class KyuubiConnection implements SQLConnection, KyuubiLoggable {
     ResultSet resultSet = null;
     try {
       preparedStatement = prepareStatement(sql);
-      resultSet = preparedStatement.executeQuery();
+      Thread logThread = getUploadStatementLogThread((KyuubiStatement) preparedStatement);
+      try {
+        logThread.start();
+        resultSet = preparedStatement.executeQuery();
+      } finally {
+        try {
+          logThread.interrupt();
+          logThread.join(logThreadTimeout);
+        } catch (Throwable e) {
+          LOG.warn("Error terminating download operation log thread", e);
+        }
+      }
+
       if (resultSet.next()) {
         // Remote file path
         return resultSet.getString(2);
@@ -1865,43 +1931,94 @@ public class KyuubiConnection implements SQLConnection, KyuubiLoggable {
     TGetOperationStatusReq statusReq = new TGetOperationStatusReq(resp.getOperationHandle());
     TGetOperationStatusResp statusResp = null;
     ReentrantLock transportLock = new ReentrantLock(true);
+    Thread logThread =
+        new Thread("download-data-log-" + resp.getOperationHandle()) {
+          @Override
+          public void run() {
+            if (isDataApiSilent()) return;
+            TFetchResultsResp tFetchResultsResp = null;
+            while (true) {
+              boolean logsFetched = false;
+              try {
+                TFetchResultsReq tFetchResultsReq =
+                    new TFetchResultsReq(
+                        resp.getOperationHandle(), TFetchOrientation.FETCH_NEXT, fetchSize);
+                tFetchResultsReq.setFetchType(FetchType.LOG.toTFetchType());
+                tFetchResultsResp = client.FetchResults(tFetchResultsReq);
+                Utils.verifySuccessWithInfo(tFetchResultsResp.getStatus());
+              } catch (Throwable e) {
+                LOG.debug("Error when getting download log: " + e, e);
+              }
 
-    while (!operationComplete) {
-      try {
-        transportLock.lock();
-        try {
-          statusResp = client.GetOperationStatus(statusReq);
-        } finally {
-          transportLock.unlock();
-        }
-        Utils.verifySuccessWithInfo(statusResp.getStatus());
-        if (statusResp.isSetOperationState()) {
-          switch (statusResp.getOperationState()) {
-            case CLOSED_STATE:
-            case FINISHED_STATE:
-              operationComplete = true;
-              break;
-            case CANCELED_STATE:
-              // 01000 -> warning
-              throw new SQLException("Query was cancelled", "01000");
-            case ERROR_STATE:
-              // Get the error details from the underlying exception
-              throw new SQLException(
-                  statusResp.getErrorMessage(),
-                  statusResp.getSqlState(),
-                  statusResp.getErrorCode());
-            case UKNOWN_STATE:
-              throw new SQLException("Unknown query", "HY000");
-            case INITIALIZED_STATE:
-            case PENDING_STATE:
-            case RUNNING_STATE:
-              break;
+              try {
+                RowSet rowSet;
+                rowSet = RowSetFactory.create(tFetchResultsResp.getResults(), getProtocol());
+                logsFetched = rowSet.numRows() > 0;
+                for (Object[] row : rowSet) {
+                  LOG.info(String.valueOf(row[0]));
+                }
+              } catch (Throwable e) {
+                LOG.debug("Error building result set for query log: " + e, e);
+              }
+
+              if (!logsFetched) {
+                try {
+                  Thread.sleep(logInterval);
+                } catch (Throwable e) {
+                  // do nothing
+                }
+              }
+            }
           }
+        };
+    logThread.setDaemon(true);
+
+    try {
+      logThread.start();
+      while (!operationComplete) {
+        try {
+          transportLock.lock();
+          try {
+            statusResp = client.GetOperationStatus(statusReq);
+          } finally {
+            transportLock.unlock();
+          }
+          Utils.verifySuccessWithInfo(statusResp.getStatus());
+          if (statusResp.isSetOperationState()) {
+            switch (statusResp.getOperationState()) {
+              case CLOSED_STATE:
+              case FINISHED_STATE:
+                operationComplete = true;
+                break;
+              case CANCELED_STATE:
+                // 01000 -> warning
+                throw new SQLException("Query was cancelled", "01000");
+              case ERROR_STATE:
+                // Get the error details from the underlying exception
+                throw new SQLException(
+                    statusResp.getErrorMessage(),
+                    statusResp.getSqlState(),
+                    statusResp.getErrorCode());
+              case UKNOWN_STATE:
+                throw new SQLException("Unknown query", "HY000");
+              case INITIALIZED_STATE:
+              case PENDING_STATE:
+              case RUNNING_STATE:
+                break;
+            }
+          }
+        } catch (SQLException e) {
+          throw e;
+        } catch (Exception e) {
+          throw new SQLException(e.toString(), "08S01", e);
         }
-      } catch (SQLException e) {
-        throw e;
-      } catch (Exception e) {
-        throw new SQLException(e.toString(), "08S01", e);
+      }
+    } finally {
+      try {
+        logThread.interrupt();
+        logThread.join(logThreadTimeout);
+      } catch (Throwable e) {
+        LOG.warn("Error terminating download operation log thread", e);
       }
     }
 

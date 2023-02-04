@@ -48,6 +48,7 @@ public class CommandLineUtils {
             .build());
     options.addOption(
         "w", "password-file", true, "[ldap auth] The password file to read User password");
+    options.addOption("S", "silent", false, "Silent mode");
     return options;
   }
 

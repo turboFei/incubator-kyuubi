@@ -314,7 +314,7 @@ class ExecuteStatement(
     }
   }
 
-  private def executeStatement(): Unit = withLocalProperties {
+  protected def executeStatement(): Unit = withLocalProperties {
     try {
       setState(OperationState.RUNNING)
       info(diagnostics)

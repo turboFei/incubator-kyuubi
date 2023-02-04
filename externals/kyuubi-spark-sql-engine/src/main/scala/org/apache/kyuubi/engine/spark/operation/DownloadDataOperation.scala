@@ -30,34 +30,32 @@ import org.apache.hive.service.rpc.thrift.TGetResultSetMetadataResp
 import org.apache.spark.kyuubi.SparkUtilsHelper
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.catalog.HiveTableRelation
-import org.apache.spark.sql.execution._
+import org.apache.spark.sql.execution.QueryExecution
 import org.apache.spark.sql.execution.datasources.LogicalRelation
-import org.apache.spark.sql.kyuubi.operation.DownloadDataHelper._
-import org.apache.spark.sql.types._
+import org.apache.spark.sql.kyuubi.operation.DownloadDataHelper.{writeData, writeDataKeepDataType}
+import org.apache.spark.sql.types.StructType
 
 import org.apache.kyuubi.KyuubiSQLException
-import org.apache.kyuubi.config.KyuubiEbayConf._
+import org.apache.kyuubi.config.KyuubiEbayConf.DATA_DOWNLOAD_MAX_SIZE
+import org.apache.kyuubi.engine.spark.KyuubiSparkUtil.diagnostics
 import org.apache.kyuubi.engine.spark.schema.SchemaHelper
 import org.apache.kyuubi.engine.spark.session.SparkSessionImpl
-import org.apache.kyuubi.operation.IterableFetchIterator
-import org.apache.kyuubi.operation.log.OperationLog
+import org.apache.kyuubi.operation.{IterableFetchIterator, OperationState}
 import org.apache.kyuubi.session.Session
-
-private[kyuubi] case class DownloadDataBlock(
-    path: Option[Path] = None,
-    offset: Option[Long] = None,
-    schema: Option[String] = None,
-    dataSize: Long)
 
 class DownloadDataOperation(
     session: Session,
     tableName: String,
     query: String,
     format: String,
-    options: JMap[String, String]) extends SparkOperation(session) {
+    options: JMap[String, String])
+  extends ExecuteStatement(
+    session,
+    DownloadDataOperation.statement(tableName, query, format, options),
+    true,
+    0L,
+    false) {
   import DownloadDataOperation._
-  private val operationLog: OperationLog = OperationLog.createOperationLog(session, getHandle)
-  override def getOperationLog: Option[OperationLog] = Option(operationLog)
 
   override protected def resultSchema: StructType = {
     new StructType()
@@ -67,26 +65,32 @@ class DownloadDataOperation(
       .add("SIZE", "bigint", nullable = true, "The size to be transferred in this fetch.")
   }
 
+  private lazy val realSchema =
+    if (result == null || result.schema.isEmpty) {
+      new StructType()
+        .add("Result", "string", nullable = true, "")
+    } else {
+      result.schema
+    }
+
   private val writeOptions =
     DEFAULT_OPTIONS ++ Option(options).map(_.asScala).getOrElse(Map.empty[String, String]).toMap
-
-  override def statement: String = s"Generating download files with arguments " +
-    s"[${tableName}, ${query}, ${format}, ${writeOptions}]"
 
   private val sessionScratchDir = session.asInstanceOf[SparkSessionImpl].sessionScratchDir
   private val fs = sessionScratchDir.getFileSystem(spark.sparkContext.hadoopConfiguration)
 
-  override protected def runInternal(): Unit = {
-    downloadData()
-  }
-
-  private def downloadData(): Unit = withLocalProperties {
-    val numFiles = writeOptions.get("numFiles").map(_.toInt)
-    val fetchSize = writeOptions("fetchBlockSize").toLong
-    val keepDataType = writeOptions("keepDataType").toBoolean
-    val dataDownloadMaxSize = session.sessionManager.getConf.get(DATA_DOWNLOAD_MAX_SIZE)
-
+  override protected def executeStatement(): Unit = withLocalProperties {
     try {
+      setState(OperationState.RUNNING)
+      info(diagnostics)
+      Thread.currentThread().setContextClassLoader(spark.sharedState.jarClassLoader)
+      addOperationListener()
+
+      val numFiles = writeOptions.get("numFiles").map(_.toInt)
+      val fetchSize = writeOptions("fetchBlockSize").toLong
+      val keepDataType = writeOptions("keepDataType").toBoolean
+      val dataDownloadMaxSize = session.sessionManager.getConf.get(DATA_DOWNLOAD_MAX_SIZE)
+
       assert(
         fetchSize >= 1L * 1024 * 1024 && fetchSize <= 20L * 1024 * 1024,
         s"fetchBlockSize(${fetchSize}) should be greater than 1M and less than 20M.")
@@ -190,16 +194,14 @@ class DownloadDataOperation(
       }
       iter = new IterableFetchIterator[Row](rows.toIterable)
       info(s"Add ${list.size()} data blocks to be fetched.")
-    } catch onError(cancel = true)
-  }
 
-  private lazy val realSchema =
-    if (result == null || result.schema.isEmpty) {
-      new StructType()
-        .add("Result", "string", nullable = true, "")
-    } else {
-      result.schema
+      setState(OperationState.FINISHED)
+    } catch {
+      onError(cancel = true)
+    } finally {
+      shutdownTimeoutMonitor()
     }
+  }
 
   override def getResultSetMetadata: TGetResultSetMetadataResp = {
     if (writeOptions.get("useRealSchema").nonEmpty
@@ -267,6 +269,16 @@ class DownloadDataOperation(
 }
 
 object DownloadDataOperation {
+  private def statement(
+      tableName: String,
+      query: String,
+      format: String,
+      options: JMap[String, String]): String = {
+    val writeOptions =
+      DEFAULT_OPTIONS ++ Option(options).map(_.asScala).getOrElse(Map.empty[String, String]).toMap
+    s"Generating download files with arguments [$tableName, $query, $format, $writeOptions]"
+  }
+
   private val PATH_FILTER = new PathFilter {
     override def accept(path: Path): Boolean =
       !path.getName.equals("_SUCCESS") && !path.getName.endsWith("crc")
@@ -306,3 +318,9 @@ object DownloadDataOperation {
       vendorCode = 500002)
   }
 }
+
+private[kyuubi] case class DownloadDataBlock(
+    path: Option[Path] = None,
+    offset: Option[Long] = None,
+    schema: Option[String] = None,
+    dataSize: Long)

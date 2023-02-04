@@ -58,6 +58,9 @@ public class DownloadAPI {
     String format = commandLine.getOptionValue('f', null);
     String optionsInfo = commandLine.getOptionValue('O', null);
     String localFilePath = commandLine.getOptionValue('d');
+    if (commandLine.hasOption('S')) {
+      System.setProperty(KyuubiConnection.DATA_SILENT_MODE_PROPERTY, "true");
+    }
 
     Map<String, String> optionMap = null;
     if (optionsInfo != null && !optionsInfo.trim().isEmpty()) {

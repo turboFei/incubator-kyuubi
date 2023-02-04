@@ -58,7 +58,7 @@ class ExecuteStatement(
     OperationLog.removeCurrentOperationLog()
   }
 
-  private def executeStatement(): Unit = {
+  protected def executeStatement(): Unit = {
     try {
       // We need to avoid executing query in sync mode, because there is no heartbeat mechanism
       // in thrift protocol, in sync mode, we cannot distinguish between long-run query and

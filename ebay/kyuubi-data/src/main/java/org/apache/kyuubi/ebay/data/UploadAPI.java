@@ -29,6 +29,7 @@ import org.apache.kyuubi.ebay.data.connection.ConnectionFactoryHelper;
 import org.apache.kyuubi.ebay.data.connection.KyuubiConnectionFactory;
 import org.apache.kyuubi.ebay.data.utils.CommandLineUtils;
 import org.apache.kyuubi.ebay.data.utils.Utils;
+import org.apache.kyuubi.jdbc.hive.KyuubiConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -91,6 +92,9 @@ public class UploadAPI {
     String optionsInfo = getOptionValue('O', ""); // #6. Partition Info
     Boolean isOverwrite = hasOption('o'); // #7. Overwrite
     String[] localFilePaths = getOptionValues('f'); // #8. Local File Name
+    if (hasOption('S')) {
+      System.setProperty(KyuubiConnection.DATA_SILENT_MODE_PROPERTY, "true");
+    }
 
     // Perform upload operation
     ConnectionFactory connectionFactory = new KyuubiConnectionFactory(url, user, password);

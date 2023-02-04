@@ -253,6 +253,8 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper 
         downloadDataReq.setFormat("parquet")
         downloadDataReq.setDownloadOptions(Collections.emptyMap[String, String]())
         val downloadResp = client.DownloadData(downloadDataReq)
+        // wait the operation finished, because it is async
+        waitForOperationToComplete(client, downloadResp.getOperationHandle)
         fetchResultReq.setOperationHandle(downloadResp.getOperationHandle)
         fetchResultReq.setFetchType(0)
         fetchResultReq.setMaxRows(10)

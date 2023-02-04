@@ -25,11 +25,27 @@ class DownloadDataOperation(
     query: String,
     format: String,
     options: Map[String, String])
-  extends KyuubiOperation(session) {
+  extends ExecuteStatement(
+    session,
+    DownloadDataOperation.statement(tableName, query, format, options),
+    Map.empty,
+    true,
+    0L) {
 
-  override protected def runInternal(): Unit = {
+  override protected def executeStatement(): Unit = {
     try {
       _remoteOpHandle = client.downloadData(tableName, query, format, options)
+      setHasResultSet(_remoteOpHandle.isHasResultSet)
     } catch onError()
+  }
+}
+
+object DownloadDataOperation {
+  private def statement(
+      tableName: String,
+      query: String,
+      format: String,
+      options: Map[String, String]): String = {
+    s"Downloading data with arguments [$tableName, $query, $format, $options]"
   }
 }

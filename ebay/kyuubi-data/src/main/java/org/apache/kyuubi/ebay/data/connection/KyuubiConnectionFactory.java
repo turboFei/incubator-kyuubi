@@ -64,6 +64,7 @@ public class KyuubiConnectionFactory implements ConnectionFactory {
     }
     KyuubiConnection connection = new KyuubiConnection(url, properties);
     LOG.info("Success get jdbc connection: " + connection.getEngineUrl());
+    connection.markLaunchEngineOpCompleted();
     return connection;
   }
 
