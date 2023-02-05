@@ -29,7 +29,7 @@ case class SessionEventDoc(
     eventTime: Long,
     startTime: Long,
     sessionCluster: String,
-    var queue: String,
+    var sessionQueue: String,
     var remoteSessionId: String,
     var engineId: String,
     var openedTime: Long,

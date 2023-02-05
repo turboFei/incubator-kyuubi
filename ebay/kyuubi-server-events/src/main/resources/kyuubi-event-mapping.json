@@ -81,7 +81,7 @@
         "sessionCluster": {
           "type": "keyword"
         },
-        "queue": {
+        "sessionQueue": {
           "type": "keyword"
         },
         "remoteSessionId": {
@@ -159,6 +159,9 @@
         "sessionCluster": {
           "type": "keyword"
         },
+        "sessionQueue": {
+          "type": "keyword"
+        },
         "eventType": {
           "type": "keyword"
         }
@@ -174,10 +177,16 @@
         "sessionCluster" : {
           "type" : "keyword"
         },
+        "sessionQueue" : {
+          "type" : "keyword"
+        },
         "count" : {
           "type" : "long"
         },
-        "users" : {
+        "clusterUsers" : {
+          "type" : "long"
+        },
+        "queueUsers" : {
           "type" : "long"
         },
         "sessionTypeCounts" : {
@@ -230,10 +239,16 @@
         "sessionCluster" : {
           "type" : "keyword"
         },
+        "sessionQueue" : {
+          "type" : "keyword"
+        },
         "count" : {
           "type" : "long"
         },
-        "users" : {
+        "clusterUsers" : {
+          "type" : "long"
+        },
+        "queueUsers" : {
           "type" : "long"
         },
         "sessionTypeCounts" : {

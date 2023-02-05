@@ -22,15 +22,18 @@ package org.apache.kyuubi.ebay.server.events.doc
  * @param date the event date
  * @param sessionCluster the session cluster
  * @param count the session/operation count
- * @param users the user count
+ * @param clusterUsers the cluster user count
+ * @param queueUsers the queue user count
  * @param sessionTypeCounts the session type and count map
  */
 case class DailyTrendEvent(
     date: String,
     sessionCluster: String,
+    sessionQueue: String,
     count: Long,
-    users: Long,
+    clusterUsers: Long,
+    queueUsers: Long,
     sessionTypeCounts: Map[String, Long])
   extends EventDoc {
-  override def docId: String = s"${date}_$sessionCluster"
+  override def docId: String = s"${date}_${sessionCluster}_${sessionQueue}"
 }

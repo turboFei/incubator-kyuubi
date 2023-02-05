@@ -32,7 +32,7 @@ import org.apache.kyuubi.metrics.MetricsConstants.{OPERATION_FAIL, OPERATION_OPE
 import org.apache.kyuubi.metrics.MetricsSystem
 import org.apache.kyuubi.operation.FetchOrientation.FetchOrientation
 import org.apache.kyuubi.operation.OperationState.OperationState
-import org.apache.kyuubi.session.{KyuubiSessionImpl, KyuubiSessionManager, Session}
+import org.apache.kyuubi.session.{KyuubiSession, KyuubiSessionImpl, KyuubiSessionManager, Session}
 import org.apache.kyuubi.util.ThriftUtils
 
 abstract class KyuubiOperation(session: Session) extends AbstractOperation(session) {
@@ -43,6 +43,22 @@ abstract class KyuubiOperation(session: Session) extends AbstractOperation(sessi
     ms.markMeter(MetricRegistry.name(OPERATION_STATE, opType, state.toString.toLowerCase))
     ms.incCount(MetricRegistry.name(OPERATION_TOTAL))
     ms.markMeter(MetricRegistry.name(OPERATION_STATE, state.toString.toLowerCase))
+
+    if (isInstanceOf[ExecuteStatement]) {
+      session.asInstanceOf[KyuubiSession].sessionCluster.foreach { c =>
+        ms.incCount(MetricRegistry.name(OPERATION_OPEN, opType, c))
+        ms.incCount(MetricRegistry.name(OPERATION_TOTAL, opType, c))
+        ms.markMeter(MetricRegistry.name(OPERATION_STATE, opType, state.toString.toLowerCase, c))
+        ms.incCount(MetricRegistry.name(OPERATION_TOTAL, c))
+        ms.markMeter(MetricRegistry.name(OPERATION_STATE, state.toString.toLowerCase, c))
+        if (session.isInstanceOf[CarmelSessionImpl]) {
+          session.asInstanceOf[CarmelSessionImpl].sessionQueue.foreach { queue =>
+            ms.incCount(MetricRegistry.name(OPERATION_TOTAL, opType, c, session.user))
+            ms.incCount(MetricRegistry.name(OPERATION_TOTAL, opType, c, queue))
+          }
+        }
+      }
+    }
   }
 
   protected[operation] lazy val client = session.asInstanceOf[KyuubiSessionImpl].client
@@ -186,6 +202,38 @@ abstract class KyuubiOperation(session: Session) extends AbstractOperation(sessi
       }
       ms.markMeter(MetricRegistry.name(OPERATION_STATE, opType, newState.toString.toLowerCase))
       ms.markMeter(MetricRegistry.name(OPERATION_STATE, newState.toString.toLowerCase))
+
+      if (isInstanceOf[ExecuteStatement]) {
+        session.asInstanceOf[KyuubiSession].sessionCluster.foreach { c =>
+          if (!OperationState.isTerminal(state)) {
+            ms.markMeter(
+              MetricRegistry.name(OPERATION_STATE, opType, state.toString.toLowerCase, c),
+              -1)
+          }
+          ms.markMeter(MetricRegistry.name(
+            OPERATION_STATE,
+            opType,
+            newState.toString.toLowerCase,
+            c))
+          ms.markMeter(MetricRegistry.name(OPERATION_STATE, newState.toString.toLowerCase, c))
+          if (session.isInstanceOf[CarmelSessionImpl] && OperationState.isTerminal(newState)) {
+            session.asInstanceOf[CarmelSessionImpl].sessionQueue.foreach { queue =>
+              ms.markMeter(MetricRegistry.name(
+                OPERATION_STATE,
+                opType,
+                newState.toString.toLowerCase,
+                c,
+                session.user))
+              ms.markMeter(MetricRegistry.name(
+                OPERATION_STATE,
+                opType,
+                newState.toString.toLowerCase,
+                c,
+                queue))
+            }
+          }
+        }
+      }
     }
     super.setState(newState)
     if (eventEnabled) EventBus.post(KyuubiOperationEvent(this))

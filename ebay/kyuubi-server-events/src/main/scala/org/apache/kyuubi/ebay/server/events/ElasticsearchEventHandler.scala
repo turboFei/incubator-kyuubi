@@ -270,8 +270,10 @@ class ElasticsearchEventHandler(conf: KyuubiConf) extends EventHandler[KyuubiEve
               DailyTrendEvent(
                 partitionDay,
                 result.cluster,
+                result.queue,
                 result.count,
-                result.userCount,
+                result.clusterUserCount,
+                result.queueUserCount,
                 result.sessionTypeCounts)
             }
             (aggIndex, doc.docId, doc.toJson)

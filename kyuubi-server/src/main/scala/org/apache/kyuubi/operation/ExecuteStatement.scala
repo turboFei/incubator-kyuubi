@@ -24,11 +24,12 @@ import org.apache.hive.service.rpc.thrift.{TGetOperationStatusResp, TOperationSt
 import org.apache.hive.service.rpc.thrift.TOperationState._
 
 import org.apache.kyuubi.KyuubiSQLException
+import org.apache.kyuubi.carmel.gateway.session.CarmelSessionImpl
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.metrics.{MetricsConstants, MetricsSystem}
 import org.apache.kyuubi.operation.FetchOrientation.FETCH_NEXT
 import org.apache.kyuubi.operation.log.OperationLog
-import org.apache.kyuubi.session.Session
+import org.apache.kyuubi.session.{KyuubiSession, Session}
 
 class ExecuteStatement(
     session: Session,
@@ -140,6 +141,27 @@ class ExecuteStatement(
         ms.updateHistogram(
           MetricRegistry.name(MetricsConstants.OPERATION_EXEC_TIME, opType),
           execTime)
+
+        session.asInstanceOf[KyuubiSession].sessionCluster.foreach { cluster =>
+          ms.updateHistogram(
+            MetricRegistry.name(MetricsConstants.OPERATION_EXEC_TIME, opType, cluster),
+            execTime)
+          if (session.isInstanceOf[CarmelSessionImpl]) {
+            // only enable user & queue metrics for carmel session
+            session.asInstanceOf[CarmelSessionImpl].sessionQueue.foreach { queue =>
+              ms.updateHistogram(
+                MetricRegistry.name(
+                  MetricsConstants.OPERATION_EXEC_TIME,
+                  opType,
+                  cluster,
+                  session.user),
+                execTime)
+              ms.updateHistogram(
+                MetricRegistry.name(MetricsConstants.OPERATION_EXEC_TIME, opType, cluster, queue),
+                execTime)
+            }
+          }
+        }
       }
       // see if anymore log could be fetched
       fetchQueryLog()

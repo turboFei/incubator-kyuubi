@@ -42,7 +42,7 @@ class ElasticsearchIntegrationSuite extends WithKyuubiServer with HiveJDBCTestHe
     KyuubiEbayConf.ELASTIC_SEARCH_CREDENTIAL_FILE.key,
     getClass.getClassLoader.getResource("elasticsearch.md").getFile)
   override protected def jdbcUrl: String = getJdbcUrl
-  private val indexUUID = UUID.randomUUID().toString
+  protected val indexUUID = UUID.randomUUID().toString
   override protected val conf: KyuubiConf = {
     KyuubiConf().set(KyuubiConf.ENGINE_SHARE_LEVEL, "connection")
       .set(KyuubiEbayConf.SESSION_CLUSTER_MODE_ENABLED, true)
@@ -101,7 +101,7 @@ class ElasticsearchIntegrationSuite extends WithKyuubiServer with HiveJDBCTestHe
         opId)
       assert(opDoc.get("sessionId") === sessionId)
       assert(opDoc.get("statementId") === opId)
-      assert(opDoc.get("statement") == "select 123")
+      assert(opDoc.get("statement") === "select 123")
       assert(opDoc.get("sessionType") === SessionType.INTERACTIVE.toString)
 
       val batchRequest = newSparkBatchRequest()
@@ -170,7 +170,7 @@ class ElasticsearchIntegrationSuite extends WithKyuubiServer with HiveJDBCTestHe
     userSessionAggRes.forall(_.user.nonEmpty)
     clusterSessionAggRes.exists { res =>
       res.cluster.nonEmpty && res.count > 0 && res.sessionTypeCounts.forall(
-        _._2 > 0) && res.userCount > 0
+        _._2 > 0) && res.clusterUserCount > 0
     }
     userSessionAggRes.exists { res =>
       res.cluster.nonEmpty && res.count > 0 && res.sessionTypeCounts.forall(_._2 > 0) &&
@@ -181,16 +181,20 @@ class ElasticsearchIntegrationSuite extends WithKyuubiServer with HiveJDBCTestHe
     userOpAggRes.forall(_.user.nonEmpty)
     clusterOpAggRes.exists { res =>
       res.cluster.nonEmpty && res.count > 0 && res.sessionTypeCounts.forall(_._2 > 0) &&
-      res.userCount > 0
+      res.clusterUserCount > 0
     }
     userOpAggRes.exists { res =>
       res.cluster.nonEmpty && res.count > 0 && res.sessionTypeCounts.forall(_._2 > 0) &&
       res.user.nonEmpty
     }
     // scalastyle:off println
+    println(sessionEventIndex)
     println(clusterSessionAggRes.mkString("", "\n", "\n"))
+    println(s"$sessionEventIndex/user")
     println(userSessionAggRes.mkString("", "\n", "\n"))
+    println(operationEventIndex)
     println(clusterOpAggRes.mkString("", "\n", "\n"))
+    println(s"$operationEventIndex/user")
     println(userOpAggRes.mkString("", "\n", "\n"))
     // scalastyle:on println
 
@@ -210,41 +214,64 @@ class ElasticsearchIntegrationSuite extends WithKyuubiServer with HiveJDBCTestHe
       assert(userDailyOpTrend.nonEmpty)
 
       // scalastyle:off println
+      println(dailySession)
       println(dailySessionTrend.mkString("", "\n", "\n"))
+      println(userDailySession)
       println(userDailySessionTrend.mkString("", "\n", "\n"))
+      println(dailyOp)
       println(dailyOpTrend.mkString("", "\n", "\n"))
+      println(userDailyOp)
       println(userDailyOpTrend.mkString("", "\n", "\n"))
       // scalastyle:on println
     }
-  }
 
-  test("get alias indexes and delete index") {
     assert(ElasticsearchUtils.getAliasIndexes("non_exists_" + UUID.randomUUID()).isEmpty)
 
-    var serverEventIndexes = ElasticsearchUtils.getAliasIndexes(
+    val serverEventIndexes = ElasticsearchUtils.getAliasIndexes(
       conf.get(KyuubiEbayConf.ELASTIC_SEARCH_SERVER_EVENT_ALIAS))
-    var sessionEventIndexes = ElasticsearchUtils.getAliasIndexes(
+    val sessionEventIndexes = ElasticsearchUtils.getAliasIndexes(
       conf.get(KyuubiEbayConf.ELASTIC_SEARCH_SESSION_EVENT_ALIAS))
-    var operationEventIndexes = ElasticsearchUtils.getAliasIndexes(
+    val operationEventIndexes = ElasticsearchUtils.getAliasIndexes(
       conf.get(KyuubiEbayConf.ELASTIC_SEARCH_OPERATION_EVENT_ALIAS))
 
     assert(serverEventIndexes.nonEmpty)
     assert(sessionEventIndexes.nonEmpty)
     assert(operationEventIndexes.nonEmpty)
 
-    serverEventIndexes.foreach(ElasticsearchUtils.deleteIndex)
-    sessionEventIndexes.foreach(ElasticsearchUtils.deleteIndex)
-    operationEventIndexes.foreach(ElasticsearchUtils.deleteIndex)
+    serverEventIndexes.foreach(showAndCleanup)
+    sessionEventIndexes.foreach(showAndCleanup)
+    operationEventIndexes.foreach(showAndCleanup)
 
-    serverEventIndexes = ElasticsearchUtils.getAliasIndexes(
-      conf.get(KyuubiEbayConf.ELASTIC_SEARCH_SERVER_EVENT_ALIAS))
-    sessionEventIndexes = ElasticsearchUtils.getAliasIndexes(
-      conf.get(KyuubiEbayConf.ELASTIC_SEARCH_SESSION_EVENT_ALIAS))
-    operationEventIndexes = ElasticsearchUtils.getAliasIndexes(
-      conf.get(KyuubiEbayConf.ELASTIC_SEARCH_OPERATION_EVENT_ALIAS))
+    showAndCleanup(conf.get(KyuubiEbayConf.ELASTIC_SEARCH_DAILY_SESSION_INDEX))
+    showAndCleanup(conf.get(KyuubiEbayConf.ELASTIC_SEARCH_USER_DAILY_SESSION_INDEX))
+    showAndCleanup(conf.get(KyuubiEbayConf.ELASTIC_SEARCH_DAILY_OPERATION_INDEX))
+    showAndCleanup(conf.get(KyuubiEbayConf.ELASTIC_SEARCH_USER_DAILY_OPERATION_INDEX))
+  }
 
-    assert(serverEventIndexes.isEmpty)
-    assert(sessionEventIndexes.isEmpty)
-    assert(operationEventIndexes.isEmpty)
+  def showAndCleanup(index: String): Unit = {
+    // scalastyle:off println
+    println(ElasticsearchUtils.getAllDocs(index).mkString(s"$index:\n", "\n", "\n"))
+    // scalastyle:on println
+    ElasticsearchUtils.deleteIndex(index)
+    assert(!ElasticsearchUtils.indexExists(index))
+  }
+}
+
+class ElasticsearchIntegrationNonClusterModeSuite extends ElasticsearchIntegrationSuite {
+  override protected val conf: KyuubiConf = {
+    KyuubiConf().set(KyuubiConf.ENGINE_SHARE_LEVEL, "connection")
+      .set(KyuubiEbayConf.SESSION_CLUSTER_MODE_ENABLED, false)
+      .set(KyuubiEbayConf.SESSION_CLUSTER, "test")
+      .set(KyuubiEbayConf.OPERATION_INTERCEPT_ENABLED, true)
+      .set(KyuubiConf.SESSION_CONF_ADVISOR, classOf[TagBasedSessionConfAdvisor].getName)
+      .set(KyuubiConf.SERVER_EVENT_LOGGERS, Seq("CUSTOM"))
+      .set(KyuubiEbayConf.ELASTIC_SEARCH_SERVER_EVENT_INDEX, s"$indexUUID-server-index")
+      .set(KyuubiEbayConf.ELASTIC_SEARCH_SESSION_EVENT_INDEX, s"$indexUUID-session-index")
+      .set(KyuubiEbayConf.ELASTIC_SEARCH_OPERATION_EVENT_INDEX, s"$indexUUID-operation-index")
+      .set(KyuubiEbayConf.ELASTIC_SEARCH_SERVER_EVENT_ALIAS, s"$indexUUID-server-alias")
+      .set(KyuubiEbayConf.ELASTIC_SEARCH_SESSION_EVENT_ALIAS, s"$indexUUID-session-alias")
+      .set(KyuubiEbayConf.ELASTIC_SEARCH_OPERATION_EVENT_ALIAS, s"$indexUUID-operation-alias")
+      .set(KyuubiEbayConf.ELASTIC_SEARCH_AGG_ENABLED, true)
+      .set(KyuubiEbayConf.ELASTIC_SEARCH_AGG_INTERVAL, 1000L)
   }
 }

@@ -140,7 +140,10 @@ object ElasticsearchUtils extends Logging {
   def getAllDocs(index: String): Seq[String] = {
     val searchRequest = new SearchRequest(index)
     val searchResponse = getClient().search(searchRequest, RequestOptions.DEFAULT)
-    searchResponse.getHits.getHits.map(_.getSourceAsString).toSeq
+    val totalHits = searchResponse.getHits.getTotalHits.value
+    val docs = searchResponse.getHits.getHits.map(_.getSourceAsString).toSeq
+    assert(totalHits == docs.size)
+    docs
   }
 
   def updateDoc(index: String, id: String, doc: String): Unit = withRetry {
@@ -279,6 +282,10 @@ object ElasticsearchUtils extends Logging {
         .field("sessionCluster")
         .size(size)
 
+      val queueAgg = AggregationBuilders.terms("queueAgg")
+        .field("sessionQueue")
+        .size(size)
+
       val sessionTypeAgg = AggregationBuilders.terms("sessionTypeAgg")
         .field("sessionType")
         .size(size)
@@ -296,7 +303,8 @@ object ElasticsearchUtils extends Logging {
         Some(uAgg)
       } else {
         clusterAgg.subAggregation(uniqueUsersAgg)
-        clusterAgg.subAggregation(sessionTypeAgg)
+        queueAgg.subAggregation(uniqueUsersAgg)
+        clusterAgg.subAggregation(queueAgg.subAggregation(sessionTypeAgg))
         None
       }
 
@@ -321,18 +329,24 @@ object ElasticsearchUtils extends Logging {
                 }
 
               case None =>
-                val clusterSessionTypeCounts =
-                  clusterBucket.getAggregations.get(sessionTypeAgg.getName)
-                    .asInstanceOf[Terms].getBuckets.asScala.map { sessionTypeBucket =>
-                      sessionTypeBucket.getKeyAsString -> sessionTypeBucket.getDocCount
-                    }.toMap
                 val clusterUserCount = clusterBucket.getAggregations.get(
                   uniqueUsersAgg.getName).asInstanceOf[Cardinality].getValue
-                CountAggResult(
-                  clusterBucket.getKeyAsString,
-                  clusterBucket.getDocCount,
-                  clusterSessionTypeCounts,
-                  userCount = clusterUserCount) :: Nil
+                clusterBucket.getAggregations.get(queueAgg.getName).asInstanceOf[Terms]
+                  .getBuckets.asScala.flatMap { queueBucket =>
+                    val queueSessionTypeCounts =
+                      queueBucket.getAggregations.get(sessionTypeAgg.getName)
+                        .asInstanceOf[Terms].getBuckets.asScala.map { sessionTypeBucket =>
+                          sessionTypeBucket.getKeyAsString -> sessionTypeBucket.getDocCount
+                        }.toMap
+                    val queueUserCount = queueBucket.getAggregations.get(
+                      uniqueUsersAgg.getName).asInstanceOf[Cardinality].getValue
+                    CountAggResult(
+                      clusterBucket.getKeyAsString,
+                      clusterBucket.getDocCount,
+                      queueSessionTypeCounts,
+                      clusterUserCount = clusterUserCount,
+                      queueUserCount = queueUserCount) :: Nil
+                  }
             }
         }
     } catch {

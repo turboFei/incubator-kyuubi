@@ -22,4 +22,6 @@ case class CountAggResult(
     count: Long,
     sessionTypeCounts: Map[String, Long],
     user: String = "",
-    userCount: Long = 0L)
+    queue: String = "",
+    clusterUserCount: Long = 0L,
+    queueUserCount: Long = 0L)

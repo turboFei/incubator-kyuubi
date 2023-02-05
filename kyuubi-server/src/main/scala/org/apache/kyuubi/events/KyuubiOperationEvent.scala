@@ -57,7 +57,8 @@ case class KyuubiOperationEvent private (
     sessionId: String,
     sessionUser: String,
     sessionType: String,
-    sessionCluster: String = "") extends KyuubiEvent {
+    sessionCluster: String = "",
+    sessionQueue: String = "") extends KyuubiEvent {
 
   // operation events are partitioned by the date when the corresponding operations are
   // created.
@@ -87,6 +88,7 @@ object KyuubiOperationEvent {
       session.handle.identifier.toString,
       session.user,
       session.sessionType.toString,
-      session.sessionCluster.getOrElse(""))
+      session.sessionCluster.getOrElse(""),
+      session.sessionQueue.getOrElse(""))
   }
 }

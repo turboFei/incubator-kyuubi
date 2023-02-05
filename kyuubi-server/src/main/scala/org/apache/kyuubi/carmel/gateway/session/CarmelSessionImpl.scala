@@ -55,6 +55,7 @@ class CarmelSessionImpl(
 
   private var _sparkEndpoint: SparkEndpoint = _
   def sparkEndpoint: SparkEndpoint = _sparkEndpoint
+  override def sessionQueue: Option[String] = Option(_sparkEndpoint).map(_.getQueue).map(_.getName)
 
   override protected[kyuubi] def openEngineSession(extraEngineLog: Option[OperationLog]): Unit = {
     val userInfo = new UserInfo(user, Option(password).getOrElse("anonymous"))
