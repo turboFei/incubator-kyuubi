@@ -111,6 +111,8 @@ class KyuubiSessionImpl(
 
   protected var _engineSessionHandle: SessionHandle = _
 
+  private var openSessionError: Option[Throwable] = None
+
   override def open(): Unit = handleSessionException {
     traceMetricsOnOpen()
 
@@ -176,6 +178,7 @@ class KyuubiSessionImpl(
                 s"Opening engine [${engine.defaultEngineName} $host:$port]" +
                   s" for $user session failed",
                 e)
+              openSessionError = Some(e)
               throw e
           } finally {
             attempt += 1
@@ -253,7 +256,7 @@ class KyuubiSessionImpl(
     try {
       if (_client != null) _client.closeSession()
     } finally {
-      if (engine != null) engine.close()
+      openSessionError.foreach { _ => if (engine != null) engine.close() }
       sessionEvent.endTime = System.currentTimeMillis()
       EventBus.post(sessionEvent)
       traceMetricsOnClose()
