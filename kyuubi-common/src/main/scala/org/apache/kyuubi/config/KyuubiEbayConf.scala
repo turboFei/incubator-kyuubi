@@ -111,6 +111,7 @@ object KyuubiEbayConf extends Logging {
   @deprecated(s"using ${KyuubiConf.OPERATION_RESULT_MAX_ROWS} instead", "1.6.0")
   val EBAY_OPERATION_MAX_RESULT_COUNT: ConfigEntry[Int] =
     buildConf("kyuubi.operation.max.result.count")
+      .internal
       .doc(s"(deprecated) Ebay legacy conf, please use the community conf" +
         s" `${KyuubiConf.OPERATION_RESULT_MAX_ROWS.key}`.")
       .version("1.3.0")
