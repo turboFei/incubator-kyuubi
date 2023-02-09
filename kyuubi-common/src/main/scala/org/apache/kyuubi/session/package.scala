@@ -28,4 +28,5 @@ package object session {
 
   val SPARK_PREFIX = "spark."
   val QUEUE = "queue"
+  val SESSION_TAG = "tag"
 }

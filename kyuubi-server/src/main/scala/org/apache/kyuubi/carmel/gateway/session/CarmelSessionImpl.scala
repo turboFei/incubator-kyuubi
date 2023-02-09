@@ -17,6 +17,8 @@
 
 package org.apache.kyuubi.carmel.gateway.session
 
+import scala.collection.JavaConverters._
+
 import org.apache.hive.service.rpc.thrift.{TGetInfoType, TGetInfoValue, TProtocolVersion}
 
 import org.apache.kyuubi.carmel.gateway.endpoint.SparkEndpoint
@@ -59,7 +61,9 @@ class CarmelSessionImpl(
 
   override protected[kyuubi] def openEngineSession(extraEngineLog: Option[OperationLog]): Unit = {
     val userInfo = new UserInfo(user, Option(password).getOrElse("anonymous"))
-    normalizedConf.get(QUEUE).foreach(userInfo.setAssignedQueue)
+    normalizedConf.get(QUEUE).orElse(normalizedConf.get("spark.yarn.queue")).foreach(
+      userInfo.setAssignedQueue)
+    sessionTag.foreach(tag => userInfo.setTags(tag.split(",").toList.asJava))
     val endpointMgr = sessionManager.carmelEndpointManager.getClusterEndpointManager(sessionCluster)
     val maxAttempts = sessionManager.getConf.get(ENGINE_OPEN_MAX_ATTEMPTS)
     val retryWait = sessionManager.getConf.get(ENGINE_OPEN_RETRY_WAIT)

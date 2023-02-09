@@ -1,0 +1,8 @@
+[ {"grouppath":"test","url":"localhost:10000"},
+  {"grouppath":"test","url":"localhost:10001"},
+  {"grouppath":"hadoop","url":"localhost:10002", "tag": ["schedule"]},
+  {"grouppath":"hadoop","url":"localhost:10003"},
+  {"grouppath":"hadoop2","url":"localhost:10004"},
+  {"grouppath":"hdmi-default","url":"localhost:10005", "tag": ["schedule"]},
+  {"grouppath":"hdmi-default","url":"localhost:10006"}
+]

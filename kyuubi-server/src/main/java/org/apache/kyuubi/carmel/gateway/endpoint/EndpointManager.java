@@ -24,6 +24,7 @@ import com.google.common.collect.Maps;
 import java.util.*;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 import org.apache.commons.lang.StringUtils;
 import org.apache.kyuubi.ebay.carmel.gateway.config.CarmelConfig;
 import org.apache.kyuubi.ebay.carmel.gateway.endpoint.*;
@@ -48,7 +49,7 @@ public class EndpointManager {
   public EndpointManager(CarmelConfig config) {
     this.config = config;
     this.failServers = Maps.newConcurrentMap();
-    this.endpointSelectStrategy = new RandomSelectStrategy();
+    this.endpointSelectStrategy = initEndpointSelectStrategy(config);
     try {
       this.discovery = initDiscovery(config);
       this.accessManager = initAccessManager(config);
@@ -64,6 +65,15 @@ public class EndpointManager {
     } else {
       String[] configIgnoreQueueList = queueIgnoreString.split(",");
       this.queueSelectionIgnorelist = new HashSet<>(Arrays.asList(configIgnoreQueueList));
+    }
+  }
+
+  private EndpointSelectStrategy initEndpointSelectStrategy(CarmelConfig config) {
+    if (config.getVar(CARMEL_GATEWAY_ENDPOINT_SELECT_STRATEGY).equals("tag")) {
+      LOG.info("use tag base endpoint selection strategy");
+      return new TagBasedSelectStrategy();
+    } else {
+      return new RandomSelectStrategy();
     }
   }
 
@@ -121,8 +131,8 @@ public class EndpointManager {
           continue;
         }
         hasMatchQueue = true;
-        List<String> allServers = discovery.getServerUrls(queueName);
-        for (String server : allServers) {
+        List<ThriftServerInfo> allServers = discovery.getServers(queueName);
+        for (ThriftServerInfo server : allServers) {
           result.add(new SparkEndpoint(config, queue, server, userInfo));
         }
       }
@@ -166,13 +176,38 @@ public class EndpointManager {
       throw new CarmelRuntimeException(
           "cannot find proper thrift endpoint for user:" + userInfo.username);
     }
-    SparkEndpoint result = endpointSelectStrategy.selectEndpoint(userInfo.username, endpoints);
+    SparkEndpoint result = selectEndpoint(userInfo, endpoints);
     LOG.info("choose spark endpoint: {} for user: {}", result, userInfo.username);
     if (result == null) {
       throw new CarmelRuntimeException(
           "cannot find proper thrift endpoint for user:" + userInfo.username);
     }
     return result;
+  }
+
+  public SparkEndpoint selectEndpoint(UserInfo userInfo, List<SparkEndpoint> endpoints) {
+    int size = endpoints.size();
+    if (size == 0) {
+      return null;
+    }
+    if (size == 1) {
+      return endpoints.get(0);
+    }
+    List<SparkEndpoint> defQueueEndpoints = Lists.newArrayList();
+    List<SparkEndpoint> otherEndpoints = Lists.newArrayList();
+    for (SparkEndpoint endpoint : endpoints) {
+      if (StringUtils.equalsIgnoreCase(clusterDefaultQueue, endpoint.getQueue().getName())) {
+        defQueueEndpoints.add(endpoint);
+      } else {
+        otherEndpoints.add(endpoint);
+      }
+    }
+    // first select non-default queue endpoints, if not found select default queue endpoints
+    SparkEndpoint result = endpointSelectStrategy.selectEndpoint(userInfo, otherEndpoints);
+    if (result != null) {
+      return result;
+    }
+    return endpointSelectStrategy.selectEndpoint(userInfo, defQueueEndpoints);
   }
 
   private static class ServerFailure {
@@ -212,11 +247,11 @@ public class EndpointManager {
 
   public interface EndpointSelectStrategy {
     /**
-     * @param user
+     * @param userInfo
      * @param endpoints
      * @return null if no server can be selected
      */
-    SparkEndpoint selectEndpoint(String user, List<SparkEndpoint> endpoints);
+    SparkEndpoint selectEndpoint(UserInfo userInfo, List<SparkEndpoint> endpoints);
   }
 
   public class RandomSelectStrategy implements EndpointSelectStrategy {
@@ -227,31 +262,7 @@ public class EndpointManager {
     }
 
     @Override
-    public SparkEndpoint selectEndpoint(String user, List<SparkEndpoint> endpoints) {
-      int size = endpoints.size();
-      if (size == 0) {
-        return null;
-      }
-      if (size == 1) {
-        return endpoints.get(0);
-      }
-      List<SparkEndpoint> defQueueEndpoints = Lists.newArrayList();
-      List<SparkEndpoint> otherEndpoints = Lists.newArrayList();
-      for (SparkEndpoint endpoint : endpoints) {
-        if (StringUtils.equalsIgnoreCase(clusterDefaultQueue, endpoint.getQueue().getName())) {
-          defQueueEndpoints.add(endpoint);
-        } else {
-          otherEndpoints.add(endpoint);
-        }
-      }
-      SparkEndpoint result = doSelectEndPoints(user, otherEndpoints);
-      if (result != null) {
-        return result;
-      }
-      return doSelectEndPoints(user, defQueueEndpoints);
-    }
-
-    private SparkEndpoint doSelectEndPoints(String user, List<SparkEndpoint> endpoints) {
+    public SparkEndpoint selectEndpoint(UserInfo userInfo, List<SparkEndpoint> endpoints) {
       int size = endpoints.size();
       if (size == 0) {
         return null;
@@ -261,7 +272,7 @@ public class EndpointManager {
       }
       Collections.sort(endpoints);
 
-      SparkEndpoint endpoint = endpoints.get(Math.abs(user.hashCode()) % size);
+      SparkEndpoint endpoint = endpoints.get(Math.abs(userInfo.username.hashCode()) % size);
       if (checkEndpoint(endpoint)) {
         return endpoint;
       }
@@ -274,22 +285,70 @@ public class EndpointManager {
         }
         select++;
       }
-
       return null;
     }
+  }
 
-    private boolean checkEndpoint(SparkEndpoint endpoint) {
-      String url = endpoint.getServerUrl();
-      ServerFailure failure = failServers.get(url);
-      if (failure == null) {
-        return true;
-      }
-      long currTime = System.currentTimeMillis();
-      // recheck the fail server every 5 minutes
-      if ((currTime - failure.lastCheckFailureTime) > 5 * 60 * 1000) {
-        return true;
-      }
-      return false;
+  public class TagBasedSelectStrategy implements EndpointSelectStrategy {
+    EndpointSelectStrategy backSelectionStrategy;
+
+    public TagBasedSelectStrategy() {
+      backSelectionStrategy = new RandomSelectStrategy();
     }
+
+    @Override
+    public SparkEndpoint selectEndpoint(UserInfo userInfo, List<SparkEndpoint> endpoints) {
+      int size = endpoints.size();
+      if (size == 0) {
+        return null;
+      }
+      if (size == 1) {
+        return endpoints.get(0);
+      }
+
+      List<String> sessionTags = userInfo.getTags();
+      // for no tag session, first select endpoint which has no tags
+      // if all endpoints has tag, the select one randomly
+      if (sessionTags.isEmpty()) {
+        List<SparkEndpoint> noTagEndpoints =
+            endpoints.stream()
+                .filter(endpoint -> !endpoint.getServerInfo().hasTags())
+                .collect(Collectors.toList());
+        if (!noTagEndpoints.isEmpty()) {
+          return backSelectionStrategy.selectEndpoint(userInfo, noTagEndpoints);
+        } else {
+          return backSelectionStrategy.selectEndpoint(userInfo, endpoints);
+        }
+      }
+
+      int maxTagMatchCnt = 0;
+      List<SparkEndpoint> bestMatchEndPoints = new ArrayList<>();
+      for (SparkEndpoint endpoint : endpoints) {
+        int matchTagCnt = endpoint.getServerInfo().matchTags(sessionTags);
+        if (matchTagCnt > maxTagMatchCnt) {
+          maxTagMatchCnt = matchTagCnt;
+          bestMatchEndPoints = new ArrayList<>();
+          bestMatchEndPoints.add(endpoint);
+        }
+        if (matchTagCnt == maxTagMatchCnt) {
+          bestMatchEndPoints.add(endpoint);
+        }
+      }
+      return backSelectionStrategy.selectEndpoint(userInfo, bestMatchEndPoints);
+    }
+  }
+
+  private boolean checkEndpoint(SparkEndpoint endpoint) {
+    String url = endpoint.getServerUrl();
+    ServerFailure failure = failServers.get(url);
+    if (failure == null) {
+      return true;
+    }
+    long currTime = System.currentTimeMillis();
+    // recheck the fail server every 5 minutes
+    if ((currTime - failure.lastCheckFailureTime) > 5 * 60 * 1000) {
+      return true;
+    }
+    return false;
   }
 }

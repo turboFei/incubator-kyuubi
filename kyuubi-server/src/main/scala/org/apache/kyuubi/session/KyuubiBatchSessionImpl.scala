@@ -58,6 +58,7 @@ class KyuubiBatchSessionImpl(
 
   val sessionCluster =
     KyuubiEbayConf.getSessionCluster(sessionManager, batchRequest.getConf.asScala.toMap)
+  val sessionTag = KyuubiEbayConf.getSessionTag(batchRequest.getConf.asScala.toMap)
 
   override def getNoOperationTime: Long = {
     if (batchJobSubmissionOp != null && !OperationState.isTerminal(

@@ -26,7 +26,7 @@ import com.google.common.cache.{CacheBuilder, CacheLoader, LoadingCache}
 
 import org.apache.kyuubi.{Logging, Utils}
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
-import org.apache.kyuubi.config.KyuubiEbayConf.{SESSION_CLUSTER, SESSION_TAG, SESSION_TAG_CONF_FILE}
+import org.apache.kyuubi.config.KyuubiEbayConf.{SESSION_CLUSTER, SESSION_TAG_CONF_FILE}
 import org.apache.kyuubi.plugin.SessionConfAdvisor
 
 class TagBasedSessionConfAdvisor extends SessionConfAdvisor with Logging {
@@ -40,7 +40,8 @@ class TagBasedSessionConfAdvisor extends SessionConfAdvisor with Logging {
   override def getConfOverlay(
       user: String,
       sessionConf: JMap[String, String]): JMap[String, String] = {
-    val sessionTag = sessionConf.asScala.get(SESSION_TAG.key).getOrElse(KYUUBI_DEFAULT_TAG)
+    val sessionTag =
+      KyuubiEbayConf.getSessionTag(sessionConf.asScala.toMap).getOrElse(KYUUBI_DEFAULT_TAG)
     val sessionCluster = sessionConf.asScala.get(SESSION_CLUSTER.key)
 
     val tagConf = tagFileConfCache.get(tagConfFile)

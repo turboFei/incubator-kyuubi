@@ -24,6 +24,7 @@ import org.apache.kyuubi.client.KyuubiSyncThriftClient;
 import org.apache.kyuubi.ebay.carmel.gateway.config.CarmelConfig;
 import org.apache.kyuubi.ebay.carmel.gateway.endpoint.CarmelRuntimeException;
 import org.apache.kyuubi.ebay.carmel.gateway.endpoint.QueueInfo;
+import org.apache.kyuubi.ebay.carmel.gateway.endpoint.ThriftServerInfo;
 import org.apache.kyuubi.ebay.carmel.gateway.endpoint.UserInfo;
 import org.apache.thrift.protocol.TProtocol;
 import org.apache.thrift.transport.*;
@@ -34,16 +35,17 @@ public class SparkEndpoint implements Comparable<SparkEndpoint> {
   private static final Logger LOG = LoggerFactory.getLogger(SparkEndpoint.class);
 
   private QueueInfo queue;
-  private String serverUrl;
+  private ThriftServerInfo serverInfo;
   private UserInfo userInfo;
   private KyuubiSyncThriftClient syncThriftClient;
   private TTransport serviceTransport;
   private int connectTimeoutInMs;
   private String id;
 
-  public SparkEndpoint(CarmelConfig config, QueueInfo queue, String serverUrl, UserInfo userInfo) {
+  public SparkEndpoint(
+      CarmelConfig config, QueueInfo queue, ThriftServerInfo serverInfo, UserInfo userInfo) {
     this.queue = queue;
-    this.serverUrl = serverUrl;
+    this.serverInfo = serverInfo;
     this.userInfo = userInfo;
     this.connectTimeoutInMs = config.getIntVar(CARMEL_GATEWAY_TO_SERVER_TIMEOUT_SEC) * 1000;
   }
@@ -58,7 +60,7 @@ public class SparkEndpoint implements Comparable<SparkEndpoint> {
   public KyuubiSyncThriftClient getClient() {
     if (syncThriftClient == null) {
       try {
-        String[] hostAndPortArr = serverUrl.split(":");
+        String[] hostAndPortArr = serverInfo.getServerUrl().split(":");
         if (hostAndPortArr.length != 2) {
           throw new IllegalStateException("The value of server url is not valid.");
         }
@@ -73,7 +75,8 @@ public class SparkEndpoint implements Comparable<SparkEndpoint> {
         this.serviceTransport = tProtocol.getTransport();
         this.syncThriftClient = KyuubiSyncThriftClient.createClient(tProtocol);
       } catch (Exception e) {
-        throw new CarmelRuntimeException("error when open transport:" + serverUrl, e);
+        throw new CarmelRuntimeException(
+            "error when open transport:" + serverInfo.getServerUrl(), e);
       }
     }
     return syncThriftClient;
@@ -84,7 +87,11 @@ public class SparkEndpoint implements Comparable<SparkEndpoint> {
   }
 
   public String getServerUrl() {
-    return serverUrl;
+    return serverInfo.getServerUrl();
+  }
+
+  public ThriftServerInfo getServerInfo() {
+    return serverInfo;
   }
 
   private String getTransportInfo(TTransport transport) {
@@ -98,7 +105,7 @@ public class SparkEndpoint implements Comparable<SparkEndpoint> {
     } catch (Exception e) {
       LOG.error("exception when get transport info", e);
     }
-    return serverUrl;
+    return serverInfo.getServerUrl();
   }
 
   public void setId(String id) {
@@ -116,7 +123,7 @@ public class SparkEndpoint implements Comparable<SparkEndpoint> {
         + queue
         + '\''
         + ", serverUrl='"
-        + serverUrl
+        + serverInfo.getServerUrl()
         + '\''
         + ", id='"
         + id
@@ -129,6 +136,6 @@ public class SparkEndpoint implements Comparable<SparkEndpoint> {
     if (!queue.getName().equals(o.queue.getName())) {
       return queue.getName().compareTo(o.queue.getName());
     }
-    return this.serverUrl.compareTo(o.serverUrl);
+    return this.serverInfo.getServerUrl().compareTo(o.getServerUrl());
   }
 }

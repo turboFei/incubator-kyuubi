@@ -17,6 +17,8 @@
 package org.apache.kyuubi.ebay.carmel.gateway.endpoint;
 
 import com.google.common.base.MoreObjects;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
 public class UserInfo {
@@ -25,6 +27,8 @@ public class UserInfo {
 
   public final String password;
   private String assignedQueue;
+
+  private List<String> tags = new ArrayList<>();
 
   private int sessionIdleTimeout = 0;
   /** the original user when using impersonation */
@@ -54,6 +58,14 @@ public class UserInfo {
 
   public void setAssignedQueue(String assignedQueue) {
     this.assignedQueue = assignedQueue;
+  }
+
+  public List<String> getTags() {
+    return tags;
+  }
+
+  public void setTags(List<String> tags) {
+    this.tags = tags;
   }
 
   public int getSessionIdleTimeout() {

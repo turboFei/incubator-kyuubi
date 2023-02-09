@@ -44,6 +44,7 @@ abstract class KyuubiSession(
 
   val sessionCluster: Option[String]
   def sessionQueue: Option[String] = None
+  val sessionTag: Option[String]
 
   def defaultName: Option[String] = sessionCluster.map(c => s"$c ${getClass.getSimpleName}")
   override lazy val name: Option[String] = normalizedConf.get(SESSION_NAME.key).orElse(defaultName)

@@ -26,10 +26,12 @@ import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public class FileThriftDiscovery implements ThriftDiscovery {
 
-  private final Map<String, String> serverUrl = new HashMap<>();
+  private final Map<String, List<ServerUrl>> serverUrl = new HashMap<>();
   private final ObjectMapper mapper = new ObjectMapper();
 
   public FileThriftDiscovery(String path) throws IOException {
@@ -38,7 +40,13 @@ public class FileThriftDiscovery implements ThriftDiscovery {
       if (Strings.isNullOrEmpty(url.grouppath) || Strings.isNullOrEmpty(url.url)) {
         continue;
       }
-      this.serverUrl.put(url.grouppath, url.url);
+      List<ServerUrl> groupServers = serverUrl.get(url.grouppath);
+      if (groupServers != null) {
+        groupServers.add(url);
+      } else {
+        groupServers = Lists.newArrayList(url);
+        serverUrl.put(url.grouppath, groupServers);
+      }
     }
   }
 
@@ -56,8 +64,17 @@ public class FileThriftDiscovery implements ThriftDiscovery {
   }
 
   @Override
-  public List<String> getServerUrls(String queue) throws Exception {
-    return Lists.newArrayList(this.serverUrl.values());
+  public List<ThriftServerInfo> getServers(String queue) throws Exception {
+    return this.serverUrl.get(queue).stream()
+        .map(
+            serverUrl -> {
+              ThriftServerInfo serverInfo = new ThriftServerInfo(serverUrl.url);
+              ThriftServerInfo.ServerData serverData = new ThriftServerInfo.ServerData();
+              serverData.setTag(serverUrl.tag);
+              serverInfo.setServerData(serverData);
+              return serverInfo;
+            })
+        .collect(Collectors.toList());
   }
 
   @Override
@@ -67,6 +84,8 @@ public class FileThriftDiscovery implements ThriftDiscovery {
 
     private String grouppath;
     private String url;
+
+    private Set<String> tag;
 
     public ServerUrl() {}
 
@@ -89,6 +108,14 @@ public class FileThriftDiscovery implements ThriftDiscovery {
 
     public void setUrl(String url) {
       this.url = url;
+    }
+
+    public Set<String> getTag() {
+      return tag;
+    }
+
+    public void setTag(Set<String> tag) {
+      this.tag = tag;
     }
   }
 }

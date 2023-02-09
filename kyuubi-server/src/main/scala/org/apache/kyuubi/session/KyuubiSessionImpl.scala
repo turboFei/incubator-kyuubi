@@ -53,6 +53,7 @@ class KyuubiSessionImpl(
   override val sessionType: SessionType = SessionType.INTERACTIVE
 
   val sessionCluster = KyuubiEbayConf.getSessionCluster(sessionManager, normalizedConf)
+  val sessionTag = KyuubiEbayConf.getSessionTag(normalizedConf)
 
   private[kyuubi] val optimizedConf: Map[String, String] = {
     val queueConf =

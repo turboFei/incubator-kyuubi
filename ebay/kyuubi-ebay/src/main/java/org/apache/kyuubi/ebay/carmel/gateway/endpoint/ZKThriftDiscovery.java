@@ -37,6 +37,7 @@ import org.apache.curator.framework.recipes.cache.PathChildrenCacheListener;
 import org.apache.curator.utils.ZKPaths;
 import org.apache.kyuubi.config.KyuubiConf;
 import org.apache.kyuubi.ebay.carmel.gateway.config.CarmelConfig;
+import org.apache.kyuubi.ebay.carmel.gateway.tools.JsonUtils;
 import org.apache.kyuubi.ha.HighAvailabilityConf;
 import org.apache.kyuubi.ha.client.zookeeper.ZookeeperClientProvider;
 import org.slf4j.Logger;
@@ -45,7 +46,7 @@ import org.slf4j.LoggerFactory;
 public class ZKThriftDiscovery implements ThriftDiscovery {
   private static final Logger LOG = LoggerFactory.getLogger(ZKThriftDiscovery.class);
 
-  private final LoadingCache<String, Set<String>> cache;
+  private final LoadingCache<String, Set<ThriftServerInfo>> cache;
   private final CuratorFramework zooKeeperClient;
   private final String zkBasePath;
   private final ConcurrentMap<String, PathChildrenCache> watches = new ConcurrentHashMap<>();
@@ -66,9 +67,10 @@ public class ZKThriftDiscovery implements ThriftDiscovery {
         CacheBuilder.newBuilder()
             .expireAfterWrite(2, TimeUnit.HOURS)
             .removalListener(
-                new RemovalListener<String, Set<String>>() {
+                new RemovalListener<String, Set<ThriftServerInfo>>() {
                   @Override
-                  public void onRemoval(RemovalNotification<String, Set<String>> notification) {
+                  public void onRemoval(
+                      RemovalNotification<String, Set<ThriftServerInfo>> notification) {
                     PathChildrenCache watch = watches.remove(notification.getKey());
                     if (watch != null) {
                       try {
@@ -80,26 +82,44 @@ public class ZKThriftDiscovery implements ThriftDiscovery {
                   }
                 })
             .build(
-                new CacheLoader<String, Set<String>>() {
+                new CacheLoader<String, Set<ThriftServerInfo>>() {
                   @Override
-                  public Set<String> load(String key) throws Exception {
+                  public Set<ThriftServerInfo> load(String key) throws Exception {
                     return getZNodeData(key);
                   }
                 });
   }
 
-  private Set<String> getZNodeData(String queue) throws Exception {
+  private Set<ThriftServerInfo> getZNodeData(String queue) throws Exception {
     String zkPath = ZKPaths.makePath(zkBasePath, queue);
     addWatchForQueue(queue, zkPath);
     List<String> nodes = zooKeeperClient.getChildren().forPath(zkPath);
     if (LOG.isDebugEnabled()) {
       LOG.debug("Get server url from path " + zkPath + " and server urls: " + nodes);
     }
-    Set<String> result = Sets.newHashSet();
+    Set<ThriftServerInfo> result = Sets.newHashSet();
     for (String node : nodes) {
-      result.add(parseServerUrl(node));
+      result.add(parseServerInfo(node));
     }
     return result;
+  }
+
+  private ThriftServerInfo parseServerInfo(String zkNodeName) throws Exception {
+    String serverUrl = zkNodeName.substring(zkNodeName.indexOf(":") + 1);
+    ThriftServerInfo serverInfo = new ThriftServerInfo(serverUrl);
+    try {
+      byte[] serverDataBytes = zooKeeperClient.getData().forPath(zkNodeName);
+      if (serverDataBytes != null && serverDataBytes.length > 0) {
+        ThriftServerInfo.ServerData serverData =
+            JsonUtils.readValue(serverDataBytes, ThriftServerInfo.ServerData.class);
+        if (serverData != null) {
+          serverInfo.setServerData(serverData);
+        }
+      }
+    } catch (Exception e) {
+      LOG.error("error when get thrift server data from zk node:{}", zkNodeName);
+    }
+    return serverInfo;
   }
 
   private String parseServerUrl(String zkNodeName) {
@@ -125,7 +145,7 @@ public class ZKThriftDiscovery implements ThriftDiscovery {
                     try {
                       String addNodeName = event.getData().getPath();
                       LOG.info("zk discover new node added:{}", addNodeName);
-                      cache.get(queue).add(parseServerUrl(addNodeName));
+                      cache.get(queue).add(parseServerInfo(addNodeName));
                     } catch (Exception e) {
                       LOG.error("error when add new thrift server", e);
                     }
@@ -141,12 +161,12 @@ public class ZKThriftDiscovery implements ThriftDiscovery {
   }
 
   @Override
-  public List<String> getServerUrls(String queue) throws Exception {
-    Set<String> cachedUrls = cache.get(queue);
-    if (cachedUrls == null) {
+  public List<ThriftServerInfo> getServers(String queue) throws Exception {
+    Set<ThriftServerInfo> cachedServers = cache.get(queue);
+    if (cachedServers == null) {
       return Collections.emptyList();
     }
-    return Lists.newArrayList(cachedUrls);
+    return Lists.newArrayList(cachedServers);
   }
 
   @Override

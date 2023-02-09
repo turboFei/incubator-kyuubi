@@ -715,9 +715,16 @@ object KyuubiEbayConf extends Logging {
     conf.getAllWithPrefix(s"___${tag}___", "")
   }
 
+  def getSessionTag(conf: KyuubiConf): Option[String] = {
+    conf.get(SESSION_TAG).orElse(conf.getOption(org.apache.kyuubi.session.SESSION_TAG))
+  }
+
+  def getSessionTag(conf: Map[String, String]): Option[String] = {
+    conf.get(SESSION_TAG.key).orElse(conf.get(org.apache.kyuubi.session.SESSION_TAG))
+  }
+
   def moveQueueEnabled(conf: KyuubiConf): Boolean = {
-    conf.get(SESSION_TAG) == Some(ZETA_TAG_KEY) && conf.get(
-      SESSION_ENGINE_LAUNCH_MOVE_QUEUE_ENABLED)
+    getSessionTag(conf) == Some(ZETA_TAG_KEY) && conf.get(SESSION_ENGINE_LAUNCH_MOVE_QUEUE_ENABLED)
   }
 
   final val KYUUBI_SESSION_ID_KEY = "kyuubi.session.id"

@@ -19,7 +19,7 @@ package org.apache.kyuubi.ebay.carmel.gateway.endpoint;
 import java.util.List;
 
 public interface ThriftDiscovery extends Cacheable, AutoCloseable {
-  List<String> getServerUrls(String queue) throws Exception;
+  List<ThriftServerInfo> getServers(String queue) throws Exception;
 
   @Override
   default void close() throws Exception {}

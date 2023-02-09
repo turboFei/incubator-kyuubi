@@ -132,6 +132,14 @@ public class CarmelConfig {
     return Long.parseLong(var.defaultValue);
   }
 
+  // for test purpose
+  public void setVar(ConfVars var, String value) {
+    if (var.validator != null) {
+      var.validator.validate(value);
+    }
+    properties.setProperty(var.name, value);
+  }
+
   public enum ConfVars {
 
     // Carmel gateway server configurations
@@ -166,6 +174,10 @@ public class CarmelConfig {
 
     CARMEL_GATEWAY_THRIFT_DISCOVERY(
         "carmel.gateway.thrift.discovery", "file", new StringSet("file", "zookeeper")),
+
+    CARMEL_GATEWAY_ENDPOINT_SELECT_STRATEGY(
+        "carmel.gateway.endpoint.select.policy", "tag", new StringSet("rnd", "tag")),
+
     CARMEL_GATEWAY_THRIFT_ZOOKEEPER_NAMESPACE(
         "carmel.gateway.thrift.zookeeper.namespace", "hiveserver2", null),
     CARMEL_GATEWAY_THRIFT_FILE("carmel.gateway.thrift.file", "carmel-server-url.json", null),
