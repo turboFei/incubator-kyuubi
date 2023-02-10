@@ -49,7 +49,7 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper 
       .set(KyuubiEbayConf.SESSION_CLUSTER_MODE_ENABLED, true)
       .set(KyuubiEbayConf.SESSION_CLUSTER, "invalid-cluster")
       .set(KyuubiEbayConf.OPERATION_INTERCEPT_ENABLED, true)
-      .set(KyuubiEbayConf.SESSION_CLUSTER_LIST, Seq("test"))
+      .set(KyuubiEbayConf.SESSION_CLUSTER_LIST, Seq("test", "cluster_limit"))
       .set(KyuubiConf.SESSION_CONF_ADVISOR, classOf[TagBasedSessionConfAdvisor].getName)
       .set(KyuubiConf.GROUP_PROVIDER, classOf[NoopGroupProvider].getName)
   }
@@ -531,6 +531,25 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper 
       withJdbcStatement() { statement =>
         val result = statement.executeQuery("show tables")
         assert(!result.next())
+      }
+    }
+  }
+
+  test("HADP-47085: tSupport to limit max connections for different clusters") {
+    Seq("test", "cluster_limit").foreach { cluster =>
+      withSessionConf()(Map.empty)(Map(KyuubiEbayConf.SESSION_CLUSTER.key -> cluster)) {
+        // session 1
+        withJdbcStatement() { _ =>
+          withSessionConf()(Map.empty)(Map(KyuubiEbayConf.SESSION_CLUSTER.key -> cluster)) {
+            // session 2
+            if (cluster == "cluster_limit") {
+              val e = intercept[Exception](withJdbcStatement() { _ => })
+              assert(e.getMessage.contains("Connection limit per user reached"))
+            } else {
+              withJdbcStatement() { _ => }
+            }
+          }
+        }
       }
     }
   }

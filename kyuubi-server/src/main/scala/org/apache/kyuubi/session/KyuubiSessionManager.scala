@@ -330,11 +330,12 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
   override protected def isServer: Boolean = true
 
   private def initSessionLimiter(conf: KyuubiConf): Unit = {
-    if (conf.get(KyuubiEbayConf.SESSION_CLUSTER_MODE_ENABLED)) {
+    val clusterOpts = if (conf.get(KyuubiEbayConf.SESSION_CLUSTER_MODE_ENABLED)) {
       KyuubiEbayConf.getClusterList(conf).map(Option(_))
     } else {
       Seq(None)
-    }.foreach { clusterOpt =>
+    }
+    clusterOpts.foreach { clusterOpt =>
       val clusterConf = KyuubiEbayConf.loadClusterConf(conf, clusterOpt)
       val userLimit = clusterConf.get(SERVER_LIMIT_CONNECTIONS_PER_USER).getOrElse(0)
       val ipAddressLimit = clusterConf.get(SERVER_LIMIT_CONNECTIONS_PER_IPADDRESS).getOrElse(0)
