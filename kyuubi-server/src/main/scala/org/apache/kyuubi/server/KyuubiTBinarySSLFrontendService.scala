@@ -18,6 +18,9 @@
 package org.apache.kyuubi.server
 
 import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.KyuubiConf.FRONTEND_SSL_KEYSTORE_TYPE
+import org.apache.kyuubi.ebay.SSLUtils
+import org.apache.kyuubi.metrics.MetricsSystem
 import org.apache.kyuubi.service.Serverable
 
 class KyuubiTBinarySSLFrontendService(
@@ -25,4 +28,27 @@ class KyuubiTBinarySSLFrontendService(
   override protected lazy val portNum: Int =
     conf.get(KyuubiConf.FRONTEND_THRIFT_BINARY_SSL_BIND_PORT)
   override protected def sslEnabled: Boolean = true
+
+  private def traceKeyStoreExpiration(): Unit = {
+    val keyStorePath = conf.get(KyuubiConf.FRONTEND_SSL_KEYSTORE_PATH)
+    val keyStorePassword = conf.get(KyuubiConf.FRONTEND_SSL_KEYSTORE_PASSWORD)
+    val keyStoreType = conf.get(FRONTEND_SSL_KEYSTORE_TYPE)
+    keyStorePath.zip(keyStorePassword) match {
+      case Seq((path, password)) =>
+        SSLUtils.getKeyStoreExpirationTime(path, password, keyStoreType).foreach { expiration =>
+          def getExpirationInMs(): Long = {
+            expiration - System.currentTimeMillis()
+          }
+          MetricsSystem.tracing { ms =>
+            ms.registerGauge("kyuubi.keystore_expiration", getExpirationInMs(), 0L)
+          }
+        }
+      case _ =>
+    }
+  }
+
+  override def start(): Unit = {
+    super.start()
+    traceKeyStoreExpiration()
+  }
 }

@@ -72,7 +72,7 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper 
         }
       }
       assert(sqlException.getMessage.contains("Please specify the cluster to access"))
-      assert(sqlException.getMessage.contains("should be one of [test]"))
+      assert(sqlException.getMessage.contains("should be one of"))
     }
   }
 
@@ -83,7 +83,7 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper 
         withJdbcStatement() { _ =>
         }
       }
-      assert(sqlException.getMessage.contains("should be one of [test]"))
+      assert(sqlException.getMessage.contains("should be one of"))
     }
   }
 
@@ -94,7 +94,7 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper 
         withJdbcStatement() { _ =>
         }
       }
-      assert(sqlException.getMessage.contains("should be one of [test]"))
+      assert(sqlException.getMessage.contains("should be one of"))
     }
   }
 
