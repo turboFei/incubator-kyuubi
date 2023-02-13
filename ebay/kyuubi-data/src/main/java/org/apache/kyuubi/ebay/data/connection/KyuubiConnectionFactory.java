@@ -45,6 +45,8 @@ public class KyuubiConnectionFactory implements ConnectionFactory {
   @Override
   public Connection getConnection() throws SQLException, IOException {
     Properties properties = new Properties();
+    // set the operation language to SQL in case it is not in engine side
+    properties.put("hivevar:kyuubi.operation.language", "SQL");
     LOG.info("Connecting to " + url);
     if (Utils.parsePropertyFromUrl(url, JdbcConnectionParams.AUTH_PRINCIPAL) == null) {
       String urlForPrompt = url.substring(0, url.contains(";") ? url.indexOf(';') : url.length());
