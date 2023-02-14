@@ -24,6 +24,7 @@ import org.apache.hive.service.rpc.thrift.{TGetResultSetMetadataResp, TProgressU
 import org.apache.spark.kyuubi.{SparkProgressMonitor, SQLOperationListener}
 import org.apache.spark.kyuubi.SparkUtilsHelper.redact
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
 
 import org.apache.kyuubi.{KyuubiSQLException, Utils}
@@ -141,29 +142,39 @@ abstract class SparkOperation(session: Session)
     spark.sparkContext.setLocalProperty
 
   protected def withLocalProperties[T](f: => T): T = {
-    try {
-      spark.sparkContext.setJobGroup(statementId, redactedStatement, forceCancel)
-      spark.sparkContext.setLocalProperty(KYUUBI_SESSION_USER_KEY, session.user)
-      spark.sparkContext.setLocalProperty(KYUUBI_STATEMENT_ID_KEY, statementId)
-      spark.sparkContext.setLocalProperty(KYUUBI_SESSION_ID_KEY, session.handle.identifier.toString)
-      schedulerPool match {
-        case Some(pool) =>
-          spark.sparkContext.setLocalProperty(SPARK_SCHEDULER_POOL_KEY, pool)
-        case None =>
-      }
-      if (isSessionUserSignEnabled) {
-        setSessionUserSign()
-      }
+    SQLConf.withExistingConf(spark.sessionState.conf) {
+      val originalSession = SparkSession.getActiveSession
+      try {
+        SparkSession.setActiveSession(spark)
+        spark.sparkContext.setJobGroup(statementId, redactedStatement, forceCancel)
+        spark.sparkContext.setLocalProperty(KYUUBI_SESSION_USER_KEY, session.user)
+        spark.sparkContext.setLocalProperty(KYUUBI_STATEMENT_ID_KEY, statementId)
+        spark.sparkContext.setLocalProperty(
+          KYUUBI_SESSION_ID_KEY,
+          session.handle.identifier.toString)
+        schedulerPool match {
+          case Some(pool) =>
+            spark.sparkContext.setLocalProperty(SPARK_SCHEDULER_POOL_KEY, pool)
+          case None =>
+        }
+        if (isSessionUserSignEnabled) {
+          setSessionUserSign()
+        }
 
-      f
-    } finally {
-      spark.sparkContext.setLocalProperty(SPARK_SCHEDULER_POOL_KEY, null)
-      spark.sparkContext.setLocalProperty(KYUUBI_SESSION_USER_KEY, null)
-      spark.sparkContext.setLocalProperty(KYUUBI_STATEMENT_ID_KEY, null)
-      spark.sparkContext.setLocalProperty(KYUUBI_SESSION_ID_KEY, null)
-      spark.sparkContext.clearJobGroup()
-      if (isSessionUserSignEnabled) {
-        clearSessionUserSign()
+        f
+      } finally {
+        spark.sparkContext.setLocalProperty(SPARK_SCHEDULER_POOL_KEY, null)
+        spark.sparkContext.setLocalProperty(KYUUBI_SESSION_USER_KEY, null)
+        spark.sparkContext.setLocalProperty(KYUUBI_STATEMENT_ID_KEY, null)
+        spark.sparkContext.setLocalProperty(KYUUBI_SESSION_ID_KEY, null)
+        spark.sparkContext.clearJobGroup()
+        if (isSessionUserSignEnabled) {
+          clearSessionUserSign()
+        }
+        originalSession match {
+          case Some(session) => SparkSession.setActiveSession(session)
+          case None => SparkSession.clearActiveSession()
+        }
       }
     }
   }
@@ -254,7 +265,7 @@ abstract class SparkOperation(session: Session)
           } else {
             val taken = iter.take(rowSetSize)
             RowSet.toTRowSet(
-              taken.toList.asInstanceOf[List[Row]],
+              taken.toSeq.asInstanceOf[Seq[Row]],
               resultSchema,
               getProtocolVersion,
               timeZone)

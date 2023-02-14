@@ -6,3 +6,4 @@ Aiming to make a better supported client for Kyuubi and Spark
 - Deploy to maven central (DONE, available since v1.3.0-incubating)
 - Create shaded jar (DONE, available since v1.4.0-incubating)
 - Remove Hive dependencies (DONE, available since v1.6.0-incubating)
+
