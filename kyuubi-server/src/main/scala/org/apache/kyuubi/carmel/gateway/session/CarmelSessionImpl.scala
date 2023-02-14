@@ -21,6 +21,7 @@ import scala.collection.JavaConverters._
 
 import org.apache.hive.service.rpc.thrift.{TGetInfoType, TGetInfoValue, TProtocolVersion}
 
+import org.apache.kyuubi.KyuubiSQLException
 import org.apache.kyuubi.carmel.gateway.endpoint.SparkEndpoint
 import org.apache.kyuubi.carmel.gateway.session.CarmelSessionStatus.CarmelSessionStatus
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
@@ -96,8 +97,19 @@ class CarmelSessionImpl(
             e.getCause)
           Thread.sleep(retryWait)
           shouldRetry = true
+        case e: Throwable =>
+          error(s"Opening spark endpoint for $userInfo session failed", e)
+          throw e
       } finally {
         attempt += 1
+        if (shouldRetry && _client != null) {
+          try {
+            _client.closeSession()
+          } catch {
+            case e: Throwable =>
+              warn(s"Error on closing broken client of carmel endpoint: ${_sparkEndpoint}", e)
+          }
+        }
       }
     }
     sessionEvent.openedTime = System.currentTimeMillis()
@@ -114,7 +126,7 @@ class CarmelSessionImpl(
       val result = client.fetchResults(opHandle, FetchOrientation.FETCH_NEXT, Int.MaxValue, false)
       configValue = Option(result.getColumns.get(1).getStringVal.getValues.get(0))
     } catch {
-      case e: Throwable => error(s"Error fetching engine config: $config", e)
+      case e: Throwable => throw KyuubiSQLException(s"Error fetching engine config: $config", e)
     }
     configValue
   }
