@@ -60,64 +60,66 @@ class CarmelSessionImpl(
   def sparkEndpoint: SparkEndpoint = _sparkEndpoint
   override def sessionQueue: Option[String] = Option(_sparkEndpoint).map(_.getQueue).map(_.getName)
 
-  override protected[kyuubi] def openEngineSession(extraEngineLog: Option[OperationLog]): Unit = {
-    val userInfo = new UserInfo(user, Option(password).getOrElse("anonymous"))
-    normalizedConf.get(QUEUE).orElse(normalizedConf.get("spark.yarn.queue")).foreach(
-      userInfo.setAssignedQueue)
-    sessionTag.foreach(tag => userInfo.setTags(tag.split(",").toList.asJava))
-    val endpointMgr = sessionManager.carmelEndpointManager.getClusterEndpointManager(sessionCluster)
-    val maxAttempts = sessionManager.getConf.get(ENGINE_OPEN_MAX_ATTEMPTS)
-    val retryWait = sessionManager.getConf.get(ENGINE_OPEN_RETRY_WAIT)
+  override protected[kyuubi] def openEngineSession(extraEngineLog: Option[OperationLog]): Unit =
+    handleSessionException {
+      val userInfo = new UserInfo(user, Option(password).getOrElse("anonymous"))
+      normalizedConf.get(QUEUE).orElse(normalizedConf.get("spark.yarn.queue")).foreach(
+        userInfo.setAssignedQueue)
+      sessionTag.foreach(tag => userInfo.setTags(tag.split(",").toList.asJava))
+      val endpointMgr =
+        sessionManager.carmelEndpointManager.getClusterEndpointManager(sessionCluster)
+      val maxAttempts = sessionManager.getConf.get(ENGINE_OPEN_MAX_ATTEMPTS)
+      val retryWait = sessionManager.getConf.get(ENGINE_OPEN_RETRY_WAIT)
 
-    var attempt = 0
-    var shouldRetry = true
+      var attempt = 0
+      var shouldRetry = true
 
-    while (attempt <= maxAttempts && shouldRetry) {
-      try {
-        _sparkEndpoint = endpointMgr.createEndpoint(userInfo, attempt)
-        _client = _sparkEndpoint.getClient
-        _engineSessionHandle = _client.openSession(protocol, user, password, normalizedConf)
-        // get engine id, name, url for carmel engine
-        _client._engineId = getEngineConfig("spark.app.id")
-        _client._engineName = getEngineConfig("spark.app.name")
-        _client._engineUrl =
-          getEngineConfig(sessionManager.getConf.get(KyuubiEbayConf.CARMEL_ENGINE_URL_KEY))
-        _client._engineId.foreach(_sparkEndpoint.setId)
-        logSessionInfo(s"Connected to $sparkEndpoint with ${_engineSessionHandle}]")
-        endpointMgr.markGoodServer(_sparkEndpoint.getServerUrl)
-        shouldRetry = false
-      } catch {
-        case e: Throwable if attempt < maxAttempts =>
-          if (_sparkEndpoint != null && _sparkEndpoint.getServerUrl != null) {
-            endpointMgr.markFailServer(_sparkEndpoint.getServerUrl);
-            _sparkEndpoint.close();
-          }
-          warn(
-            s"Failed to open after $attempt/$maxAttempts times: ${e.getMessage}, retrying",
-            e.getCause)
-          Thread.sleep(retryWait)
-          shouldRetry = true
-        case e: Throwable =>
-          error(s"Opening spark endpoint for $userInfo session failed", e)
-          throw e
-      } finally {
-        attempt += 1
-        if (shouldRetry && _client != null) {
-          try {
-            _client.closeSession()
-          } catch {
-            case e: Throwable =>
-              warn(s"Error on closing broken client of carmel endpoint: ${_sparkEndpoint}", e)
+      while (attempt <= maxAttempts && shouldRetry) {
+        try {
+          _sparkEndpoint = endpointMgr.createEndpoint(userInfo, attempt)
+          _client = _sparkEndpoint.getClient
+          _engineSessionHandle = _client.openSession(protocol, user, password, normalizedConf)
+          // get engine id, name, url for carmel engine
+          _client._engineId = getEngineConfig("spark.app.id")
+          _client._engineName = getEngineConfig("spark.app.name")
+          _client._engineUrl =
+            getEngineConfig(sessionManager.getConf.get(KyuubiEbayConf.CARMEL_ENGINE_URL_KEY))
+          _client._engineId.foreach(_sparkEndpoint.setId)
+          logSessionInfo(s"Connected to $sparkEndpoint with ${_engineSessionHandle}]")
+          endpointMgr.markGoodServer(_sparkEndpoint.getServerUrl)
+          shouldRetry = false
+        } catch {
+          case e: Throwable if attempt < maxAttempts =>
+            if (_sparkEndpoint != null && _sparkEndpoint.getServerUrl != null) {
+              endpointMgr.markFailServer(_sparkEndpoint.getServerUrl);
+              _sparkEndpoint.close();
+            }
+            warn(
+              s"Failed to open after $attempt/$maxAttempts times: ${e.getMessage}, retrying",
+              e.getCause)
+            Thread.sleep(retryWait)
+            shouldRetry = true
+          case e: Throwable =>
+            error(s"Opening spark endpoint for $userInfo session failed", e)
+            throw e
+        } finally {
+          attempt += 1
+          if (shouldRetry && _client != null) {
+            try {
+              _client.closeSession()
+            } catch {
+              case e: Throwable =>
+                warn(s"Error on closing broken client of carmel endpoint: ${_sparkEndpoint}", e)
+            }
           }
         }
       }
+      sessionEvent.openedTime = System.currentTimeMillis()
+      sessionEvent.remoteSessionId = _engineSessionHandle.identifier.toString
+      sessionEvent.engineId = _sparkEndpoint.getId
+      sessionEvent.queue = _sparkEndpoint.getQueue.getName
+      EventBus.post(sessionEvent)
     }
-    sessionEvent.openedTime = System.currentTimeMillis()
-    sessionEvent.remoteSessionId = _engineSessionHandle.identifier.toString
-    sessionEvent.engineId = _sparkEndpoint.getId
-    sessionEvent.queue = _sparkEndpoint.getQueue.getName
-    EventBus.post(sessionEvent)
-  }
 
   private def getEngineConfig(config: String): Option[String] = {
     var configValue: Option[String] = None
