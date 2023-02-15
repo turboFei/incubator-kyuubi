@@ -38,6 +38,7 @@ import org.apache.kyuubi.session.KyuubiSession
 
 @Tag(name = "Operation")
 @Produces(Array(MediaType.APPLICATION_JSON))
+@Consumes(Array(MediaType.APPLICATION_JSON))
 private[v1] class OperationsResource extends ApiRequestContext with Logging {
   private def checkOperationAccessPermission(operationHandleStr: String): Unit = {
     var operation: Operation = null
