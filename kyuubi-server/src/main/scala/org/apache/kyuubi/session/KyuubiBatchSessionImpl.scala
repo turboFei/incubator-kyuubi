@@ -79,7 +79,7 @@ class KyuubiBatchSessionImpl(
   }
 
   override lazy val name: Option[String] = Option(batchRequest.getName).orElse(
-    normalizedConf.get(KyuubiConf.SESSION_NAME.key)).orElse(defaultName)
+    normalizedConf.get(KyuubiConf.SESSION_NAME.key))
 
   // whether the resource file is from uploading
   private[kyuubi] val isResourceUploaded: Boolean = batchRequest.getConf

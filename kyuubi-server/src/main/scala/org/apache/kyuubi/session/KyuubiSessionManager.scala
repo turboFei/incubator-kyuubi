@@ -407,4 +407,12 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
         KyuubiEbayConf.loadClusterConf(conf, clusterOpt)
     }
   }
+
+  override protected def logSessionCountInfo(session: Session, action: String): Unit = {
+    info(s"${session.user}'s session with" +
+      s" ${session.handle}" +
+      s"${session.asInstanceOf[KyuubiSession].sessionCluster.map("/" + _).getOrElse("")}" +
+      s"${session.name.map("/" + _).getOrElse("")} is $action," +
+      s" current opening sessions $getOpenSessionCount")
+  }
 }
