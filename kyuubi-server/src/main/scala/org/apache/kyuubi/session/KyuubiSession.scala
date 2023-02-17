@@ -19,7 +19,6 @@ package org.apache.kyuubi.session
 import com.codahale.metrics.MetricRegistry
 import org.apache.hive.service.rpc.thrift.TProtocolVersion
 
-import org.apache.kyuubi.carmel.gateway.session.CarmelSessionImpl
 import org.apache.kyuubi.config.KyuubiReservedKeys.{KYUUBI_SESSION_CONNECTION_URL_KEY, KYUUBI_SESSION_REAL_USER_KEY}
 import org.apache.kyuubi.events.KyuubiSessionEvent
 import org.apache.kyuubi.metrics.MetricsConstants.{CONN_OPEN, CONN_TOTAL}
@@ -70,11 +69,6 @@ abstract class KyuubiSession(
       ms.incCount(MetricRegistry.name(CONN_TOTAL, cluster, user))
       ms.incCount(MetricRegistry.name(CONN_OPEN, cluster))
       ms.incCount(MetricRegistry.name(CONN_OPEN, cluster, user))
-      if (isInstanceOf[CarmelSessionImpl]) {
-        asInstanceOf[CarmelSessionImpl].sessionQueue.foreach { queue =>
-          ms.incCount(MetricRegistry.name(CONN_OPEN, cluster, queue))
-        }
-      }
     }
   }
 
@@ -85,11 +79,6 @@ abstract class KyuubiSession(
     sessionCluster.foreach { cluster =>
       ms.decCount(MetricRegistry.name(CONN_OPEN, cluster))
       ms.decCount(MetricRegistry.name(CONN_OPEN, cluster, user))
-      if (isInstanceOf[CarmelSessionImpl]) {
-        asInstanceOf[CarmelSessionImpl].sessionQueue.foreach { queue =>
-          ms.decCount(MetricRegistry.name(CONN_OPEN, cluster, queue))
-        }
-      }
     }
   }
 }

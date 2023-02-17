@@ -19,6 +19,7 @@ package org.apache.kyuubi.carmel.gateway.session
 
 import scala.collection.JavaConverters._
 
+import com.codahale.metrics.MetricRegistry
 import org.apache.hive.service.rpc.thrift.{TGetInfoType, TGetInfoValue, TProtocolVersion}
 
 import org.apache.kyuubi.KyuubiSQLException
@@ -28,6 +29,8 @@ import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiConf.{ENGINE_OPEN_MAX_ATTEMPTS, ENGINE_OPEN_RETRY_WAIT}
 import org.apache.kyuubi.ebay.carmel.gateway.endpoint.UserInfo
 import org.apache.kyuubi.events.EventBus
+import org.apache.kyuubi.metrics.MetricsConstants.CONN_OPEN
+import org.apache.kyuubi.metrics.MetricsSystem
 import org.apache.kyuubi.operation.FetchOrientation
 import org.apache.kyuubi.operation.log.OperationLog
 import org.apache.kyuubi.session.{KyuubiSessionImpl, KyuubiSessionManager, QUEUE}
@@ -58,7 +61,8 @@ class CarmelSessionImpl(
 
   private var _sparkEndpoint: SparkEndpoint = _
   def sparkEndpoint: SparkEndpoint = _sparkEndpoint
-  override def sessionQueue: Option[String] = Option(_sparkEndpoint).map(_.getQueue).map(_.getName)
+  private var _sessionQueue: Option[String] = None
+  override def sessionQueue: Option[String] = _sessionQueue
 
   override protected[kyuubi] def openEngineSession(extraEngineLog: Option[OperationLog]): Unit =
     handleSessionException {
@@ -114,6 +118,8 @@ class CarmelSessionImpl(
           }
         }
       }
+      _sessionQueue = Option(_sparkEndpoint).map(_.getQueue).map(_.getName)
+      traceMetricsOnOpenEngineSession()
       sessionEvent.openedTime = System.currentTimeMillis()
       sessionEvent.remoteSessionId = _engineSessionHandle.identifier.toString
       sessionEvent.engineId = _sparkEndpoint.getId
@@ -145,5 +151,22 @@ class CarmelSessionImpl(
   def getBackendSessionStatus: CarmelSessionStatus = backendSessionStatus
   def setBackendSessionStatus(sessionStatus: CarmelSessionStatus): Unit = {
     backendSessionStatus = sessionStatus
+  }
+
+  private def traceMetricsOnOpenEngineSession(): Unit = MetricsSystem.tracing { ms =>
+    sessionCluster.zip(sessionQueue) match {
+      case Seq((cluster, queue)) => ms.incCount(MetricRegistry.name(CONN_OPEN, cluster, queue))
+      case _ =>
+    }
+  }
+
+  override protected def traceMetricsOnClose(): Unit = {
+    super.traceMetricsOnClose()
+    MetricsSystem.tracing { ms =>
+      sessionCluster.zip(sessionQueue) match {
+        case Seq((cluster, queue)) => ms.decCount(MetricRegistry.name(CONN_OPEN, cluster, queue))
+        case _ =>
+      }
+    }
   }
 }
