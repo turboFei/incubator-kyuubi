@@ -34,6 +34,22 @@ object KyuubiEbayConf extends Logging {
     .booleanConf
     .createWithDefault(true)
 
+  val REST_HA_ZK_ENABLED: ConfigEntry[Boolean] =
+    buildConf("kyuubi.server.rest.ha.zookeeper.enabled")
+      .doc("Whether to enable the ha zookeeper discovery for rest server")
+      .internal
+      .serverOnly
+      .booleanConf
+      .createWithDefault(false)
+
+  val REST_HA_ZK_NAMESPACE: ConfigEntry[String] =
+    buildConf("kyuubi.server.rest.ha.zookeeper.namespace")
+      .doc("he root directory for the kyuubi server to deploy its rest instance uri")
+      .internal
+      .serverOnly
+      .stringConf
+      .createWithDefault("kyuubi_rest")
+
   val SESSION_CLUSTER_MODE_ENABLED: ConfigEntry[Boolean] =
     buildConf("kyuubi.session.cluster.mode.enabled")
       .doc("Whether to enable session with cluster specify mode. If it is enabled," +
