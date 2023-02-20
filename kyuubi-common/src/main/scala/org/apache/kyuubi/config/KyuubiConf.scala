@@ -783,6 +783,7 @@ object KyuubiConf {
       .doc("User-defined authentication implementation of " +
         "org.apache.kyuubi.service.authentication.PasswdAuthenticationProvider")
       .version("1.3.0")
+      .serverOnly
       .stringConf
       .createOptional
 
@@ -790,6 +791,7 @@ object KyuubiConf {
     buildConf("kyuubi.authentication.ldap.url")
       .doc("SPACE character separated LDAP connection URL(s).")
       .version("1.0.0")
+      .serverOnly
       .stringConf
       .createOptional
 
@@ -798,6 +800,7 @@ object KyuubiConf {
       .withAlternative("kyuubi.authentication.ldap.base.dn")
       .doc("LDAP base DN.")
       .version("1.7.0")
+      .serverOnly
       .stringConf
       .createOptional
 
@@ -805,6 +808,7 @@ object KyuubiConf {
     buildConf("kyuubi.authentication.ldap.domain")
       .doc("LDAP domain.")
       .version("1.0.0")
+      .serverOnly
       .stringConf
       .createOptional
 
@@ -814,6 +818,7 @@ object KyuubiConf {
         "this directory. Use %s where the actual group name is to be substituted for. " +
         "For example: CN=%s,CN=Groups,DC=subdomain,DC=domain,DC=com.")
       .version("1.7.0")
+      .serverOnly
       .stringConf
       .createOptional
 
@@ -823,6 +828,7 @@ object KyuubiConf {
         "Use %s where the actual group name is to be substituted for. " +
         "For example: CN=%s,CN=Users,DC=subdomain,DC=domain,DC=com.")
       .version("1.7.0")
+      .serverOnly
       .stringConf
       .createOptional
 
@@ -831,6 +837,7 @@ object KyuubiConf {
       .doc("COMMA-separated list of LDAP Group names (short name not full DNs). " +
         "For example: HiveAdmins,HadoopAdmins,Administrators")
       .version("1.7.0")
+      .serverOnly
       .stringConf
       .toSequence()
       .createWithDefault(Nil)
@@ -840,6 +847,7 @@ object KyuubiConf {
       .doc("COMMA-separated list of LDAP usernames (just short names, not full DNs). " +
         "For example: hiveuser,impalauser,hiveadmin,hadoopadmin")
       .version("1.7.0")
+      .serverOnly
       .stringConf
       .toSequence()
       .createWithDefault(Nil)
@@ -849,6 +857,7 @@ object KyuubiConf {
       .doc("LDAP attribute name whose values are unique in this LDAP server. " +
         "For example: uid or CN.")
       .version("1.2.0")
+      .serverOnly
       .stringConf
       .createWithDefault("uid")
 
@@ -858,6 +867,7 @@ object KyuubiConf {
         "names for the user, group, and contact objects that are members of the group. " +
         "For example: member, uniqueMember or memberUid")
       .version("1.7.0")
+      .serverOnly
       .stringConf
       .createWithDefault("member")
 
@@ -867,6 +877,7 @@ object KyuubiConf {
         "a direct member, except for the primary group, which is represented by the " +
         "primaryGroupId. For example: memberOf")
       .version("1.7.0")
+      .serverOnly
       .stringConf
       .createOptional
 
@@ -875,6 +886,7 @@ object KyuubiConf {
       .doc("LDAP attribute name on the group entry that is to be used in LDAP group searches. " +
         "For example: group, groupOfNames or groupOfUniqueNames.")
       .version("1.7.0")
+      .serverOnly
       .stringConf
       .createWithDefault("groupOfNames")
 
@@ -888,6 +900,7 @@ object KyuubiConf {
         "(|(memberOf=CN=Domain Admins,CN=Users,DC=domain,DC=com)" +
         "(memberOf=CN=Administrators,CN=Builtin,DC=domain,DC=com))))`")
       .version("1.7.0")
+      .serverOnly
       .stringConf
       .createOptional
 
@@ -899,6 +912,7 @@ object KyuubiConf {
         "the user being authenticated will be used as the bind user. " +
         "For example: CN=bindUser,CN=Users,DC=subdomain,DC=domain,DC=com")
       .version("1.7.0")
+      .serverOnly
       .stringConf
       .createOptional
 
@@ -908,6 +922,7 @@ object KyuubiConf {
         "user being authenticated. If the username is specified, this parameter must also be " +
         "specified.")
       .version("1.7.0")
+      .serverOnly
       .stringConf
       .createOptional
 
@@ -915,6 +930,7 @@ object KyuubiConf {
     buildConf("kyuubi.authentication.jdbc.driver.class")
       .doc("Driver class name for JDBC Authentication Provider.")
       .version("1.6.0")
+      .serverOnly
       .stringConf
       .createOptional
 
@@ -922,6 +938,7 @@ object KyuubiConf {
     buildConf("kyuubi.authentication.jdbc.url")
       .doc("JDBC URL for JDBC Authentication Provider.")
       .version("1.6.0")
+      .serverOnly
       .stringConf
       .createOptional
 
@@ -929,6 +946,7 @@ object KyuubiConf {
     buildConf("kyuubi.authentication.jdbc.user")
       .doc("Database user for JDBC Authentication Provider.")
       .version("1.6.0")
+      .serverOnly
       .stringConf
       .createOptional
 
@@ -936,6 +954,7 @@ object KyuubiConf {
     buildConf("kyuubi.authentication.jdbc.password")
       .doc("Database password for JDBC Authentication Provider.")
       .version("1.6.0")
+      .serverOnly
       .stringConf
       .createOptional
 
@@ -947,6 +966,7 @@ object KyuubiConf {
         "The SQL statement must start with the `SELECT` clause. " +
         "Available placeholders are `${user}` and `${password}`.")
       .version("1.6.0")
+      .serverOnly
       .stringConf
       .createOptional
 
@@ -985,6 +1005,7 @@ object KyuubiConf {
       " <li>auth-conf - authentication plus integrity and confidentiality protection. This is" +
       " applicable only if Kyuubi is configured to use Kerberos authentication.</li> </ul>")
     .version("1.0.0")
+    .serverOnly
     .stringConf
     .checkValues(SaslQOP.values.map(_.toString))
     .transform(_.toLowerCase(Locale.ROOT))
