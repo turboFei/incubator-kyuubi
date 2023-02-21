@@ -23,10 +23,12 @@ import java.time.Duration
 import scala.collection.JavaConverters._
 
 import org.apache.kyuubi.{KyuubiException, KyuubiSQLException, Logging, Utils}
-import org.apache.kyuubi.config.KyuubiConf.{buildConf, KYUUBI_CONF_DIR, KYUUBI_CONF_FILE_NAME, KYUUBI_HOME, OPERATION_INCREMENTAL_COLLECT, SESSION_IDLE_TIMEOUT}
+import org.apache.kyuubi.config.KyuubiConf.{KYUUBI_CONF_DIR, KYUUBI_CONF_FILE_NAME, KYUUBI_HOME, OPERATION_INCREMENTAL_COLLECT, SESSION_IDLE_TIMEOUT}
 import org.apache.kyuubi.session.SessionManager
 
 object KyuubiEbayConf extends Logging {
+  private def buildConf(key: String): ConfigBuilder = KyuubiConf.buildConf(key)
+
   val SERVER_HA_ZK_ENABLED: ConfigEntry[Boolean] = buildConf("kyuubi.server.ha.zookeeper.enabled")
     .doc("Whether to enable the ha zookeeper discovery in server side")
     .internal
@@ -624,13 +626,6 @@ object KyuubiEbayConf extends Logging {
       .stringConf
       .createWithDefault(
         "spark.org.apache.hadoop.yarn.server.webproxy.amfilter.AmIpFilter.param.PROXY_URI_BASES")
-
-  val PERIODIC_GC_INTERNAL: ConfigEntry[Long] =
-    buildConf("kyuubi.periodGc.interval")
-      .internal
-      .serverOnly
-      .timeConf
-      .createWithDefaultString("PT30M")
 
   def getDefaultPropertiesFileForCluster(
       clusterOpt: Option[String],

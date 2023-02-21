@@ -33,7 +33,7 @@ import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiConf._
 import org.apache.kyuubi.config.KyuubiEbayConf._
 import org.apache.kyuubi.credentials.HadoopCredentialsManager
-import org.apache.kyuubi.ebay.{BdpServiceAccountMappingCacheManager, PeriodicGCService}
+import org.apache.kyuubi.ebay.BdpServiceAccountMappingCacheManager
 import org.apache.kyuubi.engine.KyuubiApplicationManager
 import org.apache.kyuubi.metrics.MetricsConstants._
 import org.apache.kyuubi.metrics.MetricsSystem
@@ -86,7 +86,6 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
     metadataManager.foreach(addService)
     initSessionLimiter(conf)
     addService(carmelEndpointManager)
-    addService(new PeriodicGCService())
     super.initialize(conf)
   }
 
