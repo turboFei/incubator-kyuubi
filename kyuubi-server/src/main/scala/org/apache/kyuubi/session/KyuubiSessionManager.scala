@@ -195,7 +195,9 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
   private[kyuubi] def openBatchSession(batchSession: KyuubiBatchSessionImpl): SessionHandle = {
     val user = batchSession.user
     val ipAddress = batchSession.ipAddress
-    limiters.get(batchSession.sessionCluster).foreach(_.increment(UserIpAddress(user, ipAddress)))
+    batchLimiters.get(batchSession.sessionCluster).foreach(_.increment(UserIpAddress(
+      user,
+      ipAddress)))
     val handle = batchSession.handle
     try {
       batchSession.open()

@@ -33,15 +33,16 @@ import org.apache.hive.service.rpc.thrift.{TDownloadDataReq, TExecuteStatementRe
 import org.scalatest.concurrent.PatienceConfiguration.Timeout
 import org.scalatest.time.SpanSugar.convertIntToGrainOfTime
 
-import org.apache.kyuubi.{Utils, WithKyuubiServer}
+import org.apache.kyuubi.{BatchTestHelper, Utils, WithKyuubiServer}
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.ebay.{NoopGroupProvider, TagBasedSessionConfAdvisor}
 import org.apache.kyuubi.jdbc.hive.KyuubiConnection
 import org.apache.kyuubi.jdbc.hive.logs.KyuubiEngineLogListener
 import org.apache.kyuubi.service.authentication.KyuubiAuthenticationFactory
-import org.apache.kyuubi.session.KyuubiSessionImpl
+import org.apache.kyuubi.session.{KyuubiBatchSessionImpl, KyuubiSessionImpl, KyuubiSessionManager}
 
-class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper {
+class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
+  with BatchTestHelper {
   override protected def jdbcUrl: String = getJdbcUrl
 
   override protected val conf: KyuubiConf = {
@@ -552,5 +553,25 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper 
         }
       }
     }
+  }
+
+  test("HADP-47085: batch is not limited with out batch limit key") {
+    val sessionMgr = server.backendService.sessionManager.asInstanceOf[KyuubiSessionManager]
+    val sessionNum = 5
+    Seq("test", "cluster_limit").foreach { cluster =>
+      val batchRequest = newSparkBatchRequest(Map("kyuubi.session.cluster" -> cluster))
+      (0 until sessionNum).foreach { _ =>
+        sessionMgr.openBatchSession(
+          "user",
+          "password",
+          "127.0.0.1",
+          Map("kyuubi.session.cluster" -> cluster),
+          batchRequest)
+      }
+      assert(sessionMgr.allSessions().filter(_.isInstanceOf[KyuubiBatchSessionImpl])
+        .map(_.asInstanceOf[KyuubiBatchSessionImpl])
+        .filter(_.sessionCluster == Some(cluster)).size == sessionNum)
+    }
+    sessionMgr.allSessions().foreach(_.close())
   }
 }
