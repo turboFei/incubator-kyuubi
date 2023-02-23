@@ -407,10 +407,6 @@ class ExecuteStatement(
     super.close()
   }
 
-  def convertComplexType(df: DataFrame): DataFrame = {
-    SparkDatasetHelper.convertTopLevelComplexTypeToHiveString(df, timestampAsString)
-  }
-
   override def getResultSetMetadataHints(): Seq[String] =
     Seq(
       s"__kyuubi_operation_result_format__=$resultFormat",
