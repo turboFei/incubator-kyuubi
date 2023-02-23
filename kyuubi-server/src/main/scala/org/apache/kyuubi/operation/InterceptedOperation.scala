@@ -17,6 +17,8 @@
 
 package org.apache.kyuubi.operation
 
+import org.apache.hive.service.rpc.thrift.TGetInfoType
+
 import org.apache.kyuubi.KyuubiSQLException
 import org.apache.kyuubi.carmel.gateway.session.{CarmelSessionImpl, CarmelSessionStatus}
 import org.apache.kyuubi.session.Session
@@ -30,6 +32,11 @@ abstract class InterceptedOperation(session: Session) extends KyuubiOperation(se
             "The session has been closed due to the backend session has been dropped")
         }
       case _ =>
+        try {
+          client.getInfo(TGetInfoType.CLI_DBMS_NAME)
+        } catch {
+          case _: Throwable => throw KyuubiSQLException("The session to engine was interrupted")
+        }
     }
     setState(OperationState.FINISHED)
     setHasResultSet(true)
