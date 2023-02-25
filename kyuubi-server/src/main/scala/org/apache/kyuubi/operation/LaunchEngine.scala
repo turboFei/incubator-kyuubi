@@ -17,7 +17,10 @@
 
 package org.apache.kyuubi.operation
 
+import org.apache.hive.service.rpc.thrift.TRowSet
+
 import org.apache.kyuubi.engine.{ApplicationInfo, ApplicationState}
+import org.apache.kyuubi.operation.FetchOrientation.FetchOrientation
 import org.apache.kyuubi.operation.log.OperationLog
 import org.apache.kyuubi.session.KyuubiSessionImpl
 
@@ -33,13 +36,13 @@ class LaunchEngine(session: KyuubiSessionImpl, override val shouldRunAsync: Bool
     }
   override def getOperationLog: Option[OperationLog] = Option(_operationLog)
 
-  override protected def currentApplicationInfo: Option[ApplicationInfo] = {
+  override protected def currentApplicationInfo: Option[Map[String, String]] = {
     Option(client).map { cli =>
       ApplicationInfo(
         cli.engineId.orNull,
         cli.engineName.orNull,
         ApplicationState.RUNNING,
-        cli.engineUrl)
+        cli.engineUrl).toMap ++ Map("host" -> cli.engineHost, "port" -> cli.enginePort.toString)
     }
   }
 

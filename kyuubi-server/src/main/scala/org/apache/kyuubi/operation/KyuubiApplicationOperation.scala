@@ -31,7 +31,7 @@ import org.apache.kyuubi.util.ThriftUtils
 
 abstract class KyuubiApplicationOperation(session: Session) extends KyuubiOperation(session) {
 
-  protected def currentApplicationInfo: Option[ApplicationInfo]
+  protected def currentApplicationInfo: Option[Map[String, String]]
 
   override def getResultSetMetadata: TGetResultSetMetadataResp = {
     val schema = new TTableSchema()
@@ -51,7 +51,7 @@ abstract class KyuubiApplicationOperation(session: Session) extends KyuubiOperat
   }
 
   override def getNextRowSet(order: FetchOrientation, rowSetSize: Int): TRowSet = {
-    currentApplicationInfo.map(_.toMap).map { state =>
+    currentApplicationInfo.map { state =>
       val tRow = new TRowSet(0, new JArrayList[TRow](state.size))
       Seq(state.keys, state.values.map(Option(_).getOrElse(""))).map(_.toSeq.asJava).foreach {
         col =>

@@ -102,8 +102,8 @@ class BatchJobSubmission(
     }
   }
 
-  override protected def currentApplicationInfo: Option[ApplicationInfo] = {
-    if (isTerminal(state) && _applicationInfo.nonEmpty) return _applicationInfo
+  override protected def currentApplicationInfo: Option[Map[String, String]] = {
+    if (isTerminal(state) && _applicationInfo.nonEmpty) return None
     // only the ApplicationInfo with non-empty id is valid for the operation
     val applicationInfo =
       applicationManager.getApplicationInfo(builder.clusterManager(), batchId).filter(_.id != null)
@@ -112,7 +112,7 @@ class BatchJobSubmission(
         _appStartTime = System.currentTimeMillis()
       }
     }
-    applicationInfo
+    applicationInfo.map(_.toMap)
   }
 
   private[kyuubi] def killBatchApplication(): KillResponse = {

@@ -43,7 +43,9 @@ class KyuubiSyncThriftClient private (
     protocol: TProtocol,
     engineAliveProbeProtocol: Option[TProtocol],
     engineAliveProbeInterval: Long,
-    engineAliveTimeout: Long)
+    engineAliveTimeout: Long,
+    val engineHost: String,
+    val enginePort: Int)
   extends TCLIService.Client(protocol) with Logging {
 
   @volatile private var _remoteSessionHandle: TSessionHandle = _
@@ -469,6 +471,8 @@ private[kyuubi] object KyuubiSyncThriftClient extends Logging {
       tProtocol,
       aliveProbeProtocol,
       aliveProbeInterval,
-      aliveTimeout)
+      aliveTimeout,
+      host,
+      port)
   }
 }
