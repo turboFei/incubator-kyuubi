@@ -38,6 +38,8 @@ object KyuubiReservedKeys {
     "kyuubi.session.engine.launch.handle.guid"
   final val KYUUBI_SESSION_ENGINE_LAUNCH_HANDLE_SECRET =
     "kyuubi.session.engine.launch.handle.secret"
+  final val KYUUBI_SESSION_ENGINE_HOST = "kyuubi.session.engine.host"
+  final val KYUUBI_SESSION_ENGINE_PORT = "kyuubi.session.engine.port"
   final val KYUUBI_OPERATION_SET_CURRENT_CATALOG = "kyuubi.operation.set.current.catalog"
   final val KYUUBI_OPERATION_GET_CURRENT_CATALOG = "kyuubi.operation.get.current.catalog"
   final val KYUUBI_OPERATION_SET_CURRENT_DATABASE = "kyuubi.operation.set.current.database"
