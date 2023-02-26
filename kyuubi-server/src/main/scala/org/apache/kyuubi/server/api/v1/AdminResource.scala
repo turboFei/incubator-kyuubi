@@ -42,7 +42,8 @@ import org.apache.kyuubi.session.KyuubiSessionManager
 @Tag(name = "Admin")
 @Produces(Array(MediaType.APPLICATION_JSON))
 private[v1] class AdminResource extends ApiRequestContext with Logging {
-  private lazy val administrator = Utils.currentUser
+  private lazy val administrators = fe.getConf.get(KyuubiConf.SERVER_ADMINISTRATORS).toSet +
+    Utils.currentUser
 
   @ApiResponse(
     responseCode = "200",
@@ -55,7 +56,7 @@ private[v1] class AdminResource extends ApiRequestContext with Logging {
     val userName = fe.getSessionUser(Map.empty[String, String])
     val ipAddress = fe.getIpAddress
     info(s"Receive refresh Kyuubi server hadoop conf request from $userName/$ipAddress")
-    if (!userName.equals(administrator)) {
+    if (!isAdministrator(userName)) {
       throw new NotAllowedException(
         s"$userName is not allowed to refresh the Kyuubi server hadoop conf")
     }
@@ -74,7 +75,7 @@ private[v1] class AdminResource extends ApiRequestContext with Logging {
     val userName = fe.getSessionUser(Map.empty[String, String])
     val ipAddress = fe.getIpAddress
     info(s"Receive refresh user defaults conf request from $userName/$ipAddress")
-    if (!userName.equals(administrator)) {
+    if (!isAdministrator(userName)) {
       throw new NotAllowedException(
         s"$userName is not allowed to refresh the user defaults conf")
     }
@@ -93,7 +94,7 @@ private[v1] class AdminResource extends ApiRequestContext with Logging {
     val userName = fe.getSessionUser(Map.empty[String, String])
     val ipAddress = fe.getIpAddress
     info(s"Receive refresh unlimited users request from $userName/$ipAddress")
-    if (!userName.equals(administrator)) {
+    if (!isAdministrator(userName)) {
       throw new NotAllowedException(
         s"$userName is not allowed to refresh the unlimited users")
     }
@@ -225,6 +226,10 @@ private[v1] class AdminResource extends ApiRequestContext with Logging {
       s"${serverSpace}_${engine.getVersion}_${engine.getSharelevel}_${engine.getEngineType}",
       engine.getUser,
       engine.getSubdomain)
+  }
+
+  private def isAdministrator(userName: String): Boolean = {
+    administrators.contains(userName);
   }
 
   private def getClusterConf(clusterOpt: Option[String]): KyuubiConf = {
