@@ -41,7 +41,7 @@ import org.apache.kyuubi.config.KyuubiConf.OPERATION_RESULT_MAX_ROWS
 import org.apache.kyuubi.config.KyuubiEbayConf._
 import org.apache.kyuubi.engine.spark.KyuubiSparkUtil._
 import org.apache.kyuubi.engine.spark.session.SparkSessionImpl
-import org.apache.kyuubi.operation.{ArrayFetchIterator, FetchIterator, IterableFetchIterator, OperationState}
+import org.apache.kyuubi.operation.{ArrayFetchIterator, FetchIterator, IterableFetchIterator, OperationHandle, OperationState}
 import org.apache.kyuubi.operation.log.OperationLog
 import org.apache.kyuubi.session.Session
 
@@ -50,7 +50,8 @@ class ExecuteStatement(
     override val statement: String,
     override val shouldRunAsync: Boolean,
     queryTimeout: Long,
-    incrementalCollect: Boolean)
+    incrementalCollect: Boolean,
+    override protected val handle: OperationHandle)
   extends SparkOperation(session) with Logging {
 
   private val operationLog: OperationLog = OperationLog.createOperationLog(session, getHandle)
@@ -442,8 +443,15 @@ class ArrowBasedExecuteStatement(
     override val statement: String,
     override val shouldRunAsync: Boolean,
     queryTimeout: Long,
-    incrementalCollect: Boolean)
-  extends ExecuteStatement(session, statement, shouldRunAsync, queryTimeout, incrementalCollect) {
+    incrementalCollect: Boolean,
+    override protected val handle: OperationHandle)
+  extends ExecuteStatement(
+    session,
+    statement,
+    shouldRunAsync,
+    queryTimeout,
+    incrementalCollect,
+    handle) {
 
   override protected def incrementalCollectResult(resultDF: DataFrame): Iterator[Any] = {
     collectAsArrow(convertComplexType(resultDF)) { rdd =>

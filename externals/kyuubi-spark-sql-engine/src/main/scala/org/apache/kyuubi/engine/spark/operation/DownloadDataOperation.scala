@@ -40,7 +40,7 @@ import org.apache.kyuubi.config.KyuubiEbayConf.DATA_DOWNLOAD_MAX_SIZE
 import org.apache.kyuubi.engine.spark.KyuubiSparkUtil.diagnostics
 import org.apache.kyuubi.engine.spark.schema.SchemaHelper
 import org.apache.kyuubi.engine.spark.session.SparkSessionImpl
-import org.apache.kyuubi.operation.{IterableFetchIterator, OperationState}
+import org.apache.kyuubi.operation.{IterableFetchIterator, OperationHandle, OperationState}
 import org.apache.kyuubi.session.Session
 
 class DownloadDataOperation(
@@ -48,13 +48,15 @@ class DownloadDataOperation(
     tableName: String,
     query: String,
     format: String,
-    options: JMap[String, String])
+    options: JMap[String, String],
+    override protected val handle: OperationHandle = OperationHandle())
   extends ExecuteStatement(
     session,
     DownloadDataOperation.statement(tableName, query, format, options),
     true,
     0L,
-    false) {
+    false,
+    handle) {
   import DownloadDataOperation._
 
   override protected def resultSchema: StructType = {
