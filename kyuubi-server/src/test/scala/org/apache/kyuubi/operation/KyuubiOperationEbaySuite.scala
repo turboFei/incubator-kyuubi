@@ -34,6 +34,7 @@ import org.scalatest.concurrent.PatienceConfiguration.Timeout
 import org.scalatest.time.SpanSugar.convertIntToGrainOfTime
 
 import org.apache.kyuubi.{BatchTestHelper, Utils, WithKyuubiServer}
+import org.apache.kyuubi.client.util.BatchUtils
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.ebay.{NoopGroupProvider, TagBasedSessionConfAdvisor}
 import org.apache.kyuubi.jdbc.hive.KyuubiConnection
@@ -559,13 +560,16 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
     val sessionMgr = server.backendService.sessionManager.asInstanceOf[KyuubiSessionManager]
     val sessionNum = 5
     Seq("test", "cluster_limit").foreach { cluster =>
-      val batchRequest = newSparkBatchRequest(Map("kyuubi.session.cluster" -> cluster))
       (0 until sessionNum).foreach { _ =>
+        val batchConf = Map(
+          "kyuubi.session.cluster" -> cluster,
+          BatchUtils.KYUUBI_BATCH_ID_KEY -> UUID.randomUUID().toString)
+        val batchRequest = newSparkBatchRequest(batchConf)
         sessionMgr.openBatchSession(
           "user",
           "password",
           "127.0.0.1",
-          Map("kyuubi.session.cluster" -> cluster),
+          batchConf,
           batchRequest)
       }
       assert(sessionMgr.allSessions().filter(_.isInstanceOf[KyuubiBatchSessionImpl])
