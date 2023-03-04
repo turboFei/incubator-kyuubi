@@ -180,6 +180,7 @@ metrics-json/4.2.8//metrics-json-4.2.8.jar
 metrics-jvm/4.2.8//metrics-jvm-4.2.8.jar
 mimepull/1.9.15//mimepull-1.9.15.jar
 mina/9.8.4-RELEASE//mina-9.8.4-RELEASE.jar
+mysql-connector-j/8.0.32//mysql-connector-j-8.0.32.jar
 netty-all/4.1.87.Final//netty-all-4.1.87.Final.jar
 netty-buffer/4.1.87.Final//netty-buffer-4.1.87.Final.jar
 netty-codec-dns/4.1.87.Final//netty-codec-dns-4.1.87.Final.jar
