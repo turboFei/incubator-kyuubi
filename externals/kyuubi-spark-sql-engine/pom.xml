@@ -50,6 +50,12 @@
         </dependency>
 
         <dependency>
+            <groupId>org.apache.kyuubi</groupId>
+            <artifactId>kyuubi-elasticsearch-spark_${scala.binary.version}</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-core</artifactId>
         </dependency>
@@ -242,6 +248,10 @@
                             <include>org.apache.zookeeper:zookeeper</include>
                             <include>org.checkerframework:checker-qual</include>
                             <include>org.codehaus.mojo:animal-sniffer-annotations</include>
+                            <!-- ebay extensions begin -->
+                            <include>org.apache.kyuubi:kyuubi-elasticsearch-spark_${scala.binary.version}</include>
+                            <include>org.elasticsearch:*</include>
+                            <!-- ebay extensions end -->
                         </includes>
                     </artifactSet>
                     <filters>
@@ -420,6 +430,12 @@
                             <pattern>com.google.type</pattern>
                             <shadedPattern>${kyuubi.shade.packageName}.com.google.type</shadedPattern>
                         </relocation>
+                        <!-- ebay extensions begin -->
+                        <relocation>
+                            <pattern>org.elasticsearch</pattern>
+                            <shadedPattern>${kyuubi.shade.packageName}.org.elasticsearch</shadedPattern>
+                        </relocation>
+                        <!-- ebay extensions end -->
                     </relocations>
                     <transformers>
                         <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"></transformer>

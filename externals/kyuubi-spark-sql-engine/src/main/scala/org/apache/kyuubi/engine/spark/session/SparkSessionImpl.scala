@@ -77,6 +77,7 @@ class SparkSessionImpl(
       case (key, value) => setModifiableConfig(key, value)
     }
     KDFRegistry.registerAll(spark)
+    initElasticsearchSpark()
     EventBus.post(sessionEvent)
     super.open()
   }
@@ -122,6 +123,19 @@ class SparkSessionImpl(
     if (!sessionManager.getConf.get(KyuubiConf.ENGINE_SINGLE_SPARK_SESSION)) {
       // clear the temp tables
       spark.sqlContext.clearTempTables()
+    }
+  }
+
+  private def initElasticsearchSpark(): Unit = {
+    import org.apache.spark.sql.ElasticsearchSparkUtils
+    import org.apache.kyuubi.engine.spark.KyuubiSparkUtil
+    try {
+      ElasticsearchSparkUtils.initElasticsearchSpark(sessionManager.getConf, spark)
+      KyuubiSparkUtil.initializeSparkSession(
+        spark,
+        ElasticsearchSparkUtils.elasticsearchInitSql(sessionManager.getConf, spark))
+    } catch {
+      case e: Throwable => warn("Error initializing elasticsearch spark", e)
     }
   }
 }
