@@ -39,6 +39,7 @@ import org.apache.kyuubi.server.metadata.jdbc.DatabaseType._
 import org.apache.kyuubi.server.metadata.jdbc.JDBCMetadataStoreConf._
 import org.apache.kyuubi.server.metadata.jdbc.fount.FountService
 import org.apache.kyuubi.session.SessionType
+import org.apache.kyuubi.util.JdbcUtils
 
 class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
   import JDBCMetadataStore._
@@ -61,7 +62,7 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
   private val metadataTable = conf.get(KyuubiEbayConf.METADATA_STORE_JDBC_TABLE)
     .getOrElse(METADATA_TABLE)
 
-  private var hikariDataSource: HikariDataSource = dbType match {
+  implicit private var hikariDataSource: HikariDataSource = dbType match {
     case FOUNT =>
       FountService.initialize(conf, this)
       FountService.getHikariDataSource()
@@ -88,8 +89,7 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
 
   private val mapper = new ObjectMapper().registerModule(DefaultScalaModule)
 
-  private val terminalStates =
-    OperationState.terminalStates.map(x => s"'${x.toString}'").mkString(", ")
+  private val terminalStates = OperationState.terminalStates.map(x => s"'$x'").mkString(", ")
 
   if (conf.get(METADATA_STORE_JDBC_DATABASE_SCHEMA_INIT)) {
     initSchema()
@@ -98,7 +98,7 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
   private def initSchema(): Unit = {
     getInitSchema(dbType).foreach { schema =>
       val ddlStatements = schema.trim.split(";")
-      withConnection() { connection =>
+      JdbcUtils.withConnection { connection =>
         Utils.tryLogNonFatalError {
           ddlStatements.foreach { ddlStatement =>
             execute(connection, ddlStatement)
@@ -139,7 +139,7 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
           inputStream.close()
         }
       }
-    }.headOption
+    }
   }
 
   def getSchemaVersion(schemaUrl: String): (Int, Int, Int) =
@@ -186,7 +186,7 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
          |VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          |""".stripMargin
 
-    withConnection() { connection =>
+    JdbcUtils.withConnection { connection =>
       execute(
         connection,
         query,
@@ -217,7 +217,7 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
         s"SELECT $METADATA_ALL_COLUMNS FROM $metadataTable WHERE identifier = ?"
       }
 
-    withConnection() { connection =>
+    JdbcUtils.withConnection { connection =>
       withResultSet(connection, query, identifier) { rs =>
         buildMetadata(rs, stateOnly).headOption.orNull
       }
@@ -238,19 +238,19 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
     }
     val whereConditions = ListBuffer[String]()
     Option(filter.sessionType).foreach { sessionType =>
-      whereConditions += " session_type = ?"
+      whereConditions += "session_type = ?"
       params += sessionType.toString
     }
     Option(filter.engineType).filter(_.nonEmpty).foreach { engineType =>
-      whereConditions += " UPPER(engine_type) = ? "
+      whereConditions += "UPPER(engine_type) = ?"
       params += engineType.toUpperCase(Locale.ROOT)
     }
     Option(filter.username).filter(_.nonEmpty).foreach { username =>
-      whereConditions += " user_name = ? "
+      whereConditions += "user_name = ?"
       params += username
     }
     Option(filter.state).filter(_.nonEmpty).foreach { state =>
-      whereConditions += " state = ? "
+      whereConditions += "state = ?"
       params += state.toUpperCase(Locale.ROOT)
     }
     Option(filter.cluster).filter(_.nonEmpty).foreach { _ =>
@@ -258,28 +258,28 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
       params += filter.cluster.toLowerCase(Locale.ROOT)
     }
     Option(filter.kyuubiInstance).filter(_.nonEmpty).foreach { kyuubiInstance =>
-      whereConditions += " kyuubi_instance = ? "
+      whereConditions += "kyuubi_instance = ?"
       params += kyuubiInstance
     }
     if (filter.createTime > 0) {
-      whereConditions += " create_time >= ? "
+      whereConditions += "create_time >= ?"
       params += filter.createTime
     }
     if (filter.endTime > 0) {
-      whereConditions += " end_time > 0 "
-      whereConditions += " end_time <= ? "
+      whereConditions += "end_time > 0"
+      whereConditions += "end_time <= ?"
       params += filter.endTime
     }
     if (filter.peerInstanceClosed) {
-      whereConditions += " peer_instance_closed = ? "
+      whereConditions += "peer_instance_closed = ?"
       params += filter.peerInstanceClosed
     }
     if (whereConditions.nonEmpty) {
-      queryBuilder.append(whereConditions.mkString(" WHERE ", " AND ", " "))
+      queryBuilder.append(whereConditions.mkString(" WHERE ", " AND ", ""))
     }
-    queryBuilder.append(" ORDER BY key_id ")
+    queryBuilder.append(" ORDER BY key_id")
     val query = databaseAdaptor.addLimitAndOffsetToQuery(queryBuilder.toString(), size, from)
-    withConnection() { connection =>
+    JdbcUtils.withConnection { connection =>
       withResultSet(connection, query, params: _*) { rs =>
         buildMetadata(rs, stateOnly)
       }
@@ -293,49 +293,49 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
     queryBuilder.append(s"UPDATE $metadataTable")
     val setClauses = ListBuffer[String]()
     Option(metadata.state).foreach { _ =>
-      setClauses += " state = ? "
+      setClauses += "state = ?"
       params += metadata.state
     }
     if (metadata.endTime > 0) {
-      setClauses += " end_time = ? "
+      setClauses += "end_time = ?"
       params += metadata.endTime
     }
     if (metadata.engineOpenTime > 0) {
-      setClauses += " engine_open_time = ? "
+      setClauses += "engine_open_time = ?"
       params += metadata.engineOpenTime
     }
     Option(metadata.engineId).foreach { _ =>
-      setClauses += " engine_id = ? "
+      setClauses += "engine_id = ?"
       params += metadata.engineId
     }
     Option(metadata.engineName).foreach { _ =>
-      setClauses += " engine_name = ? "
+      setClauses += "engine_name = ?"
       params += metadata.engineName
     }
     Option(metadata.engineUrl).foreach { _ =>
-      setClauses += " engine_url = ? "
+      setClauses += "engine_url = ?"
       params += metadata.engineUrl
     }
     Option(metadata.engineState).foreach { _ =>
-      setClauses += " engine_state = ? "
+      setClauses += "engine_state = ?"
       params += metadata.engineState
     }
     metadata.engineError.foreach { error =>
-      setClauses += " engine_error = ? "
+      setClauses += "engine_error = ?"
       params += error
     }
     if (metadata.peerInstanceClosed) {
-      setClauses += " peer_instance_closed = ? "
+      setClauses += "peer_instance_closed = ?"
       params += metadata.peerInstanceClosed
     }
     if (setClauses.nonEmpty) {
-      queryBuilder.append(setClauses.mkString(" SET ", " , ", " "))
+      queryBuilder.append(setClauses.mkString(" SET ", ", ", ""))
     }
-    queryBuilder.append(" WHERE identifier = ? ")
+    queryBuilder.append(" WHERE identifier = ?")
     params += metadata.identifier
 
     val query = queryBuilder.toString()
-    withConnection() { connection =>
+    JdbcUtils.withConnection { connection =>
       withUpdateCount(connection, query, params: _*) { updateCount =>
         if (updateCount == 0) {
           throw new KyuubiException(
@@ -347,7 +347,7 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
 
   override def cleanupMetadataByIdentifier(identifier: String): Unit = {
     val query = s"DELETE FROM $metadataTable WHERE identifier = ?"
-    withConnection() { connection =>
+    JdbcUtils.withConnection { connection =>
       execute(connection, query, identifier)
     }
   }
@@ -355,7 +355,7 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
   override def cleanupMetadataByAge(maxAge: Long): Unit = {
     val minEndTime = System.currentTimeMillis() - maxAge
     val query = s"DELETE FROM $metadataTable WHERE state IN ($terminalStates) AND end_time < ?"
-    withConnection() { connection =>
+    JdbcUtils.withConnection { connection =>
       execute(connection, query, minEndTime)
     }
   }
@@ -428,7 +428,7 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
   }
 
   private def execute(conn: Connection, sql: String, params: Any*): Unit = {
-    debug(s"executing sql $sql")
+    debug(s"execute sql: $sql, with params: ${params.mkString(", ")}")
     var statement: PreparedStatement = null
     try {
       statement = conn.prepareStatement(sql)
@@ -436,7 +436,9 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
       statement.execute()
     } catch {
       case e: SQLException =>
-        throw new KyuubiException(s"Error executing $sql:" + e.getMessage, e)
+        throw new KyuubiException(
+          s"Error executing sql: $sql, with params: ${params.mkString(", ")}. ${e.getMessage}",
+          e)
     } finally {
       if (statement != null) {
         Utils.tryLogNonFatalError(statement.close())
@@ -448,7 +450,7 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
       conn: Connection,
       sql: String,
       params: Any*)(f: ResultSet => T): T = {
-    debug(s"executing sql $sql with result set")
+    debug(s"executeQuery sql: $sql, with params: ${params.mkString(", ")}")
     var statement: PreparedStatement = null
     var resultSet: ResultSet = null
     try {
@@ -458,7 +460,9 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
       f(resultSet)
     } catch {
       case e: SQLException =>
-        throw new KyuubiException(e.getMessage, e)
+        throw new KyuubiException(
+          s"Error executing sql: $sql, with params: ${params.mkString(", ")}. ${e.getMessage}",
+          e)
     } finally {
       if (resultSet != null) {
         Utils.tryLogNonFatalError(resultSet.close())
@@ -473,7 +477,7 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
       conn: Connection,
       sql: String,
       params: Any*)(f: Int => T): T = {
-    debug(s"executing sql $sql with update count")
+    debug(s"executeUpdate sql: $sql, with params: ${params.mkString(", ")}")
     var statement: PreparedStatement = null
     try {
       statement = conn.prepareStatement(sql)
@@ -481,7 +485,9 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
       f(statement.executeUpdate())
     } catch {
       case e: SQLException =>
-        throw new KyuubiException(e.getMessage, e)
+        throw new KyuubiException(
+          s"Error executing sql: $sql, with params: ${params.mkString(", ")}. ${e.getMessage}",
+          e)
     } finally {
       if (statement != null) {
         Utils.tryLogNonFatalError(statement.close())
@@ -500,22 +506,6 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
         case f: Float => statement.setFloat(index + 1, f)
         case b: Boolean => statement.setBoolean(index + 1, b)
         case _ => throw new KyuubiException(s"Unsupported param type ${param.getClass.getName}")
-      }
-    }
-  }
-
-  private def withConnection[T](autoCommit: Boolean = true)(f: Connection => T): T = {
-    var connection: Connection = null
-    try {
-      connection = hikariDataSource.getConnection
-      connection.setAutoCommit(autoCommit)
-      f(connection)
-    } catch {
-      case e: SQLException =>
-        throw new KyuubiException(e.getMessage, e)
-    } finally {
-      if (connection != null) {
-        Utils.tryLogNonFatalError(connection.close())
       }
     }
   }
