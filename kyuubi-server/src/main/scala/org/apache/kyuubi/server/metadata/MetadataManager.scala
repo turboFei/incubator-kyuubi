@@ -24,7 +24,7 @@ import scala.collection.JavaConverters._
 
 import org.apache.kyuubi.{KyuubiException, Logging}
 import org.apache.kyuubi.client.api.v1.dto.Batch
-import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiConf.METADATA_MAX_AGE
 import org.apache.kyuubi.metrics.{MetricsConstants, MetricsSystem}
 import org.apache.kyuubi.operation.OperationState
@@ -327,7 +327,6 @@ object MetadataManager extends Logging {
       batchMetadata.username,
       batchMetadata.engineType,
       name,
-      batchMetadata.cluster.orNull,
       batchMetadata.engineOpenTime,
       batchMetadata.engineId,
       batchMetadata.engineUrl,
@@ -337,6 +336,6 @@ object MetadataManager extends Logging {
       batchState,
       batchMetadata.createTime,
       batchMetadata.endTime,
-      Map.empty[String, String].asJava)
+      Map(KyuubiEbayConf.SESSION_CLUSTER.key -> batchMetadata.cluster.getOrElse("")).asJava)
   }
 }

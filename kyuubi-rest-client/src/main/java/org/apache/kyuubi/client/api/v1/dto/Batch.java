@@ -28,7 +28,6 @@ public class Batch {
   private String user;
   private String batchType;
   private String name;
-  private String cluster;
   private long appStartTime;
   private String appId;
   private String appUrl;
@@ -47,7 +46,6 @@ public class Batch {
       String user,
       String batchType,
       String name,
-      String cluster,
       long appStartTime,
       String appId,
       String appUrl,
@@ -62,7 +60,6 @@ public class Batch {
     this.user = user;
     this.batchType = batchType;
     this.name = name;
-    this.cluster = cluster;
     this.appStartTime = appStartTime;
     this.appId = appId;
     this.appUrl = appUrl;
@@ -105,14 +102,6 @@ public class Batch {
 
   public void setName(String name) {
     this.name = name;
-  }
-
-  public String getCluster() {
-    return cluster;
-  }
-
-  public void setCluster(String cluster) {
-    this.cluster = cluster;
   }
 
   public String getAppId() {

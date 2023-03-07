@@ -50,7 +50,6 @@ public class RestClientTestUtils {
         TEST_USERNAME,
         "spark",
         "batch_name",
-        "cluster",
         0,
         id,
         null,

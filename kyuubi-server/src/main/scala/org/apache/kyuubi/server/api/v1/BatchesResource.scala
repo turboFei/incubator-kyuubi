@@ -38,7 +38,7 @@ import org.apache.kyuubi.{Logging, Utils}
 import org.apache.kyuubi.client.api.v1.dto._
 import org.apache.kyuubi.client.exception.KyuubiRestException
 import org.apache.kyuubi.client.util.BatchUtils._
-import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiReservedKeys._
 import org.apache.kyuubi.engine.{ApplicationInfo, KyuubiApplicationManager}
 import org.apache.kyuubi.operation.{BatchJobSubmission, FetchOrientation, OperationState}
@@ -101,7 +101,6 @@ private[v1] class BatchesResource extends ApiRequestContext with Logging {
       session.user,
       batchOp.batchType,
       name,
-      session.sessionCluster.orNull,
       batchOp.appStartTime,
       appId,
       appUrl,
@@ -111,7 +110,7 @@ private[v1] class BatchesResource extends ApiRequestContext with Logging {
       batchOpStatus.state.toString,
       session.createTime,
       batchOpStatus.completed,
-      Map.empty[String, String].asJava)
+      Map(KyuubiEbayConf.SESSION_CLUSTER.key -> session.sessionCluster.getOrElse("")).asJava)
   }
 
   private def buildBatch(
@@ -140,7 +139,6 @@ private[v1] class BatchesResource extends ApiRequestContext with Logging {
         metadata.username,
         metadata.engineType,
         name,
-        metadata.cluster.orNull,
         metadata.engineOpenTime,
         appId,
         appUrl,
@@ -150,7 +148,7 @@ private[v1] class BatchesResource extends ApiRequestContext with Logging {
         currentBatchState,
         metadata.createTime,
         metadata.endTime,
-        Map.empty[String, String].asJava)
+        Map(KyuubiEbayConf.SESSION_CLUSTER.key -> metadata.cluster.getOrElse("")).asJava)
     }.getOrElse(MetadataManager.buildBatch(metadata))
   }
 

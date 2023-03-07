@@ -111,8 +111,8 @@ private[ctl] object Render {
 
   private def buildBatchAppInfo(batch: Batch, showDiagnostic: Boolean = true): List[String] = {
     val batchAppInfo = ListBuffer[String]()
-    Option(batch.getCluster).foreach { _ =>
-      batchAppInfo += s"App Cluster: ${batch.getCluster}"
+    batch.getBatchInfo.asScala.foreach { case (key, value) =>
+      batchAppInfo += s"$key: $value"
     }
     if (batch.getAppStartTime > 0) {
       batchAppInfo += s"App Start Time:" +
