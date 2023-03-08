@@ -182,7 +182,6 @@ class KyuubiRestFrontendService(override val serverable: Serverable)
         server.start()
         recoverBatchSessions()
         isStarted.set(true)
-        info(s"$getName has started at ${server.getServerUri}")
         startBatchChecker()
         startInternal()
       } catch {
@@ -190,6 +189,7 @@ class KyuubiRestFrontendService(override val serverable: Serverable)
       }
     }
     super.start()
+    info(s"Exposing REST endpoint at: http://${server.getServerUri}")
   }
 
   override def stop(): Unit = synchronized {
