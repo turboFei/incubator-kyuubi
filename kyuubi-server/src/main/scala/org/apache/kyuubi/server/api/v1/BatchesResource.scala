@@ -40,9 +40,9 @@ import org.apache.kyuubi.client.exception.KyuubiRestException
 import org.apache.kyuubi.client.util.BatchUtils._
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiReservedKeys._
+import org.apache.kyuubi.ebay.BatchLogAggManager
 import org.apache.kyuubi.engine.{ApplicationInfo, KyuubiApplicationManager}
 import org.apache.kyuubi.operation.{BatchJobSubmission, FetchOrientation, OperationState}
-import org.apache.kyuubi.server.BatchLogAggManager
 import org.apache.kyuubi.server.api.ApiRequestContext
 import org.apache.kyuubi.server.api.v1.BatchesResource._
 import org.apache.kyuubi.server.metadata.MetadataManager
@@ -357,8 +357,8 @@ private[v1] class BatchesResource extends ApiRequestContext with Logging {
       @QueryParam("from") @DefaultValue("-1") from: Int,
       @QueryParam("size") @DefaultValue("100") size: Int): OperationLog = {
     def getAggOperationLog(createTime: Long, identifier: String): Option[OperationLog] = {
-      BatchLogAggManager.get.map(_.getAggregatedLog(createTime, identifier, from, size)).getOrElse(
-        None)
+      BatchLogAggManager.get.flatMap(_.getAggregatedLog(createTime, identifier, from, size))
+        .map(logs => new OperationLog(logs.asJava, logs.size)).orElse(None)
     }
     val userName = fe.getSessionUser(Map.empty[String, String])
     val sessionHandle = formatSessionHandle(batchId)

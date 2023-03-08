@@ -21,11 +21,10 @@ import java.io.{FileNotFoundException, IOException}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
 
-import org.apache.http.auth.{AuthScope, Credentials, UsernamePasswordCredentials}
-import org.apache.http.client.CredentialsProvider
-
 import org.apache.kyuubi.Logging
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
+import org.apache.kyuubi.elasticsearch.shade.org.apache.http.auth.{AuthScope, Credentials, UsernamePasswordCredentials}
+import org.apache.kyuubi.elasticsearch.shade.org.apache.http.client.CredentialsProvider
 
 class FileBasedCredentialsProvider(conf: KyuubiConf) extends CredentialsProvider
   with Logging {

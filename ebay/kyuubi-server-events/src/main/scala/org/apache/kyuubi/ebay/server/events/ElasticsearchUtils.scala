@@ -21,7 +21,6 @@ import java.util.{Map => JMap}
 
 import scala.collection.JavaConverters._
 
-import org.apache.http.HttpHost
 import org.elasticsearch.action.admin.indices.alias.IndicesAliasesRequest
 import org.elasticsearch.action.admin.indices.alias.get.GetAliasesRequest
 import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest
@@ -40,6 +39,7 @@ import org.elasticsearch.search.builder.SearchSourceBuilder
 
 import org.apache.kyuubi.{Logging, Utils}
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
+import org.apache.kyuubi.elasticsearch.shade.org.apache.http.HttpHost
 
 object ElasticsearchUtils extends Logging {
   @volatile private var CLIENT: RestHighLevelClient = _

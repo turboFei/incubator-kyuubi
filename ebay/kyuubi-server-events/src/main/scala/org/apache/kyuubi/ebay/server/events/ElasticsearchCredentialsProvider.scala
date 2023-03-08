@@ -17,9 +17,8 @@
 
 package org.apache.kyuubi.ebay.server.events
 
-import org.apache.http.client.CredentialsProvider
-
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
+import org.apache.kyuubi.elasticsearch.shade.org.apache.http.client.CredentialsProvider
 import org.apache.kyuubi.util.ClassUtils
 
 object ElasticsearchCredentialsProvider {

@@ -15,13 +15,12 @@
  * limitations under the License.
  */
 
-package org.apache.kyuubi.server
+package org.apache.kyuubi.ebay
 
 import java.io.{BufferedInputStream, BufferedOutputStream, BufferedReader, File, FileInputStream, FileOutputStream, InputStream, InputStreamReader, OutputStream}
 import java.util.{Date, Locale}
 import java.util.concurrent.{ScheduledExecutorService, ThreadPoolExecutor, TimeUnit}
 
-import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.Promise
 import scala.concurrent.duration.Duration
@@ -32,12 +31,11 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, FileUtil, Path}
 
 import org.apache.kyuubi.Utils
-import org.apache.kyuubi.client.api.v1.dto.OperationLog
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.service.AbstractService
 import org.apache.kyuubi.util.{KyuubiHadoopUtils, ThreadUtils}
 
-class BatchLogAggManager() extends AbstractService("BatchLogAggManager") {
+class BatchLogAggManager extends AbstractService("BatchLogAggManager") {
   private var executor: ThreadPoolExecutor = _
   private var cleaner: ScheduledExecutorService = _
   private var localFs: FileSystem = _
@@ -132,10 +130,10 @@ class BatchLogAggManager() extends AbstractService("BatchLogAggManager") {
       createTime: Long,
       identifier: String,
       from: Int,
-      size: Int): Option[OperationLog] = {
+      size: Int): Option[Seq[String]] = {
     Option(executor) match {
       case Some(_) =>
-        val promise = Promise[OperationLog]()
+        val promise = Promise[Seq[String]]()
         val task = new Runnable {
           override def run(): Unit = {
             val logRows = ListBuffer[String]()
@@ -162,7 +160,7 @@ class BatchLogAggManager() extends AbstractService("BatchLogAggManager") {
                     lineOffset += 1
                     line = br.readLine()
                   }
-                  promise.trySuccess(new OperationLog(logRows.asJava, logCount))
+                  promise.trySuccess(logRows)
                 } finally {
                   br.close()
                 }

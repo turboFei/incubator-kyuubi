@@ -49,8 +49,8 @@
         </dependency>
 
         <dependency>
-            <groupId>org.elasticsearch.client</groupId>
-            <artifactId>elasticsearch-rest-high-level-client</artifactId>
+            <groupId>org.apache.kyuubi</groupId>
+            <artifactId>kyuubi-shaded-elasticsearch</artifactId>
         </dependency>
 
         <dependency>

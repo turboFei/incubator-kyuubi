@@ -196,6 +196,11 @@
         </dependency>
 
         <dependency>
+            <groupId>commons-io</groupId>
+            <artifactId>commons-io</artifactId>
+        </dependency>
+
+        <dependency>
             <groupId>io.netty</groupId>
             <artifactId>netty-all</artifactId>
         </dependency>
@@ -256,8 +261,8 @@
         </dependency>
 
         <dependency>
-            <groupId>com.ebay.fount</groupId>
-            <artifactId>managed-fount-client</artifactId>
+            <groupId>org.apache.kyuubi</groupId>
+            <artifactId>kyuubi-shaded-fount</artifactId>
         </dependency>
 
         <dependency>

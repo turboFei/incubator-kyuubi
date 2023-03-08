@@ -1645,96 +1645,15 @@
 
             <!-- ebay dependencies begin -->
             <dependency>
-                <groupId>com.ebay.fount</groupId>
-                <artifactId>managed-fount-client</artifactId>
-                <version>0.2.2</version>
-                <exclusions>
-                    <exclusion>
-                        <groupId>org.slf4j</groupId>
-                        <artifactId>*</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>com.fasterxml.jackson.core</groupId>
-                        <artifactId>*</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>commons-beanutils</groupId>
-                        <artifactId>commons-beanutils-core</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>commons-collections</groupId>
-                        <artifactId>commons-collections</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>com.ebay.aero</groupId>
-                        <artifactId>cal-client-impl</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>javax.servlet</groupId>
-                        <artifactId>javax.servlet-api</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>com.sun.mail</groupId>
-                        <artifactId>javax.mail</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>org.codehaus.jackson</groupId>
-                        <artifactId>*</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>joda-time</groupId>
-                        <artifactId>joda-time</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>javax.servlet.jsp</groupId>
-                        <artifactId>javax.servlet.jsp-api</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>org.ebayopensource.ginger</groupId>
-                        <artifactId>ebay-jaxrs</artifactId>
-                    </exclusion>
-                </exclusions>
+                <groupId>org.apache.kyuubi</groupId>
+                <artifactId>kyuubi-shaded-fount</artifactId>
+                <version>1.0.0</version>
             </dependency>
 
             <dependency>
-                <groupId>org.elasticsearch.client</groupId>
-                <artifactId>elasticsearch-rest-high-level-client</artifactId>
-                <!-- ebay elastic search version is 7.10 -->
-                <version>7.10.2</version>
-                <exclusions>
-                    <exclusion>
-                        <groupId>com.fasterxml.jackson.dataformat</groupId>
-                        <artifactId>jackson-dataformat-cbor</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>com.fasterxml.jackson.dataformat</groupId>
-                        <artifactId>jackson-dataformat-smile</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>org.hdrhistogram</groupId>
-                        <artifactId>HdrHistogram</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>org.elasticsearch.plugin</groupId>
-                        <artifactId>aggs-matrix-stats-client</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>com.github.spullara.mustache.java</groupId>
-                        <artifactId>compiler</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>org.elasticsearch</groupId>
-                        <artifactId>jna</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>net.sf.jopt-simple</groupId>
-                        <artifactId>jopt-simple</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>com.tdunning</groupId>
-                        <artifactId>t-digest</artifactId>
-                    </exclusion>
-                </exclusions>
+                <groupId>org.apache.kyuubi</groupId>
+                <artifactId>kyuubi-shaded-elasticsearch</artifactId>
+                <version>1.0.0</version>
             </dependency>
 
             <dependency>

@@ -33,13 +33,13 @@ import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiConf._
 import org.apache.kyuubi.config.KyuubiEbayConf._
 import org.apache.kyuubi.credentials.HadoopCredentialsManager
+import org.apache.kyuubi.ebay.BatchLogAggManager
 import org.apache.kyuubi.ebay.BdpServiceAccountMappingCacheManager
 import org.apache.kyuubi.engine.KyuubiApplicationManager
 import org.apache.kyuubi.metrics.MetricsConstants._
 import org.apache.kyuubi.metrics.MetricsSystem
 import org.apache.kyuubi.operation.{KyuubiOperationManager, OperationState}
 import org.apache.kyuubi.plugin.{GroupProvider, PluginLoader, SessionConfAdvisor}
-import org.apache.kyuubi.server.BatchLogAggManager
 import org.apache.kyuubi.server.metadata.{MetadataManager, MetadataRequestsRetryRef}
 import org.apache.kyuubi.server.metadata.api.Metadata
 import org.apache.kyuubi.sql.parser.server.KyuubiParser
