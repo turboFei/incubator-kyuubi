@@ -197,7 +197,11 @@ private[v1] class AdminResource extends ApiRequestContext with Logging {
       @QueryParam("subdomain") subdomain: String,
       @QueryParam("hive.server2.proxy.user") hs2ProxyUser: String,
       @QueryParam("cluster") cluster: String): Response = {
-    val userName = fe.getSessionUser(hs2ProxyUser)
+    val userName = if (isAdministrator(fe.getRealUser())) {
+      Option(hs2ProxyUser).getOrElse(fe.getRealUser())
+    } else {
+      fe.getSessionUser(hs2ProxyUser)
+    }
     val clusterConf = getClusterConf(Option(cluster))
     val engine = getEngine(userName, engineType, shareLevel, subdomain, "default", clusterConf)
     val engineSpace = getEngineSpace(engine, clusterConf)
@@ -233,7 +237,11 @@ private[v1] class AdminResource extends ApiRequestContext with Logging {
       @QueryParam("subdomain") subdomain: String,
       @QueryParam("hive.server2.proxy.user") hs2ProxyUser: String,
       @QueryParam("cluster") cluster: String): Seq[Engine] = {
-    val userName = fe.getSessionUser(hs2ProxyUser)
+    val userName = if (isAdministrator(fe.getRealUser())) {
+      Option(hs2ProxyUser).getOrElse(fe.getRealUser())
+    } else {
+      fe.getSessionUser(hs2ProxyUser)
+    }
     val clusterOptList = Option(cluster).map(c => Seq(Option(c))).getOrElse {
       KyuubiEbayConf.getNonCarmelClusterOptList(fe.getConf)
     }
