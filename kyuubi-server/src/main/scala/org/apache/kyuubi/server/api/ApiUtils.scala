@@ -40,7 +40,9 @@ object ApiUtils {
       sessionEvent.flatMap(_.exception).map(Utils.prettyPrint).getOrElse(""),
       session.sessionType.toString,
       session.connectionUrl,
-      sessionEvent.map(_.engineId).getOrElse(""))
+      sessionEvent.map(_.engineId).getOrElse(""),
+      session.sessionCluster.getOrElse(""),
+      session.sessionQueue.getOrElse(""))
   }
 
   def operationData(operation: KyuubiOperation): OperationData = {
@@ -56,6 +58,8 @@ object ApiUtils {
       opEvent.sessionId,
       opEvent.sessionUser,
       opEvent.sessionType,
-      operation.getSession.asInstanceOf[KyuubiSession].connectionUrl)
+      operation.getSession.asInstanceOf[KyuubiSession].connectionUrl,
+      operation.getSession.asInstanceOf[KyuubiSession].sessionCluster.getOrElse(""),
+      operation.getSession.asInstanceOf[KyuubiSession].sessionQueue.getOrElse(""))
   }
 }

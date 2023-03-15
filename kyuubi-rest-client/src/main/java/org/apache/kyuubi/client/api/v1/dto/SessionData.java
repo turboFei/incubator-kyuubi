@@ -35,6 +35,8 @@ public class SessionData {
   private String sessionType;
   private String kyuubiInstance;
   private String engineId;
+  private String sessionCluster;
+  private String sessionQueue;
 
   public SessionData() {}
 
@@ -49,7 +51,9 @@ public class SessionData {
       String exception,
       String sessionType,
       String kyuubiInstance,
-      String engineId) {
+      String engineId,
+      String sessionCluster,
+      String sessionQueue) {
     this.identifier = identifier;
     this.user = user;
     this.ipAddr = ipAddr;
@@ -61,6 +65,8 @@ public class SessionData {
     this.sessionType = sessionType;
     this.kyuubiInstance = kyuubiInstance;
     this.engineId = engineId;
+    this.sessionCluster = sessionCluster;
+    this.sessionQueue = sessionQueue;
   }
 
   public String getIdentifier() {
@@ -152,6 +158,22 @@ public class SessionData {
 
   public void setEngineId(String engineId) {
     this.engineId = engineId;
+  }
+
+  public String getSessionCluster() {
+    return sessionCluster;
+  }
+
+  public void setSessionCluster(String sessionCluster) {
+    this.sessionCluster = sessionCluster;
+  }
+
+  public String getSessionQueue() {
+    return sessionQueue;
+  }
+
+  public void setSessionQueue(String sessionQueue) {
+    this.sessionQueue = sessionQueue;
   }
 
   @Override

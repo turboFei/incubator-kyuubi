@@ -33,6 +33,8 @@ public class OperationData {
   private String sessionUser;
   private String sessionType;
   private String kyuubiInstance;
+  private String sessionCluster;
+  private String sessionQueue;
 
   public OperationData() {}
 
@@ -47,7 +49,9 @@ public class OperationData {
       String sessionId,
       String sessionUser,
       String sessionType,
-      String kyuubiInstance) {
+      String kyuubiInstance,
+      String sessionCluster,
+      String sessionQueue) {
     this.identifier = identifier;
     this.statement = statement;
     this.state = state;
@@ -59,6 +63,8 @@ public class OperationData {
     this.sessionUser = sessionUser;
     this.sessionType = sessionType;
     this.kyuubiInstance = kyuubiInstance;
+    this.sessionCluster = sessionCluster;
+    this.sessionQueue = sessionQueue;
   }
 
   public String getIdentifier() {
@@ -147,6 +153,22 @@ public class OperationData {
 
   public void setKyuubiInstance(String kyuubiInstance) {
     this.kyuubiInstance = kyuubiInstance;
+  }
+
+  public String getSessionCluster() {
+    return sessionCluster;
+  }
+
+  public void setSessionCluster(String sessionCluster) {
+    this.sessionCluster = sessionCluster;
+  }
+
+  public String getSessionQueue() {
+    return sessionQueue;
+  }
+
+  public void setSessionQueue(String sessionQueue) {
+    this.sessionQueue = sessionQueue;
   }
 
   @Override

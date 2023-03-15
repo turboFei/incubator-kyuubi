@@ -31,6 +31,7 @@ case class OperationEventDoc(
     sessionId: String,
     sessionUser: String,
     sessionType: String,
+    kyuubiInstance: String,
     eventType: String,
     sessionCluster: String,
     sessionQueue: String)
