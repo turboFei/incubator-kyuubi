@@ -82,7 +82,7 @@ class KyuubiSessionImpl(
     new EngineRef(
       sessionConf,
       user,
-      sessionManager.groupProvider.primaryGroup(user, optimizedConf.asJava),
+      sessionManager.groupProvider,
       handle.identifier.toString,
       sessionManager.applicationManager,
       sessionCluster)
