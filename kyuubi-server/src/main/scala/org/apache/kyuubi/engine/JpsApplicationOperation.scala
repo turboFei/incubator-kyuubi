@@ -89,6 +89,7 @@ class JpsApplicationOperation extends ApplicationOperation {
 
   override def getApplicationInfoByTag(
       tag: String,
+      submitTime: Option[Long],
       clusterOpt: Option[String]): ApplicationInfo = {
     val commandOption = getEngine(tag)
     if (commandOption.nonEmpty) {

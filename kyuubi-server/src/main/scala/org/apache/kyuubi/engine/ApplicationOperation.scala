@@ -50,15 +50,19 @@ trait ApplicationOperation {
    *
    * @note For implementations, please suppress exceptions and always return KillResponse
    */
-  def killApplicationByTag(tag: String, clusterOpt: Option[String]): KillResponse
+  def killApplicationByTag(tag: String, clusterOpt: Option[String] = None): KillResponse
 
   /**
    * Get the engine/application status by the unique application tag
    *
    * @param tag the unique application tag for engine instance.
+   * @param submitTime engine submit to resourceManager time
    * @return [[ApplicationInfo]]
    */
-  def getApplicationInfoByTag(tag: String, clusterOpt: Option[String]): ApplicationInfo
+  def getApplicationInfoByTag(
+      tag: String,
+      submitTime: Option[Long] = None,
+      clusterOpt: Option[String] = None): ApplicationInfo
 }
 
 object ApplicationState extends Enumeration {

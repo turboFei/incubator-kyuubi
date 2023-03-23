@@ -87,6 +87,7 @@ class YarnApplicationOperation extends ApplicationOperation with Logging {
 
   override def getApplicationInfoByTag(
       tag: String,
+      submitTime: Option[Long],
       clusterOpt: Option[String]): ApplicationInfo = {
     val yarnClient = yarnClients.get(clusterOpt)
     if (yarnClient != null) {

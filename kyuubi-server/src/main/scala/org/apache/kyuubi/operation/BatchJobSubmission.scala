@@ -106,9 +106,15 @@ class BatchJobSubmission(
   override protected def currentApplicationInfo: Option[ApplicationInfo] = {
     if (isTerminal(state) && _applicationInfo.nonEmpty) return _applicationInfo
     // only the ApplicationInfo with non-empty id is valid for the operation
+    val submitTime = if (_appStartTime <= 0) {
+      System.currentTimeMillis()
+    } else {
+      _appStartTime
+    }
     val applicationInfo = applicationManager.getApplicationInfo(
       builder.clusterManager(),
       batchId,
+      Some(submitTime),
       session.sessionCluster).filter(_.id != null)
     applicationInfo.foreach { _ =>
       if (_appStartTime <= 0) {

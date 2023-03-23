@@ -221,6 +221,7 @@ private[kyuubi] class EngineRef(
             engineMgr.getApplicationInfo(
               builder.clusterManager(),
               engineRefId,
+              Some(started),
               clusterOpt).foreach {
               appInfo =>
                 if (ApplicationState.isTerminated(appInfo.state)) {
