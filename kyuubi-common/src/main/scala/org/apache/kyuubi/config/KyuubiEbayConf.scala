@@ -104,6 +104,7 @@ object KyuubiEbayConf extends Logging {
 
   val SESSION_ENGINE_LAUNCH_MOVE_QUEUE_ENABLED: ConfigEntry[Boolean] =
     buildConf("kyuubi.session.engine.launch.moveQueue.enabled")
+      .internal
       .doc("When opening kyuubi session, whether to launch engine at first and then move queue." +
         " Note that, it is only for yarn resource manger.")
       .version("1.4.0")
@@ -112,6 +113,7 @@ object KyuubiEbayConf extends Logging {
 
   val SESSION_ENGINE_LAUNCH_MOVE_QUEUE_INIT_QUEUE: OptionalConfigEntry[String] =
     buildConf("kyuubi.session.engine.launch.moveQueue.initQueue")
+      .internal
       .doc("When launch engine and move queue, the init queue.")
       .version("1.6.0")
       .stringConf
@@ -119,6 +121,7 @@ object KyuubiEbayConf extends Logging {
 
   val SESSION_ENGINE_LAUNCH_MOVE_QUEUE_TIMEOUT: ConfigEntry[Long] =
     buildConf("kyuubi.session.engine.launch.moveQueue.timeout")
+      .internal
       .doc("When launch engine and move queue, the final queue.")
       .version("1.6.0")
       .timeConf
