@@ -173,14 +173,14 @@ private[v1] class BatchesResource extends ApiRequestContext with Logging {
     openBatchSessionInternal(request)
   }
 
-  @ApiResponse(
-    responseCode = "200",
-    content = Array(new Content(
-      mediaType = MediaType.APPLICATION_JSON,
-      schema = new Schema(implementation = classOf[Batch]))),
-    description = "create and open a batch session with uploading resource file")
-  @POST
-  @Consumes(Array(MediaType.MULTIPART_FORM_DATA))
+//  @ApiResponse(
+//    responseCode = "200",
+//    content = Array(new Content(
+//      mediaType = MediaType.APPLICATION_JSON,
+//      schema = new Schema(implementation = classOf[Batch]))),
+//    description = "create and open a batch session with uploading resource file")
+//  @POST
+//  @Consumes(Array(MediaType.MULTIPART_FORM_DATA))
   def openBatchSessionWithUpload(
       @FormDataParam("batchRequest") batchRequest: BatchRequest,
       @FormDataParam("resourceFile") resourceFileInputStream: InputStream,
