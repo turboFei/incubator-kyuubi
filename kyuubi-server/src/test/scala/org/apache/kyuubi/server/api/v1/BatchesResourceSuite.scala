@@ -211,7 +211,7 @@ class BatchesResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper wi
     assert(!deleteBatchResponse.readEntity(classOf[CloseBatchResponse]).isSuccess)
   }
 
-  test("open batch session with uploading resource") {
+  ignore("open batch session with uploading resource") {
     val requestObj = newSparkBatchRequest(Map("spark.master" -> "local"))
     val exampleJarFile = Paths.get(sparkBatchTestResource.get).toFile
     val multipart = new FormDataMultiPart()

@@ -15,19 +15,18 @@
  * limitations under the License.
  */
 
-package org.apache.kyuubi.carmel.gateway.session
+package org.apache.kyuubi.ebay.carmel.gateway.session
 
 import scala.collection.JavaConverters._
 
+import CarmelSessionStatus.CarmelSessionStatus
 import com.codahale.metrics.MetricRegistry
 import org.apache.hive.service.rpc.thrift.{TGetInfoType, TGetInfoValue, TProtocolVersion}
 
 import org.apache.kyuubi.KyuubiSQLException
-import org.apache.kyuubi.carmel.gateway.endpoint.SparkEndpoint
-import org.apache.kyuubi.carmel.gateway.session.CarmelSessionStatus.CarmelSessionStatus
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiConf.{ENGINE_OPEN_MAX_ATTEMPTS, ENGINE_OPEN_RETRY_WAIT}
-import org.apache.kyuubi.ebay.carmel.gateway.endpoint.UserInfo
+import org.apache.kyuubi.ebay.carmel.gateway.endpoint.{SparkEndpoint, UserInfo}
 import org.apache.kyuubi.events.EventBus
 import org.apache.kyuubi.metrics.MetricsConstants.CONN_OPEN
 import org.apache.kyuubi.metrics.MetricsSystem

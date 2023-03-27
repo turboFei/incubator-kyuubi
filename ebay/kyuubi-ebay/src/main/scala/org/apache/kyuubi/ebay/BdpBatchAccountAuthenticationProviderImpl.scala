@@ -30,7 +30,8 @@ class BdpBatchAccountAuthenticationProviderImpl(conf: KyuubiConf)
   extends BatchAccountAuthenticationProvider with Logging {
   import HttpClientUtils._
 
-  private val endpoint: String = conf.get(KyuubiEbayConf.AUTHENTICATION_BATCH_ACCOUNT_ENDPOINT)
+  private val bdpUrl = conf.get(KyuubiEbayConf.ACCESS_BDP_URL)
+  private val endpoint = bdpUrl + "/product/batch/$serviceAccount/service/mapping"
 
   override def authenticate(serviceAccount: String, batchAccount: String): Unit = {
     info(s"Using service account:$serviceAccount to auth for batch account:$batchAccount")

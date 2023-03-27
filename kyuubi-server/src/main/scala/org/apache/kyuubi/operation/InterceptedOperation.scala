@@ -20,7 +20,7 @@ package org.apache.kyuubi.operation
 import org.apache.hive.service.rpc.thrift.TGetInfoType
 
 import org.apache.kyuubi.KyuubiSQLException
-import org.apache.kyuubi.carmel.gateway.session.{CarmelSessionImpl, CarmelSessionStatus}
+import org.apache.kyuubi.ebay.carmel.gateway.session.{CarmelSessionImpl, CarmelSessionStatus}
 import org.apache.kyuubi.session.Session
 
 abstract class InterceptedOperation(session: Session) extends KyuubiOperation(session) {

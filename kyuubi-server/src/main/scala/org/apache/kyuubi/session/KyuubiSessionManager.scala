@@ -27,14 +27,13 @@ import com.google.common.cache.{CacheBuilder, CacheLoader, LoadingCache}
 import org.apache.hive.service.rpc.thrift.TProtocolVersion
 
 import org.apache.kyuubi.{KyuubiException, KyuubiSQLException}
-import org.apache.kyuubi.carmel.gateway.session.{CarmelEndpointManager, CarmelSessionImpl}
 import org.apache.kyuubi.client.api.v1.dto.{Batch, BatchRequest}
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiConf._
 import org.apache.kyuubi.config.KyuubiEbayConf._
 import org.apache.kyuubi.credentials.HadoopCredentialsManager
-import org.apache.kyuubi.ebay.BatchLogAggManager
-import org.apache.kyuubi.ebay.BdpServiceAccountMappingCacheManager
+import org.apache.kyuubi.ebay.{BatchLogAggManager, BdpServiceAccountMappingCacheManager}
+import org.apache.kyuubi.ebay.carmel.gateway.session.{CarmelEndpointManager, CarmelSessionImpl}
 import org.apache.kyuubi.engine.KyuubiApplicationManager
 import org.apache.kyuubi.metrics.MetricsConstants._
 import org.apache.kyuubi.metrics.MetricsSystem
@@ -73,6 +72,7 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
 
   lazy val (signingPrivateKey, signingPublicKey) = SignUtils.generateKeyPair()
 
+  val bdpManager = new BdpServiceAccountMappingCacheManager()
   val carmelEndpointManager = new CarmelEndpointManager(this)
 
   override def initialize(conf: KyuubiConf): Unit = {
@@ -80,9 +80,7 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
     addService(applicationManager)
     addService(credentialsManager)
     addService(new BatchLogAggManager())
-    if (conf.get(KyuubiEbayConf.AUTHENTICATION_BATCH_ACCOUNT_LOAD_ALL_ENABLED)) {
-      addService(new BdpServiceAccountMappingCacheManager())
-    }
+    addService(bdpManager)
     metadataManager.foreach(addService)
     initSessionLimiter(conf)
     addService(carmelEndpointManager)
@@ -333,12 +331,7 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
   override protected def isServer: Boolean = true
 
   private def initSessionLimiter(conf: KyuubiConf): Unit = {
-    val clusterOpts = if (conf.get(KyuubiEbayConf.SESSION_CLUSTER_MODE_ENABLED)) {
-      KyuubiEbayConf.getClusterList(conf).map(Option(_))
-    } else {
-      Seq(None)
-    }
-    clusterOpts.foreach { clusterOpt =>
+    KyuubiEbayConf.getClusterOptList(conf).foreach { clusterOpt =>
       val clusterConf = KyuubiEbayConf.loadClusterConf(conf, clusterOpt)
       val userLimit = clusterConf.get(SERVER_LIMIT_CONNECTIONS_PER_USER).getOrElse(0)
       val ipAddressLimit = clusterConf.get(SERVER_LIMIT_CONNECTIONS_PER_IPADDRESS).getOrElse(0)

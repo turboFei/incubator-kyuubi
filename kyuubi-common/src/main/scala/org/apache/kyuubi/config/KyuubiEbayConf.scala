@@ -87,6 +87,21 @@ object KyuubiEbayConf extends Logging {
       .stringConf
       .createOptional
 
+  val ACCESS_BDP_QUEUE_AUTO_SELECTION: ConfigEntry[Boolean] =
+    buildConf("kyuubi.access.bdp.queue.auto.selection")
+      .serverOnly
+      .internal
+      .booleanConf
+      .createWithDefault(false)
+
+  val ACCESS_BDP_QUEUE_AUTO_SELECTION_IGNORE_LIST: ConfigEntry[Seq[String]] =
+    buildConf("kyuubi.access.bdp.queue.auto.selection.ignore.list")
+      .serverOnly
+      .internal
+      .stringConf
+      .toSequence()
+      .createWithDefault(Seq("hdmi-reserve-test", "hdmi-staging", "hdmi-test"))
+
   val AUTHENTICATION_BATCH_ACCOUNT_CLASS: OptionalConfigEntry[String] =
     buildConf("kyuubi.authentication.batchAccount.class")
       .doc("The authentication class name for batch account authentication," +
@@ -137,33 +152,35 @@ object KyuubiEbayConf extends Logging {
       .intConf
       .createWithDefault(0)
 
-  val AUTHENTICATION_BATCH_ACCOUNT_ENDPOINT: ConfigEntry[String] =
-    buildConf("kyuubi.authentication.batch.account.endpoint")
+  val ACCESS_BDP_DEFAULT_CLUSTER: ConfigEntry[String] =
+    buildConf("kyuubi.access.bdp.default.cluster")
       .internal
-      .doc("The endpoint for batch account verification.")
-      .version("1.6.0")
       .serverOnly
       .stringConf
-      .checkValue(_.contains("$serviceAccount"), "the endpoint should contains `$serviceAccount`")
-      .createWithDefault("https://bdp.vip.ebay.com/product/batch/$serviceAccount/service/mapping?")
+      .createWithDefault("")
 
-  val AUTHENTICATION_BATCH_ACCOUNT_LOAD_ALL_ENABLED: ConfigEntry[Boolean] =
-    buildConf("kyuubi.authentication.batch.account.load.all.enabled")
+  val ACCESS_BDP_QUEUE_REFRESH_INTERVAL: ConfigEntry[Long] =
+    buildConf("kyuubi.access.bdp.queue.refresh.interval")
       .internal
       .serverOnly
-      .doc("Whether to enable to load all service account and batch account mapping.")
-      .version("1.6.0")
-      .booleanConf
-      .createWithDefault(false)
+      .timeConf
+      .checkValue(_ > 0, "must be positive number")
+      .createWithDefaultString("PT5M")
 
-  val AUTHENTICATION_BATCH_ACCOUNT_LOAD_ALL_ENDPOINT: ConfigEntry[String] =
-    buildConf("kyuubi.authentication.batch.account.load.all.endpoint")
+  val ACCESS_BDP_QUEUE_CACHE_MAX: ConfigEntry[Int] =
+    buildConf("kyuubi.access.bdp.queue.cache.max")
       .internal
       .serverOnly
-      .doc("The endpoint for loading all service account and batch account mapping.")
-      .version("1.6.0")
+      .intConf
+      .checkValue(_ > 0, "must be positive number")
+      .createWithDefault(1000)
+
+  val ACCESS_BDP_URL: ConfigEntry[String] =
+    buildConf("kyuubi.access.bdp.url")
+      .internal
+      .serverOnly
       .stringConf
-      .createWithDefault("https://bdp.vip.ebay.com/product/batch/service-account-mappings")
+      .createWithDefault("https://bdp.vip.ebay.com")
 
   val AUTHENTICATION_BATCH_ACCOUNT_LOAD_ALL_INTERVAL: ConfigEntry[Long] =
     buildConf("kyuubi.authentication.batch.account.load.all.interval")
@@ -693,9 +710,25 @@ object KyuubiEbayConf extends Logging {
     sessionCluster.exists(conf.get(CARMEL_CLUSTER_LIST).contains)
   }
 
+  def getClusterOptList(conf: KyuubiConf): Seq[Option[String]] = {
+    if (conf.get(SESSION_CLUSTER_MODE_ENABLED)) {
+      getClusterList(conf).map(Option(_))
+    } else {
+      Seq(None)
+    }
+  }
+
+  def getCarmelClusterOptList(conf: KyuubiConf): Seq[Option[String]] = {
+    if (conf.get(SESSION_CLUSTER_MODE_ENABLED)) {
+      conf.get(CARMEL_CLUSTER_LIST).map(Option(_))
+    } else {
+      Seq(None)
+    }
+  }
+
   def getNonCarmelClusterOptList(conf: KyuubiConf): Seq[Option[String]] = {
     if (conf.get(SESSION_CLUSTER_MODE_ENABLED)) {
-      getClusterList(conf).filterNot(conf.get(SESSION_CLUSTER_LIST).contains).map(Option(_))
+      getClusterList(conf).filterNot(conf.get(CARMEL_CLUSTER_LIST).contains).map(Option(_))
     } else {
       Seq(None)
     }

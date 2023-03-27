@@ -27,8 +27,19 @@ class KyuubiEbayConfSuite extends KyuubiFunSuite {
 
     val conf = KyuubiConf()
     conf.set(KyuubiEbayConf.SESSION_CLUSTER_MODE_ENABLED, true)
-    conf.set(KyuubiEbayConf.SESSION_CLUSTER_LIST, Seq("test1", "test2"))
-    assert(KyuubiEbayConf.getClusterList(conf) === Seq("test1", "test2"))
+    conf.set(KyuubiEbayConf.SESSION_CLUSTER_LIST, Seq("test1", "test2", "carmel"))
+    conf.set(KyuubiEbayConf.CARMEL_CLUSTER_LIST, Seq("carmel"))
+    assert(KyuubiEbayConf.getClusterList(conf) === Seq("test1", "test2", "carmel"))
+    assert(KyuubiEbayConf.getClusterOptList(conf) ==
+      Seq(Option("test1"), Option("test2"), Option("carmel")))
+    assert(KyuubiEbayConf.getNonCarmelClusterOptList(conf) == Seq(Option("test1"), Option("test2")))
+    assert(KyuubiEbayConf.getCarmelClusterOptList(conf) == Seq(Option("carmel")))
+
+    conf.set(KyuubiEbayConf.SESSION_CLUSTER_MODE_ENABLED, false)
+    assert(KyuubiEbayConf.getClusterList(conf) == Seq.empty)
+    assert(KyuubiEbayConf.getClusterOptList(conf) == Seq(None))
+    assert(KyuubiEbayConf.getNonCarmelClusterOptList(conf) == Seq(None))
+    assert(KyuubiEbayConf.getCarmelClusterOptList(conf) == Seq(None))
   }
 
   test("getDefaultPropertiesFileForCluster") {

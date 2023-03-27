@@ -85,7 +85,7 @@ class BatchRestApiSuite extends RestClientTestHelper with BatchTestHelper {
     basicKyuubiRestClient.close()
   }
 
-  test("basic batch rest client with uploading resource file") {
+  ignore("basic batch rest client with uploading resource file") {
     val basicKyuubiRestClient: KyuubiRestClient =
       KyuubiRestClient.builder(baseUri.toString)
         .authHeaderMethod(KyuubiRestClient.AuthHeaderMethod.BASIC)

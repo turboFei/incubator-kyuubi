@@ -152,13 +152,8 @@ object KyuubiServer extends Logging {
 
   private[kyuubi] def refreshUnlimitedUsers(): Unit = synchronized {
     val conf = KyuubiConf().loadFileDefaults()
-    val clusterOpts = if (clusterModeEnabled) {
-      KyuubiEbayConf.getClusterList(conf).map(Option(_))
-    } else {
-      Seq(None)
-    }
     val sessionMgr = kyuubiServer.backendService.sessionManager.asInstanceOf[KyuubiSessionManager]
-    clusterOpts.foreach { clusterOpt =>
+    KyuubiEbayConf.getClusterOptList(conf).foreach { clusterOpt =>
       val existingUnlimitedUsers = sessionMgr.getUnlimitedUsers(clusterOpt)
       sessionMgr.refreshUnlimitedUsers(clusterOpt, KyuubiEbayConf.loadClusterConf(conf, clusterOpt))
       val refreshedUnlimitedUsers = sessionMgr.getUnlimitedUsers(clusterOpt)

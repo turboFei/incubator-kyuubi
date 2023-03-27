@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kyuubi.carmel.gateway.session
+package org.apache.kyuubi.ebay.carmel.gateway.session
 
 import java.util.concurrent.{Callable, Future, LinkedBlockingQueue, ThreadPoolExecutor, TimeUnit}
 

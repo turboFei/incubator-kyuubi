@@ -23,27 +23,44 @@ import javax.security.sasl.AuthenticationException
 import scala.collection.JavaConverters._
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.google.common.cache.{CacheBuilder, CacheLoader, LoadingCache}
 import org.apache.http.client.methods.{CloseableHttpResponse, HttpGet}
 
+import org.apache.kyuubi.KyuubiException
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
+import org.apache.kyuubi.ebay.carmel.gateway.endpoint.QueueInfo
 import org.apache.kyuubi.service.AbstractService
 import org.apache.kyuubi.util.ThreadUtils
 
 class BdpServiceAccountMappingCacheManager(name: String) extends AbstractService(name) {
   def this() = this(classOf[BdpServiceAccountMappingCacheManager].getSimpleName)
 
+  case class UserQueuesCache(cacheTime: Long, queues: Seq[QueueInfo])
+
   import HttpClientUtils._
 
   private val bdpBatchMappingLoader =
     ThreadUtils.newDaemonSingleThreadScheduledExecutor("bdp-batch-mapping-loader")
-  private var batchMappingLoadEndpoint: String = _
   private var batchMappingLoadInterval: Long = _
 
   private var serviceAccountMappingCache = new ConcurrentHashMap[String, Set[String]]().asScala
 
+  private var bdpUrl: String = _
+  private var bdpDefaultCluster: String = _
+  private var userQueuesRefreshInterval: Long = _
+  private var bdpUserQueuesCache: LoadingCache[(String, Option[String]), UserQueuesCache] = _
+
   override def initialize(conf: KyuubiConf): Unit = {
-    batchMappingLoadEndpoint =
-      conf.get(KyuubiEbayConf.AUTHENTICATION_BATCH_ACCOUNT_LOAD_ALL_ENDPOINT)
+    bdpUrl = conf.get(KyuubiEbayConf.ACCESS_BDP_URL)
+    bdpDefaultCluster = conf.get(KyuubiEbayConf.ACCESS_BDP_DEFAULT_CLUSTER)
+    userQueuesRefreshInterval = conf.get(KyuubiEbayConf.ACCESS_BDP_QUEUE_REFRESH_INTERVAL)
+    bdpUserQueuesCache = CacheBuilder.newBuilder()
+      .maximumSize(conf.get(KyuubiEbayConf.ACCESS_BDP_QUEUE_CACHE_MAX))
+      .build(new CacheLoader[(String, Option[String]), UserQueuesCache] {
+        override def load(key: (String, Option[String])): UserQueuesCache = {
+          UserQueuesCache(System.currentTimeMillis(), getUserQueuesFromBdp(key._1, key._2))
+        }
+      })
     batchMappingLoadInterval =
       conf.get(KyuubiEbayConf.AUTHENTICATION_BATCH_ACCOUNT_LOAD_ALL_INTERVAL)
     super.initialize(conf)
@@ -108,7 +125,7 @@ class BdpServiceAccountMappingCacheManager(name: String) extends AbstractService
     val loadTask = new Runnable {
       override def run(): Unit = {
         try {
-          val httpGet = new HttpGet(batchMappingLoadEndpoint)
+          val httpGet = new HttpGet(s"$bdpUrl/product/batch/service-account-mappings")
           withHttpResponse(httpGet) { response =>
             val newServiceAccountMappings = new ConcurrentHashMap[String, Set[String]]().asScala
             parseServiceAccountMappings(response).foreach { case (sa, baSet) =>
@@ -130,6 +147,50 @@ class BdpServiceAccountMappingCacheManager(name: String) extends AbstractService
       0,
       batchMappingLoadInterval,
       TimeUnit.MILLISECONDS)
+  }
+
+  def getUserQueues(user: String, clusterOpt: Option[String]): Seq[QueueInfo] = {
+    val queuesCache = bdpUserQueuesCache.get((user, clusterOpt))
+    val currentTime = System.currentTimeMillis()
+    if (currentTime - queuesCache.cacheTime < userQueuesRefreshInterval) {
+      queuesCache.queues
+    } else {
+      val latestUserQueues = getUserQueuesFromBdp(user, clusterOpt)
+      bdpUserQueuesCache.put((user, clusterOpt), UserQueuesCache(currentTime, latestUserQueues))
+      latestUserQueues
+    }
+  }
+
+  private def getUserQueuesFromBdp(user: String, clusterOpt: Option[String]): Seq[QueueInfo] = {
+    val cluster = clusterOpt.getOrElse(bdpDefaultCluster)
+    val httpGet = new HttpGet(s"$bdpUrl/product/queue/user/$cluster/$user")
+    withHttpResponse(httpGet) { response =>
+      parseQueues(response)
+    }
+  }
+
+  private def parseQueues(resp: CloseableHttpResponse): Seq[QueueInfo] = {
+    if (resp == null) throw new KyuubiException(
+      "Fail to do request to get user queues")
+    val code = resp.getStatusLine.getStatusCode
+    val mapper = new ObjectMapper
+    val node = mapper.readTree(resp.getEntity.getContent)
+    if (code >= 300 || code < 200) {
+      if (node.get("error") != null) {
+        throw new KyuubiException(
+          s"Fail to do request to get user queues: ${node.get("error").get("message")}")
+      } else {
+        throw new KyuubiException(s"Fail to do request to get user queues: $code")
+      }
+    }
+
+    val result = node.get("result")
+    (0 until result.size()).map { i =>
+      val mappingNode = result.get(i)
+      val queueName = mappingNode.get("queueName").textValue()
+      val defaultQueue = mappingNode.get("defaultQueue").booleanValue()
+      new QueueInfo(queueName, defaultQueue)
+    }
   }
 }
 

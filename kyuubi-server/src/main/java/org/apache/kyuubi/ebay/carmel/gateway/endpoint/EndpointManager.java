@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kyuubi.carmel.gateway.endpoint;
+package org.apache.kyuubi.ebay.carmel.gateway.endpoint;
 
 import static org.apache.kyuubi.ebay.carmel.gateway.config.CarmelConfig.ConfVars.*;
 
@@ -27,7 +27,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import org.apache.commons.lang.StringUtils;
 import org.apache.kyuubi.ebay.carmel.gateway.config.CarmelConfig;
-import org.apache.kyuubi.ebay.carmel.gateway.endpoint.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

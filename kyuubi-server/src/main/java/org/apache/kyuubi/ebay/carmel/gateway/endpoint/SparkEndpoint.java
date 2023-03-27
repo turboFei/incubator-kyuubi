@@ -15,17 +15,13 @@
  * limitations under the License.
  */
 
-package org.apache.kyuubi.carmel.gateway.endpoint;
+package org.apache.kyuubi.ebay.carmel.gateway.endpoint;
 
 import static org.apache.kyuubi.ebay.carmel.gateway.config.CarmelConfig.ConfVars.*;
 
 import java.net.Socket;
 import org.apache.kyuubi.client.KyuubiSyncThriftClient;
 import org.apache.kyuubi.ebay.carmel.gateway.config.CarmelConfig;
-import org.apache.kyuubi.ebay.carmel.gateway.endpoint.CarmelRuntimeException;
-import org.apache.kyuubi.ebay.carmel.gateway.endpoint.QueueInfo;
-import org.apache.kyuubi.ebay.carmel.gateway.endpoint.ThriftServerInfo;
-import org.apache.kyuubi.ebay.carmel.gateway.endpoint.UserInfo;
 import org.apache.thrift.protocol.TProtocol;
 import org.apache.thrift.transport.*;
 import org.slf4j.Logger;

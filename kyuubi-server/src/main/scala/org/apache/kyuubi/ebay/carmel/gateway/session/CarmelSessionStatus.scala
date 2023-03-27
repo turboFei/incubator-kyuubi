@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kyuubi.carmel.gateway.session
+package org.apache.kyuubi.ebay.carmel.gateway.session
 
 object CarmelSessionStatus extends Enumeration {
   type CarmelSessionStatus = Value

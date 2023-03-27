@@ -15,16 +15,16 @@
  * limitations under the License.
  */
 
-package org.apache.kyuubi.carmel.gateway.session
+package org.apache.kyuubi.ebay.carmel.gateway.session
 
 import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
 
 import scala.collection.JavaConverters._
 
 import org.apache.kyuubi.{KyuubiException, Logging}
-import org.apache.kyuubi.carmel.gateway.endpoint.EndpointManager
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.ebay.carmel.gateway.config.CarmelConfig
+import org.apache.kyuubi.ebay.carmel.gateway.endpoint.EndpointManager
 import org.apache.kyuubi.service.AbstractService
 import org.apache.kyuubi.session.SessionManager
 import org.apache.kyuubi.util.ThreadUtils
@@ -37,8 +37,7 @@ class CarmelEndpointManager(sessionMgr: SessionManager)
     ThreadUtils.newDaemonSingleThreadScheduledExecutor("carmel-session-checker")
 
   override def initialize(conf: KyuubiConf): Unit = {
-    val carmelClusters = conf.get(KyuubiEbayConf.CARMEL_CLUSTER_LIST).map(Option(_))
-    carmelClusters.foreach { clusterOpt =>
+    KyuubiEbayConf.getCarmelClusterOptList(conf).foreach { clusterOpt =>
       val carmelConfig =
         clusterOpt.map(CarmelConfig.getClusterInstance).getOrElse(CarmelConfig.getInstance)
       clusterEndpointManager.put(clusterOpt, new EndpointManager(carmelConfig))

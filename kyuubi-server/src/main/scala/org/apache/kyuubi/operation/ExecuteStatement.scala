@@ -24,8 +24,8 @@ import org.apache.hive.service.rpc.thrift.{TGetOperationStatusResp, TOperationSt
 import org.apache.hive.service.rpc.thrift.TOperationState._
 
 import org.apache.kyuubi.KyuubiSQLException
-import org.apache.kyuubi.carmel.gateway.session.CarmelSessionImpl
 import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.ebay.carmel.gateway.session.CarmelSessionImpl
 import org.apache.kyuubi.metrics.{MetricsConstants, MetricsSystem}
 import org.apache.kyuubi.operation.FetchOrientation.FETCH_NEXT
 import org.apache.kyuubi.operation.log.OperationLog

@@ -26,8 +26,8 @@ import org.apache.thrift.TException
 import org.apache.thrift.transport.TTransportException
 
 import org.apache.kyuubi.{KyuubiSQLException, Utils}
-import org.apache.kyuubi.carmel.gateway.session.CarmelSessionImpl
 import org.apache.kyuubi.config.KyuubiReservedKeys.KYUUBI_OPERATION_HANDLE_KEY
+import org.apache.kyuubi.ebay.carmel.gateway.session.CarmelSessionImpl
 import org.apache.kyuubi.events.{EventBus, KyuubiOperationEvent}
 import org.apache.kyuubi.metrics.MetricsConstants.{OPERATION_FAIL, OPERATION_OPEN, OPERATION_STATE, OPERATION_TOTAL}
 import org.apache.kyuubi.metrics.MetricsSystem

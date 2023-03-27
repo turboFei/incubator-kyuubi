@@ -23,12 +23,13 @@ import scala.collection.JavaConverters._
 
 import org.apache.hive.service.rpc.thrift._
 
-import org.apache.kyuubi.KyuubiSQLException
+import org.apache.kyuubi.{KyuubiSQLException, Utils}
 import org.apache.kyuubi.client.KyuubiSyncThriftClient
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiConf._
 import org.apache.kyuubi.config.KyuubiReservedKeys.{KYUUBI_ENGINE_CREDENTIALS_KEY, KYUUBI_SESSION_HANDLE_KEY, KYUUBI_SESSION_SIGN_PUBLICKEY, KYUUBI_SESSION_USER_SIGN}
 import org.apache.kyuubi.engine.{EngineRef, KyuubiApplicationManager}
+import org.apache.kyuubi.engine.spark.SparkProcessBuilder.YARN_QUEUE
 import org.apache.kyuubi.events.{EventBus, KyuubiSessionEvent}
 import org.apache.kyuubi.ha.client.DiscoveryClientProvider._
 import org.apache.kyuubi.operation.{Operation, OperationHandle}
@@ -57,7 +58,7 @@ class KyuubiSessionImpl(
 
   private[kyuubi] val optimizedConf: Map[String, String] = {
     val queueConf =
-      normalizedConf.get(QUEUE).map(queue => Map("spark.yarn.queue" -> queue)).getOrElse(Map.empty)
+      normalizedConf.get(QUEUE).map(queue => Map(YARN_QUEUE -> queue)).getOrElse(Map.empty)
     val confOverlay = sessionManager.sessionConfAdvisor.getConfOverlay(
       user,
       normalizedConf.asJava)
@@ -75,6 +76,9 @@ class KyuubiSessionImpl(
     case ("kyuubi.engine.pool.size.threshold", _) =>
     case (key, value) => sessionConf.set(key, value)
   }
+
+  // select queue after applying all config into session conf
+  selectQueueIfNeeded()
 
   private lazy val engineCredentials = renewEngineCredentials()
 
@@ -294,6 +298,31 @@ class KyuubiSessionImpl(
           command)
         runOperation(operation)
       case _ => super.executeStatement(statement, confOverlay, runAsync, queryTimeout)
+    }
+  }
+
+  private def selectQueueIfNeeded(): Unit = {
+    if (sessionManager.getConf.get(KyuubiEbayConf.ACCESS_BDP_QUEUE_AUTO_SELECTION)) {
+      if (sessionConf.getOption(YARN_QUEUE).isEmpty) {
+        try {
+          val ignoreQueues =
+            sessionManager.getConf.get(KyuubiEbayConf.ACCESS_BDP_QUEUE_AUTO_SELECTION_IGNORE_LIST)
+          val queues =
+            sessionManager.bdpManager.getUserQueues(user, sessionCluster).filterNot { queue =>
+              ignoreQueues.contains(queue.getName)
+            }
+          if (queues.nonEmpty) {
+            val queue = queues(scala.util.Random.nextInt(queues.size))
+            logSessionInfo(s"Select queue[$queue] for $user/$sessionCluster automatically")
+            sessionConf.set(YARN_QUEUE, queue.getName)
+          }
+        } catch {
+          case e: Throwable =>
+            logSessionInfo(
+              s"Error selecting queues for $user/$sessionCluster automatically: " +
+                Utils.prettyPrint(e))
+        }
+      }
     }
   }
 }

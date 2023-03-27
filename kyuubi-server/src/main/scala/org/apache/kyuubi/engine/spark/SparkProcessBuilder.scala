@@ -300,7 +300,7 @@ object SparkProcessBuilder {
   final val SPARK_JARS = "spark.jars"
   final private val PRINCIPAL = "spark.kerberos.principal"
   final private val KEYTAB = "spark.kerberos.keytab"
-  final private val YARN_QUEUE = "spark.yarn.queue"
+  final val YARN_QUEUE = "spark.yarn.queue"
   // Get the appropriate spark-submit file
   final val SPARK_SUBMIT_FILE = if (Utils.isWindows) "spark-submit.cmd" else "spark-submit"
   final private val SPARK_CONF_DIR = "SPARK_CONF_DIR"

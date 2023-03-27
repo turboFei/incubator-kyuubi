@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kyuubi.carmel.gateway.endpoint;
+package org.apache.kyuubi.ebay.carmel.gateway.endpoint;
 
 import static org.apache.kyuubi.ebay.carmel.gateway.config.CarmelConfig.ConfVars.*;
 import static org.junit.Assert.assertEquals;
@@ -25,7 +25,6 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import java.util.Set;
 import org.apache.kyuubi.ebay.carmel.gateway.config.CarmelConfig;
-import org.apache.kyuubi.ebay.carmel.gateway.endpoint.UserInfo;
 import org.junit.Before;
 import org.junit.Test;
 
