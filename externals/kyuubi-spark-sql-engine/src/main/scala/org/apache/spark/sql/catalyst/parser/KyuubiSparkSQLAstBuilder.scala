@@ -28,7 +28,7 @@ import org.antlr.v4.runtime.tree.{ParseTree, TerminalNode}
 import org.apache.commons.codec.binary.Hex
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
-import org.apache.spark.sql.catalyst.data.{MoveDataCommand, UploadDataStatement}
+import org.apache.spark.sql.catalyst.data.{KyuubiDescribePathCommand, MoveDataCommand, UploadDataStatement}
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.parser.ParserUtils.{checkDuplicateKeys, string, stringWithoutUnescape, withOrigin}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
@@ -370,6 +370,11 @@ class KyuubiSparkSQLAstBuilder extends KyuubiSparkSQLBaseVisitor[AnyRef] {
       toFileName = Option(ctx.destFileName).map(string),
       isOverwrite = ctx.OVERWRITE() != null)
   }
+
+  override def visitKyuubiDescribePath(ctx: KyuubiDescribePathContext): LogicalPlan =
+    withOrigin(ctx) {
+      KyuubiDescribePathCommand(ctx.multipartIdentifier().getText)
+    }
 
   /**
    * Create a String from a string literal context. This supports multiple consecutive string

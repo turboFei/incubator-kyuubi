@@ -287,6 +287,14 @@ object KyuubiEbayConf extends Logging {
       .longConf
       .createWithDefault(100L * 1024 * 1024 * 1024) // 100G
 
+  val KYUUBI_DESCRIBE_PATH_DATA_SOURCES: ConfigEntry[Seq[String]] =
+    buildConf("kyuubi.describe.path.datasource.providers")
+      .doc("The supported datasource providers for KYUUBI DESCRIBE PATH Command.")
+      .internal
+      .stringConf
+      .toSequence()
+      .createWithDefault(Seq("parquet", "avro", "orc"))
+
   val LOG_AGG_ENABLED: ConfigEntry[Boolean] =
     buildConf("kyuubi.log.agg.enabled")
       .internal
