@@ -37,6 +37,7 @@ class TSetIpAddressProcessor[I <: Iface](
     } finally {
       THREAD_LOCAL_USER_NAME.remove()
       THREAD_LOCAL_IP_ADDRESS.remove()
+      PlainSASLHelper.AUTHENTICATION_SUBJECT.remove()
     }
   }
 

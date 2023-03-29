@@ -145,6 +145,7 @@ object HadoopThriftAuthBridgeServer {
           USER_AUTH_MECHANISM.set(mechanismName)
           try {
             if (AuthMethod.PLAIN.getMechanismName.equalsIgnoreCase(mechanismName)) {
+              Option(PlainSASLHelper.getAuthenticationSubject).foreach(endUser = _)
               REMOTE_USER.set(endUser)
               wrapped.process(in, out)
             } else {
@@ -181,6 +182,7 @@ object HadoopThriftAuthBridgeServer {
             REMOTE_USER.remove()
             REMOTE_ADDRESS.remove()
             USER_AUTH_MECHANISM.remove()
+            PlainSASLHelper.AUTHENTICATION_SUBJECT.remove()
           }
 
         case _ => throw new TException(s"Unexpected non-SASL transport ${transport.getClass}")

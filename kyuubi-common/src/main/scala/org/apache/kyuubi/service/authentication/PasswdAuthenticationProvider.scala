@@ -34,4 +34,10 @@ trait PasswdAuthenticationProvider {
    */
   @throws[AuthenticationException]
   def authenticate(user: String, password: String): Unit
+
+  @throws[AuthenticationException]
+  def createAuthenticationSubject(user: String, password: String): String = {
+    authenticate(user, password)
+    user
+  }
 }

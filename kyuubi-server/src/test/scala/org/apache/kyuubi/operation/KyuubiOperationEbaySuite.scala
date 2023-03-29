@@ -36,10 +36,10 @@ import org.scalatest.time.SpanSugar.convertIntToGrainOfTime
 import org.apache.kyuubi.{BatchTestHelper, Utils, WithKyuubiServer}
 import org.apache.kyuubi.client.util.BatchUtils
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
-import org.apache.kyuubi.ebay.{NoopGroupProvider, TagBasedSessionConfAdvisor}
+import org.apache.kyuubi.ebay.{FakeApiKeyAuthenticationProviderImpl, NoopGroupProvider, TagBasedSessionConfAdvisor}
 import org.apache.kyuubi.jdbc.hive.KyuubiConnection
 import org.apache.kyuubi.jdbc.hive.logs.KyuubiEngineLogListener
-import org.apache.kyuubi.service.authentication.KyuubiAuthenticationFactory
+import org.apache.kyuubi.service.authentication.{AuthTypes, KyuubiAuthenticationFactory}
 import org.apache.kyuubi.session.{KyuubiBatchSessionImpl, KyuubiSessionImpl, KyuubiSessionManager}
 
 class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
@@ -54,6 +54,20 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
       .set(KyuubiEbayConf.SESSION_CLUSTER_LIST, Seq("test", "cluster_limit"))
       .set(KyuubiConf.SESSION_CONF_ADVISOR, classOf[TagBasedSessionConfAdvisor].getName)
       .set(KyuubiConf.GROUP_PROVIDER, classOf[NoopGroupProvider].getName)
+      .set(KyuubiConf.AUTHENTICATION_METHOD, Seq(AuthTypes.CUSTOM.toString))
+      .set(
+        KyuubiConf.AUTHENTICATION_CUSTOM_CLASS,
+        classOf[FakeApiKeyAuthenticationProviderImpl].getName)
+  }
+
+  override def beforeAll(): Unit = {
+    super.beforeAll()
+    FakeApiKeyAuthenticationProviderImpl.reset()
+  }
+
+  override def afterAll(): Unit = {
+    super.afterAll()
+    FakeApiKeyAuthenticationProviderImpl.reset()
   }
 
   test("open session with cluster selector") {
@@ -577,5 +591,19 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
         .filter(_.sessionCluster == Some(cluster)).size == sessionNum)
     }
     sessionMgr.allSessions().foreach(_.close())
+  }
+
+  test("HADP-49143: support api key and api secret authentication") {
+    Seq("serviceAccount1", "serviceAccount2").foreach { serviceAccount =>
+      FakeApiKeyAuthenticationProviderImpl.setServiceAccount(serviceAccount)
+      withSessionConf(Map.empty)(Map.empty)(Map(KyuubiEbayConf.SESSION_CLUSTER.key -> "test")) {
+        withJdbcStatement() { statement =>
+          val rs = statement.executeQuery("SELECT session_user()")
+          assert(rs.next())
+          assert(rs.getString(1) === serviceAccount)
+          assert(!rs.next())
+        }
+      }
+    }
   }
 }

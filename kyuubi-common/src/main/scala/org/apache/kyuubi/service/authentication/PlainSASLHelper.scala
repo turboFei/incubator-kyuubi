@@ -66,7 +66,7 @@ object PlainSASLHelper {
       }
       val provider =
         AuthenticationProviderFactory.getAuthenticationProvider(authMethod, conf, isServer)
-      provider.authenticate(username, password)
+      AUTHENTICATION_SUBJECT.set(provider.createAuthenticationSubject(username, password))
       if (ac != null) ac.setAuthorized(true)
     }
   }
@@ -118,4 +118,10 @@ object PlainSASLHelper {
       callBackHandler,
       underlyingTransport)
   }
+
+  final val AUTHENTICATION_SUBJECT = new ThreadLocal[String]() {
+    override protected def initialValue: String = null
+  }
+
+  def getAuthenticationSubject: String = AUTHENTICATION_SUBJECT.get()
 }

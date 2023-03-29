@@ -36,6 +36,14 @@ class KeyStoneAuthenticationProviderImpl(conf: KyuubiConf)
   private val endpoint: String = conf.get(KyuubiEbayConf.AUTHENTICATION_KEYSTONE_ENDPOINT)
 
   override def authenticate(user: String, password: String): Unit = {
+    auth(user, password)
+  }
+
+  override def createAuthenticationSubject(user: String, password: String): String = {
+    auth(user, password)
+  }
+
+  private def auth(user: String, password: String): String = {
     info(s"Using keystone to auth for $user")
     if (user == null || password == null) {
       warn(s"Invalid username or password: $user, $password")
@@ -46,10 +54,12 @@ class KeyStoneAuthenticationProviderImpl(conf: KyuubiConf)
     var retryCnt = 0
     val retrySleepTimeInMs = 200
     var authPass = false
+    var finalUser: String = null
 
     while (retryCnt < maxRetries && !authPass) {
       try {
-        doAuth(user, password)
+        finalUser = doAuth(user, password)
+        info(s"Authentication succeeded for $user, the final user is $finalUser")
         authPass = true
       } catch {
         case aue: AuthenticationException =>
@@ -69,26 +79,29 @@ class KeyStoneAuthenticationProviderImpl(conf: KyuubiConf)
           warn(s"Call keystone api failed with exception, retry $retryCnt/$maxRetries", e)
       }
     }
+    finalUser
   }
 
   @throws[Exception]
-  private def parseAuth(resp: CloseableHttpResponse): Unit = {
+  private def parseAuth(resp: CloseableHttpResponse): String = {
     if (resp == null) throw new AuthenticationException("Fail to do request to keystone")
     val code = resp.getStatusLine.getStatusCode
+    val mapper = new ObjectMapper
+    val node = mapper.readTree(resp.getEntity.getContent)
     if (code >= 300 || code < 200) {
-      val mapper = new ObjectMapper
-      val node = mapper.readTree(resp.getEntity.getContent)
       if (node.get("error") != null) {
         throw new AuthenticationException(
           s"Fail to auth in keystone: ${node.get("error").get("message")}")
       } else {
         throw new AuthenticationException(s"Fail to auth in keystone: $code")
       }
+    } else {
+      node.get("access").get("user").get("username").textValue()
     }
   }
 
   @throws[Exception]
-  private def doAuth(user: String, password: String): Unit = {
+  private def doAuth(user: String, password: String): String = {
     val body = authBodyTemplate.replace("$username", user).replace("$password", password)
     val httpPost = new HttpPost(endpoint)
     httpPost.addHeader("Content-Type", "application/json")

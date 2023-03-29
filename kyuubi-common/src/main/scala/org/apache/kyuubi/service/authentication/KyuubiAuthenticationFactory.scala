@@ -112,7 +112,8 @@ class KyuubiAuthenticationFactory(conf: KyuubiConf, isServer: Boolean = true) ex
   }
 
   def getRemoteUser: Option[String] = {
-    hadoopAuthServer.map(_.getRemoteUser).orElse(Option(TSetIpAddressProcessor.getUserName))
+    hadoopAuthServer.map(_.getRemoteUser).orElse(Option(PlainSASLHelper.getAuthenticationSubject))
+      .orElse(Option(TSetIpAddressProcessor.getUserName))
   }
 
   def getIpAddress: Option[String] = {
