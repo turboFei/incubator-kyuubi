@@ -77,9 +77,6 @@ class KyuubiSessionImpl(
     case (key, value) => sessionConf.set(key, value)
   }
 
-  // select queue after applying all config into session conf
-  selectQueueIfNeeded()
-
   private lazy val engineCredentials = renewEngineCredentials()
 
   lazy val engine: EngineRef =
@@ -130,6 +127,10 @@ class KyuubiSessionImpl(
 
   protected[kyuubi] def openEngineSession(extraEngineLog: Option[OperationLog] = None): Unit =
     handleSessionException {
+
+      /** queue auto selection */
+      queueAutoSelectionIfNeeded()
+
       withDiscoveryClient(sessionConf) { discoveryClient =>
         var openEngineSessionConf =
           optimizedConf ++ Map(KYUUBI_SESSION_HANDLE_KEY -> handle.identifier.toString)
@@ -301,25 +302,27 @@ class KyuubiSessionImpl(
     }
   }
 
-  private def selectQueueIfNeeded(): Unit = {
+  private def queueAutoSelectionIfNeeded(): Unit = {
     if (sessionManager.getConf.get(KyuubiEbayConf.ACCESS_BDP_QUEUE_AUTO_SELECTION)) {
       if (sessionConf.getOption(YARN_QUEUE).isEmpty) {
+        val bdpCluster = sessionConf.get(KyuubiEbayConf.ACCESS_BDP_CLUSTER)
         try {
           val ignoreQueues =
             sessionManager.getConf.get(KyuubiEbayConf.ACCESS_BDP_QUEUE_AUTO_SELECTION_IGNORE_LIST)
           val queues =
-            sessionManager.bdpManager.getUserQueues(user, sessionCluster).filterNot { queue =>
+            sessionManager.bdpManager.getUserQueues(user, bdpCluster).filterNot { queue =>
               ignoreQueues.contains(queue.getName)
             }
           if (queues.nonEmpty) {
             val queue = queues(scala.util.Random.nextInt(queues.size))
-            logSessionInfo(s"Select queue[$queue] for $user/$sessionCluster automatically")
+            logSessionInfo(
+              s"Select queue[$queue] for $user/$sessionCluster/$bdpCluster automatically")
             sessionConf.set(YARN_QUEUE, queue.getName)
           }
         } catch {
           case e: Throwable =>
             logSessionInfo(
-              s"Error selecting queues for $user/$sessionCluster automatically: " +
+              s"Error selecting queues for $user/$sessionCluster/$bdpCluster automatically: " +
                 Utils.prettyPrint(e))
         }
       }

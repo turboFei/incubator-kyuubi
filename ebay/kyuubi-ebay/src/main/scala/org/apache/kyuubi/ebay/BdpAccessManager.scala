@@ -32,8 +32,8 @@ import org.apache.kyuubi.ebay.carmel.gateway.endpoint.QueueInfo
 import org.apache.kyuubi.service.AbstractService
 import org.apache.kyuubi.util.ThreadUtils
 
-class BdpServiceAccountMappingCacheManager(name: String) extends AbstractService(name) {
-  def this() = this(classOf[BdpServiceAccountMappingCacheManager].getSimpleName)
+class BdpAccessManager(name: String) extends AbstractService(name) {
+  def this() = this(classOf[BdpAccessManager].getSimpleName)
 
   case class UserQueuesCache(cacheTime: Long, queues: Seq[QueueInfo])
 
@@ -69,11 +69,11 @@ class BdpServiceAccountMappingCacheManager(name: String) extends AbstractService
   override def start(): Unit = {
     startBatchMappingLoader()
     super.start()
-    BdpServiceAccountMappingCacheManager.bdpServiceAccountMappingCacheMgr = this
+    BdpAccessManager.bdpAccessManager = Some(this)
   }
 
   override def stop(): Unit = {
-    BdpServiceAccountMappingCacheManager.bdpServiceAccountMappingCacheMgr = null
+    BdpAccessManager.bdpAccessManager = None
     super.stop()
     ThreadUtils.shutdown(bdpBatchMappingLoader)
   }
@@ -185,19 +185,23 @@ class BdpServiceAccountMappingCacheManager(name: String) extends AbstractService
     }
 
     val result = node.get("result")
-    (0 until result.size()).map { i =>
+    (0 until result.size()).flatMap { i =>
       val mappingNode = result.get(i)
-      val queueName = mappingNode.get("queueName").textValue()
-      val defaultQueue = mappingNode.get("defaultQueue").booleanValue()
-      new QueueInfo(queueName, defaultQueue)
+      if (mappingNode.get("accessible").asBoolean(false)) {
+        val queueName = mappingNode.get("queueName").textValue()
+        val defaultQueue = mappingNode.get("defaultQueue").booleanValue()
+        Some(new QueueInfo(queueName, defaultQueue))
+      } else {
+        None
+      }
     }
   }
 }
 
-object BdpServiceAccountMappingCacheManager {
-  private var bdpServiceAccountMappingCacheMgr: BdpServiceAccountMappingCacheManager = _
+object BdpAccessManager {
+  private var bdpAccessManager: Option[BdpAccessManager] = None
 
-  def getBdpServiceAccountMappingCacheMgr: Option[BdpServiceAccountMappingCacheManager] = {
-    Option(bdpServiceAccountMappingCacheMgr)
+  def getBdpAccessManager: Option[BdpAccessManager] = {
+    bdpAccessManager
   }
 }

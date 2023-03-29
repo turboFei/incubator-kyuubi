@@ -182,6 +182,12 @@ object KyuubiEbayConf extends Logging {
       .stringConf
       .createWithDefault("https://bdp.vip.ebay.com")
 
+  val ACCESS_BDP_CLUSTER: ConfigEntry[Option[String]] =
+    buildConf("kyuubi.access.bdp.cluster")
+      .internal
+      .serverOnly
+      .fallbackConf(SESSION_CLUSTER)
+
   val AUTHENTICATION_BATCH_ACCOUNT_LOAD_ALL_INTERVAL: ConfigEntry[Long] =
     buildConf("kyuubi.authentication.batch.account.load.all.interval")
       .doc("The interval for loading all service account and batch account mapping.")

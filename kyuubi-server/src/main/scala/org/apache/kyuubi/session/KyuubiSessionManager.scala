@@ -32,7 +32,7 @@ import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiConf._
 import org.apache.kyuubi.config.KyuubiEbayConf._
 import org.apache.kyuubi.credentials.HadoopCredentialsManager
-import org.apache.kyuubi.ebay.{BatchLogAggManager, BdpServiceAccountMappingCacheManager}
+import org.apache.kyuubi.ebay.{BatchLogAggManager, BdpAccessManager}
 import org.apache.kyuubi.ebay.carmel.gateway.session.{CarmelEndpointManager, CarmelSessionImpl}
 import org.apache.kyuubi.engine.KyuubiApplicationManager
 import org.apache.kyuubi.metrics.MetricsConstants._
@@ -72,7 +72,7 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
 
   lazy val (signingPrivateKey, signingPublicKey) = SignUtils.generateKeyPair()
 
-  val bdpManager = new BdpServiceAccountMappingCacheManager()
+  val bdpManager = new BdpAccessManager()
   val carmelEndpointManager = new CarmelEndpointManager(this)
 
   override def initialize(conf: KyuubiConf): Unit = {

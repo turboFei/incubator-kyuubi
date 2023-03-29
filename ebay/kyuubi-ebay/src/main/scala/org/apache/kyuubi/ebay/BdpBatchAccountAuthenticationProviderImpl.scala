@@ -94,14 +94,14 @@ class BdpBatchAccountAuthenticationProviderImpl(conf: KyuubiConf)
 
         val result = node.get("result")
         val batchAccountMapping = (0 until result.size()).map(i => result.get(i).textValue()).toSet
-        BdpServiceAccountMappingCacheManager.getBdpServiceAccountMappingCacheMgr.map(
+        BdpAccessManager.getBdpAccessManager.map(
           _.updateServiceAccountMappingCache(serviceAccount, batchAccountMapping))
         batchAccountMapping
       }
     } catch {
       case e: Throwable =>
         error(s"Error getting service account batch account mapping for $serviceAccount", e)
-        BdpServiceAccountMappingCacheManager.getBdpServiceAccountMappingCacheMgr.map(
+        BdpAccessManager.getBdpAccessManager.map(
           _.getServiceAccountBatchAccountsFromCache(serviceAccount)).getOrElse(throw e)
     }
   }

@@ -25,7 +25,7 @@ import org.apache.kyuubi.config.KyuubiConf
 class BdpBatchAccountAuthenticationProviderImplSuite extends KyuubiFunSuite {
   test("auth") {
     val keystoneAuthenticator = new BdpBatchAccountAuthenticationProviderImpl(KyuubiConf())
-    val bdpMappingService = new BdpServiceAccountMappingCacheManager()
+    val bdpMappingService = new BdpAccessManager()
     bdpMappingService.initialize(KyuubiConf())
     bdpMappingService.start()
     intercept[AuthenticationException](keystoneAuthenticator.authenticate("fwang12", "b_stf"))
