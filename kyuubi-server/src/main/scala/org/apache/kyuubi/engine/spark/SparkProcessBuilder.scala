@@ -124,16 +124,18 @@ class SparkProcessBuilder(
       buffer += s"${convertConfigKey(k)}=$v"
     }
 
-    // if the keytab is specified, PROXY_USER is not supported
-    tryKeytab() match {
-      case None =>
-        setSparkUserName(proxyUser, buffer)
-        buffer += PROXY_USER
-        buffer += proxyUser
-      case Some(name) =>
-        setSparkUserName(name, buffer)
-    }
+    setUpMoveQueue(allConf, buffer)
 
+    setupKerberos(buffer)
+
+    mainResource.foreach { r => buffer += r }
+
+    buffer.toArray
+  }
+
+  override protected def module: String = "kyuubi-spark-sql-engine"
+
+  private def setUpMoveQueue(allConf: Map[String, String], buffer: ArrayBuffer[String]): Unit = {
     if (KyuubiEbayConf.moveQueueEnabled(conf)) {
       // only use init queue if the spark.yarn.queue is specified
       if (allConf.get(YARN_QUEUE).isDefined) {
@@ -143,13 +145,19 @@ class SparkProcessBuilder(
         }
       }
     }
-
-    mainResource.foreach { r => buffer += r }
-
-    buffer.toArray
   }
 
-  override protected def module: String = "kyuubi-spark-sql-engine"
+  protected def setupKerberos(buffer: ArrayBuffer[String]): Unit = {
+    // if the keytab is specified, PROXY_USER is not supported
+    tryKeytab() match {
+      case None =>
+        setSparkUserName(proxyUser, buffer)
+        buffer += PROXY_USER
+        buffer += proxyUser
+      case Some(name) =>
+        setSparkUserName(name, buffer)
+    }
+  }
 
   private def tryKeytab(): Option[String] = {
     val principal = conf.getOption(PRINCIPAL)
