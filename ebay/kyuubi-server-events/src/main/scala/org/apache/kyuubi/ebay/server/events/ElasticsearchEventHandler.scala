@@ -58,7 +58,7 @@ class ElasticsearchEventHandler(conf: KyuubiConf) extends EventHandler[KyuubiEve
   }
 
   override def apply(event: KyuubiEvent): Unit = {
-    val eventDoc = EventDoc(event)
+    val eventDoc = EventDoc(event, conf)
     ElasticsearchUtils.createDoc(getEventDocIndex(eventDoc), eventDoc.docId, eventDoc.toJson)
   }
 

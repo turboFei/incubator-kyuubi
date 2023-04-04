@@ -24,6 +24,9 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.apache.commons.lang3.time.FastDateFormat
 
+import org.apache.kyuubi.Utils
+import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.KyuubiConf.SERVER_SECRET_REDACTION_PATTERN
 import org.apache.kyuubi.ebay.server.events.doc.EventDoc.{dateFormat, indexDelimiter}
 import org.apache.kyuubi.events.{KyuubiEvent, KyuubiOperationEvent, KyuubiServerInfoEvent, KyuubiSessionEvent}
 
@@ -55,7 +58,15 @@ object EventDoc {
     }.getOrElse("")
   }
 
-  def apply(event: KyuubiEvent): EventDoc = {
+  private def mapToString(conf: KyuubiConf, map: Map[String, String]): String = {
+    val redactionPattern = conf.get(SERVER_SECRET_REDACTION_PATTERN)
+    val newMap = map.map { case (key, value) =>
+      Utils.redact(redactionPattern, Seq((key, value))).head
+    }
+    mapper.writeValueAsString(newMap)
+  }
+
+  def apply(event: KyuubiEvent, conf: KyuubiConf = KyuubiConf()): EventDoc = {
     event match {
       case e: KyuubiServerInfoEvent =>
         ServerEventDoc(
@@ -64,12 +75,12 @@ object EventDoc {
           e.eventTime,
           e.state,
           e.serverIP,
-          mapper.writeValueAsString(e.serverConf),
-          mapper.writeValueAsString(e.serverEnv),
+          mapToString(conf, e.serverConf),
+          mapToString(conf, e.serverEnv),
           e.BUILD_USER,
           e.BUILD_DATE,
           e.REPO_URL,
-          mapper.writeValueAsString(e.VERSION_INFO),
+          mapToString(conf, e.VERSION_INFO),
           e.eventType)
       case e: KyuubiSessionEvent =>
         SessionEventDoc(
@@ -80,7 +91,7 @@ object EventDoc {
           e.user,
           e.clientIP,
           e.serverIP,
-          mapper.writeValueAsString(e.conf),
+          mapToString(conf, e.conf),
           e.eventTime,
           e.startTime,
           e.sessionCluster,
