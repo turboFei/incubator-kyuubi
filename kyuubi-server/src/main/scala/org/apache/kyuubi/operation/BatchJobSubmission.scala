@@ -215,10 +215,16 @@ class BatchJobSubmission(
               _applicationInfo = currentApplicationInfo
               _applicationInfo.map(_.id) match {
                 case Some(null) =>
+                  require(
+                    session.reserveMetadata,
+                    "batch metadata is not reserved and does not support recovery.")
                   submitAndMonitorBatchJob()
                 case Some(appId) =>
                   monitorBatchJob(appId)
                 case None =>
+                  require(
+                    session.reserveMetadata,
+                    "batch metadata is not reserved and does not support recovery.")
                   submitAndMonitorBatchJob()
               }
             } else {

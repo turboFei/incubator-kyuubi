@@ -25,7 +25,7 @@ import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.apache.commons.lang3.time.FastDateFormat
 
 import org.apache.kyuubi.Utils
-import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiConf.SERVER_SECRET_REDACTION_PATTERN
 import org.apache.kyuubi.ebay.server.events.doc.EventDoc.{dateFormat, indexDelimiter}
 import org.apache.kyuubi.events.{KyuubiEvent, KyuubiOperationEvent, KyuubiServerInfoEvent, KyuubiSessionEvent}
@@ -58,7 +58,7 @@ object EventDoc {
     }.getOrElse("")
   }
 
-  private def mapToString(conf: KyuubiConf, map: Map[String, String]): String = {
+  private def mapToRedactedString(conf: KyuubiConf, map: Map[String, String]): String = {
     val redactionPattern = conf.get(SERVER_SECRET_REDACTION_PATTERN)
     val newMap = map.map { case (key, value) =>
       Utils.redact(redactionPattern, Seq((key, value))).head
@@ -75,14 +75,22 @@ object EventDoc {
           e.eventTime,
           e.state,
           e.serverIP,
-          mapToString(conf, e.serverConf),
-          mapToString(conf, e.serverEnv),
+          mapToRedactedString(conf, e.serverConf),
+          mapToRedactedString(conf, e.serverEnv),
           e.BUILD_USER,
           e.BUILD_DATE,
           e.REPO_URL,
-          mapToString(conf, e.VERSION_INFO),
+          mapToRedactedString(conf, e.VERSION_INFO),
           e.eventType)
       case e: KyuubiSessionEvent =>
+        val reserveMetadata = e.conf.getOrElse(
+          KyuubiEbayConf.SESSION_METADATA_RESERVE.key,
+          KyuubiEbayConf.SESSION_METADATA_RESERVE.defaultValStr).toBoolean
+        val sessionConf = if (reserveMetadata) {
+          e.conf
+        } else {
+          Map(KyuubiEbayConf.SESSION_METADATA_RESERVE.key -> "false")
+        }
         SessionEventDoc(
           e.sessionId,
           e.clientVersion,
@@ -91,7 +99,7 @@ object EventDoc {
           e.user,
           e.clientIP,
           e.serverIP,
-          mapToString(conf, e.conf),
+          mapToRedactedString(conf, sessionConf),
           e.eventTime,
           e.startTime,
           e.sessionCluster,

@@ -72,6 +72,10 @@ class KyuubiBatchSessionImpl(
   override val sessionIdleTimeoutThreshold: Long =
     sessionManager.getConf.get(KyuubiConf.BATCH_SESSION_IDLE_TIMEOUT)
 
+  private[kyuubi] val reserveMetadata: Boolean = batchRequest.getConf.getOrDefault(
+    KyuubiEbayConf.SESSION_METADATA_RESERVE.key,
+    KyuubiEbayConf.SESSION_METADATA_RESERVE.defaultValStr).toBoolean
+
   // TODO: Support batch conf advisor
   override val normalizedConf: Map[String, String] = {
     sessionConf.getBatchConf(batchRequest.getBatchType) ++
@@ -133,7 +137,7 @@ class KyuubiBatchSessionImpl(
     traceMetricsOnOpen()
 
     if (recoveryMetadata.isEmpty) {
-      val metaData = Metadata(
+      var metaData = Metadata(
         identifier = handle.identifier.toString,
         sessionType = sessionType,
         realUser = realUser,
@@ -150,6 +154,12 @@ class KyuubiBatchSessionImpl(
         engineType = batchRequest.getBatchType,
         cluster = sessionCluster,
         clusterManager = batchJobSubmissionOp.builder.clusterManager())
+
+      if (!reserveMetadata) {
+        metaData = metaData.copy(
+          requestConf = Map(KyuubiEbayConf.SESSION_METADATA_RESERVE.key -> "false"),
+          requestArgs = Seq.empty)
+      }
 
       // there is a chance that operation failed w/ duplicated key error
       sessionManager.insertMetadata(metaData)

@@ -258,6 +258,14 @@ object KyuubiEbayConf extends Logging {
       .stringConf
       .createWithDefault("spark_hbase")
 
+  val SESSION_METADATA_RESERVE: ConfigEntry[Boolean] =
+    buildConf("kyuubi.session.metadata.reserve")
+      .serverOnly
+      .doc("Whether to reserve the metadata of session in server side." +
+        " If not, batch recovery is not supported for batch session.")
+      .booleanConf
+      .createWithDefault(true)
+
   val DATA_UPLOAD_ENABLED: ConfigEntry[Boolean] =
     buildConf("kyuubi.data.upload.enabled")
       .doc("Enable data upload")

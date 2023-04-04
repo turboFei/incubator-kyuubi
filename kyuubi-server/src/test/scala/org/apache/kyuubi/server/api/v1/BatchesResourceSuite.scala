@@ -35,7 +35,7 @@ import org.apache.kyuubi.{BatchTestHelper, KyuubiFunSuite, RestFrontendTestHelpe
 import org.apache.kyuubi.client.api.v1.dto._
 import org.apache.kyuubi.client.util.BatchUtils
 import org.apache.kyuubi.client.util.BatchUtils._
-import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiConf._
 import org.apache.kyuubi.engine.{ApplicationInfo, KyuubiApplicationManager}
 import org.apache.kyuubi.engine.spark.SparkBatchProcessBuilder
@@ -715,5 +715,55 @@ class BatchesResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper wi
     val batchId = sessionHandleRegex.findFirstMatchIn(e.getMessage).get.group(0)
       .replaceAll("\\[", "").replaceAll("\\]", "")
     assert(sessionManager.getBatchMetadata(batchId).state == "CANCELED")
+  }
+
+  test("batch sessions recovery with metadata not reserved") {
+    val sessionManager = fe.be.sessionManager.asInstanceOf[KyuubiSessionManager]
+    val kyuubiInstance = fe.connectionUrl
+
+    assert(sessionManager.getOpenSessionCount == 0)
+    val batchId1 = UUID.randomUUID().toString
+
+    val batchMetadata = Metadata(
+      identifier = batchId1,
+      sessionType = SessionType.BATCH,
+      realUser = "kyuubi",
+      username = "kyuubi",
+      ipAddress = "localhost",
+      kyuubiInstance = kyuubiInstance,
+      state = OperationState.PENDING.toString,
+      resource = sparkBatchTestResource.get,
+      className = sparkBatchTestMainClass,
+      requestName = "PENDING_RECOVERY",
+      requestConf = Map(KyuubiEbayConf.SESSION_METADATA_RESERVE.key -> "false"),
+      requestArgs = Seq.empty,
+      createTime = System.currentTimeMillis(),
+      engineType = "SPARK")
+
+    sessionManager.insertMetadata(batchMetadata)
+    assert(sessionManager.getBatchFromMetadataStore(batchId1).getState.equals("PENDING"))
+
+    val restFe = fe.asInstanceOf[KyuubiRestFrontendService]
+    restFe.recoverBatchSessions()
+    assert(sessionManager.getOpenSessionCount == 1)
+
+    val sessionHandle1 = SessionHandle.fromUUID(batchId1)
+    val session1 = sessionManager.getSession(sessionHandle1).asInstanceOf[KyuubiBatchSessionImpl]
+    assert(session1.createTime === batchMetadata.createTime)
+
+    eventually(timeout(10.seconds)) {
+      assert(session1.batchJobSubmissionOp.getStatus.state === OperationState.ERROR)
+      assert(!session1.batchJobSubmissionOp.builder.processLaunched)
+    }
+
+    assert(sessionManager.getBatchesFromMetadataStore(
+      "SPARK",
+      null,
+      null,
+      null,
+      0,
+      0,
+      0,
+      Int.MaxValue).size == 1)
   }
 }
