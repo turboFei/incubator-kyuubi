@@ -41,7 +41,7 @@ import org.apache.kyuubi.client.util.BatchUtils
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiConf.FrontendProtocols
 import org.apache.kyuubi.config.KyuubiConf.FrontendProtocols.FrontendProtocol
-import org.apache.kyuubi.ebay.{FakeApiKeyAuthenticationProviderImpl, NoopGroupProvider, TagBasedSessionConfAdvisor}
+import org.apache.kyuubi.ebay.{FakeApiKeyAuthenticationProviderImpl, TagBasedSessionConfAdvisor}
 import org.apache.kyuubi.jdbc.hive.KyuubiConnection
 import org.apache.kyuubi.jdbc.hive.logs.KyuubiEngineLogListener
 import org.apache.kyuubi.server.http.authentication.AuthenticationHandler.AUTHORIZATION_HEADER
@@ -65,7 +65,6 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
       .set(KyuubiEbayConf.OPERATION_INTERCEPT_ENABLED, true)
       .set(KyuubiEbayConf.SESSION_CLUSTER_LIST, Seq("test", "cluster_limit"))
       .set(KyuubiConf.SESSION_CONF_ADVISOR, classOf[TagBasedSessionConfAdvisor].getName)
-      .set(KyuubiConf.GROUP_PROVIDER, classOf[NoopGroupProvider].getName)
       .set(KyuubiConf.AUTHENTICATION_METHOD, Seq(AuthTypes.CUSTOM.toString))
       .set(
         KyuubiConf.AUTHENTICATION_CUSTOM_CLASS,
