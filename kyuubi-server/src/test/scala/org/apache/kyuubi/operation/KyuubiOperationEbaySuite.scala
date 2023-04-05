@@ -22,7 +22,9 @@ import java.net.URI
 import java.nio.file.Files
 import java.sql.SQLException
 import java.util
-import java.util.{Collections, Properties, UUID}
+import java.util.{Base64, Collections, Properties, UUID}
+import javax.ws.rs.client.Entity
+import javax.ws.rs.core.{GenericType, MediaType}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
@@ -33,20 +35,30 @@ import org.apache.hive.service.rpc.thrift.{TDownloadDataReq, TExecuteStatementRe
 import org.scalatest.concurrent.PatienceConfiguration.Timeout
 import org.scalatest.time.SpanSugar.convertIntToGrainOfTime
 
-import org.apache.kyuubi.{BatchTestHelper, Utils, WithKyuubiServer}
+import org.apache.kyuubi.{BatchTestHelper, RestFrontendTestHelper, Utils, WithKyuubiServer}
+import org.apache.kyuubi.client.api.v1.dto.{SessionData, SessionHandle, SessionOpenRequest}
 import org.apache.kyuubi.client.util.BatchUtils
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
+import org.apache.kyuubi.config.KyuubiConf.FrontendProtocols
+import org.apache.kyuubi.config.KyuubiConf.FrontendProtocols.FrontendProtocol
 import org.apache.kyuubi.ebay.{FakeApiKeyAuthenticationProviderImpl, NoopGroupProvider, TagBasedSessionConfAdvisor}
 import org.apache.kyuubi.jdbc.hive.KyuubiConnection
 import org.apache.kyuubi.jdbc.hive.logs.KyuubiEngineLogListener
+import org.apache.kyuubi.server.http.authentication.AuthenticationHandler.AUTHORIZATION_HEADER
 import org.apache.kyuubi.service.authentication.{AuthTypes, KyuubiAuthenticationFactory}
 import org.apache.kyuubi.session.{KyuubiBatchSessionImpl, KyuubiSessionImpl, KyuubiSessionManager}
 
 class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
-  with BatchTestHelper {
+  with BatchTestHelper with RestFrontendTestHelper {
+  override protected val frontendProtocols: Seq[FrontendProtocol] =
+    FrontendProtocols.REST :: FrontendProtocols.THRIFT_BINARY :: Nil
+
+  override protected def getJdbcUrl: String = {
+    s"jdbc:hive2://${server.frontendServices.last.connectionUrl}/;"
+  }
   override protected def jdbcUrl: String = getJdbcUrl
 
-  override protected val conf: KyuubiConf = {
+  override protected lazy val conf: KyuubiConf = {
     KyuubiConf().set(KyuubiConf.ENGINE_SHARE_LEVEL, "connection")
       .set(KyuubiEbayConf.SESSION_CLUSTER_MODE_ENABLED, true)
       .set(KyuubiEbayConf.SESSION_CLUSTER, "invalid-cluster")
@@ -58,15 +70,16 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
       .set(
         KyuubiConf.AUTHENTICATION_CUSTOM_CLASS,
         classOf[FakeApiKeyAuthenticationProviderImpl].getName)
+      .set("kyuubi.server.redaction.regex", "(?i)secret|pass|token|access[.]key")
   }
 
-  override def beforeAll(): Unit = {
-    super.beforeAll()
+  override protected def beforeEach(): Unit = {
     FakeApiKeyAuthenticationProviderImpl.reset()
+    super.beforeEach()
   }
 
-  override def afterAll(): Unit = {
-    super.afterAll()
+  override protected def afterEach(): Unit = {
+    super.afterEach()
     FakeApiKeyAuthenticationProviderImpl.reset()
   }
 
@@ -605,5 +618,41 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
         }
       }
     }
+  }
+
+  test("HADP-49286: redact the session conf in AdminResource") {
+    val adminUser = Utils.currentUser
+    val encodeAuthorization = new String(
+      Base64.getEncoder.encode(
+        s"$adminUser:pass".getBytes()),
+      "UTF-8")
+
+    val requestObj = new SessionOpenRequest(Map(
+      "kyuubi.session.cluster" -> "test",
+      "spark.redaction.regex" -> "ebay",
+      "kyuubi.token" -> "token",
+      "kyuubi.ebay" -> "engineToken").asJava)
+    var response = webTarget.path("api/v1/sessions")
+      .request(MediaType.APPLICATION_JSON_TYPE)
+      .header(AUTHORIZATION_HEADER, s"BASIC $encodeAuthorization")
+      .post(Entity.entity(requestObj, MediaType.APPLICATION_JSON_TYPE))
+
+    val sessionHandle = response.readEntity(classOf[SessionHandle]).getIdentifier.toString
+
+    // get session list
+    val response2 = webTarget.path("api/v1/admin/sessions").request()
+      .header(AUTHORIZATION_HEADER, s"BASIC $encodeAuthorization")
+      .get()
+    assert(200 == response2.getStatus)
+    val sessions = response2.readEntity(new GenericType[Seq[SessionData]]() {})
+    val session = sessions.find(_.getIdentifier === sessionHandle).get
+    assert(session.getConf.get("kyuubi.token") === Utils.REDACTION_REPLACEMENT_TEXT)
+    assert(session.getConf.get("kyuubi.ebay") === Utils.REDACTION_REPLACEMENT_TEXT)
+
+    // close an opened session
+    response = webTarget.path(s"api/v1/admin/sessions/$sessionHandle").request()
+      .header(AUTHORIZATION_HEADER, s"BASIC $encodeAuthorization")
+      .delete()
+    assert(200 == response.getStatus)
   }
 }

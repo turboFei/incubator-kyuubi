@@ -33,7 +33,7 @@ object ApiUtils {
       session.handle.identifier.toString,
       session.user,
       session.ipAddress,
-      session.conf.asJava,
+      org.apache.kyuubi.ebay.EbayUtils.redact(session.sessionManager.getConf, session.conf).asJava,
       session.createTime,
       session.lastAccessTime - session.createTime,
       session.getNoOperationTime,

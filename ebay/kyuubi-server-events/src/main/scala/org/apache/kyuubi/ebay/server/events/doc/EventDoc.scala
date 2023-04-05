@@ -24,9 +24,8 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.apache.commons.lang3.time.FastDateFormat
 
-import org.apache.kyuubi.Utils
-import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
-import org.apache.kyuubi.config.KyuubiConf.SERVER_SECRET_REDACTION_PATTERN
+import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.ebay.EbayUtils
 import org.apache.kyuubi.ebay.server.events.doc.EventDoc.{dateFormat, indexDelimiter}
 import org.apache.kyuubi.events.{KyuubiEvent, KyuubiOperationEvent, KyuubiServerInfoEvent, KyuubiSessionEvent}
 
@@ -59,11 +58,7 @@ object EventDoc {
   }
 
   private def mapToRedactedString(conf: KyuubiConf, map: Map[String, String]): String = {
-    val redactionPattern = conf.get(SERVER_SECRET_REDACTION_PATTERN)
-    val newMap = map.map { case (key, value) =>
-      Utils.redact(redactionPattern, Seq((key, value))).head
-    }
-    mapper.writeValueAsString(newMap)
+    mapper.writeValueAsString(EbayUtils.redact(conf, map))
   }
 
   def apply(event: KyuubiEvent, conf: KyuubiConf = KyuubiConf()): EventDoc = {
@@ -83,14 +78,6 @@ object EventDoc {
           mapToRedactedString(conf, e.VERSION_INFO),
           e.eventType)
       case e: KyuubiSessionEvent =>
-        val reserveMetadata = e.conf.getOrElse(
-          KyuubiEbayConf.SESSION_METADATA_RESERVE.key,
-          KyuubiEbayConf.SESSION_METADATA_RESERVE.defaultValStr).toBoolean
-        val sessionConf = if (reserveMetadata) {
-          e.conf
-        } else {
-          Map(KyuubiEbayConf.SESSION_METADATA_RESERVE.key -> "false")
-        }
         SessionEventDoc(
           e.sessionId,
           e.clientVersion,
@@ -99,7 +86,7 @@ object EventDoc {
           e.user,
           e.clientIP,
           e.serverIP,
-          mapToRedactedString(conf, sessionConf),
+          mapToRedactedString(conf, e.conf),
           e.eventTime,
           e.startTime,
           e.sessionCluster,
