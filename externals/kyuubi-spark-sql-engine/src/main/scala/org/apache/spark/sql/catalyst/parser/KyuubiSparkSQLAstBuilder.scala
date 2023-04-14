@@ -373,7 +373,7 @@ class KyuubiSparkSQLAstBuilder extends KyuubiSparkSQLBaseVisitor[AnyRef] {
 
   override def visitKyuubiDescribePath(ctx: KyuubiDescribePathContext): LogicalPlan =
     withOrigin(ctx) {
-      KyuubiDescribePathCommand(ctx.multipartIdentifier().getText)
+      KyuubiDescribePathCommand(ctx.multipartIdentifier().getText, ctx.EXTENDED != null)
     }
 
   /**

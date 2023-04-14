@@ -44,20 +44,46 @@ class SparkOperationEbaySuite extends WithSparkSQLEngine with HiveJDBCTestHelper
                |LOCATION '$path'
                |""".stripMargin)
           spark.sql(s"INSERT INTO $table values(1)")
-          checkAnswer(s"KYUUBI DESCRIBE PATH $dsProvider.`$path`", Seq(Row("id", "int", "")))
-          checkAnswer(s"KYUUBI DESCRIBE PATH `$path`", Seq(Row("id", "int", "")))
+          checkAnswer(s"KYUUBI DESCRIBE PATH $dsProvider.`$path`", Seq(Row("id", "int", null)))
+          checkAnswer(s"KYUUBI DESCRIBE PATH `$path`", Seq(Row("id", "int", null)))
+          checkAnswer(
+            s"KYUUBI DESCRIBE PATH EXTENDED `$path`",
+            Seq(
+              Row("id", "int", null),
+              Row("", "", ""),
+              Row("# Detailed Path Information", "", ""),
+              Row("Datasource Provider", dsProvider, "")))
 
           var rs = statement.executeQuery(s"KYUUBI DESCRIBE PATH $dsProvider.`$path`")
           assert(rs.next())
           assert(rs.getString(1) == "id")
           assert(rs.getString(2) == "int")
-          assert(rs.getString(3) == "")
+          assert(rs.getString(3) == null)
           assert(!rs.next())
 
           rs = statement.executeQuery(s"KYUUBI DESCRIBE PATH `$path`")
           assert(rs.next())
           assert(rs.getString(1) == "id")
           assert(rs.getString(2) == "int")
+          assert(rs.getString(3) == null)
+          assert(!rs.next())
+
+          rs = statement.executeQuery(s"KYUUBI DESCRIBE PATH EXTENDED `$path`")
+          assert(rs.next())
+          assert(rs.getString(1) == "id")
+          assert(rs.getString(2) == "int")
+          assert(rs.getString(3) == null)
+          assert(rs.next())
+          assert(rs.getString(1) == "")
+          assert(rs.getString(2) == "")
+          assert(rs.getString(3) == "")
+          assert(rs.next())
+          assert(rs.getString(1) == "# Detailed Path Information")
+          assert(rs.getString(2) == "")
+          assert(rs.getString(3) == "")
+          assert(rs.next())
+          assert(rs.getString(1) == "Datasource Provider")
+          assert(rs.getString(2) == dsProvider)
           assert(rs.getString(3) == "")
           assert(!rs.next())
         } finally {

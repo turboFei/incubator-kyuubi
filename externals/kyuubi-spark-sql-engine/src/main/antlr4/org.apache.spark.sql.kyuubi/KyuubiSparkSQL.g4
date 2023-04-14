@@ -54,7 +54,7 @@ statement
         multipartIdentifier partitionSpec? optionSpec?              #uploadData
     | MOVE DATA INPATH path=STRING OVERWRITE? INTO
         destDir=STRING (destFileName=STRING)?                       #moveData
-    | KYUUBI DESCRIBE PATH multipartIdentifier                      #kyuubiDescribePath
+    | KYUUBI DESCRIBE PATH EXTENDED? multipartIdentifier            #kyuubiDescribePath
     | .*?                                                           #passThrough
     ;
 
@@ -126,6 +126,7 @@ nonReserved
     : AND
     | DATA
     | DESCRIBE
+    | EXTENDED
     | FALSE
     | INPATH
     | INTERVAL
@@ -147,6 +148,7 @@ nonReserved
 AND: 'AND';
 DATA: 'DATA';
 DESCRIBE: 'DESCRIBE';
+EXTENDED: 'EXTENDED';
 FALSE: 'FALSE';
 INPATH: 'INPATH';
 INTERVAL: 'INTERVAL';

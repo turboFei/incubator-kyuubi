@@ -19,10 +19,10 @@ package org.apache.spark.sql.catalyst.data
 
 import java.util.Locale
 
+import scala.collection.mutable.ArrayBuffer
+
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
-import org.apache.spark.sql.catalyst.expressions.Attribute
-import org.apache.spark.sql.catalyst.plans.DescribeCommandSchema
-import org.apache.spark.sql.execution.command.{DDLUtils, RunnableCommand}
+import org.apache.spark.sql.execution.command.{DDLUtils, DescribeCommandBase}
 import org.apache.spark.sql.execution.datasources.{DataSource, FileFormat, LogicalRelation}
 
 import org.apache.kyuubi.{KyuubiSQLException, Logging}
@@ -32,13 +32,14 @@ import org.apache.kyuubi.engine.spark.SparkSQLEngine
 /**
  * A KYUUBI DESCRIBE PATH command, as parsed from SQL
  */
-case class KyuubiDescribePathCommand(identifier: String) extends RunnableCommand with Logging {
+case class KyuubiDescribePathCommand(identifier: String, isExtended: Boolean)
+  extends DescribeCommandBase with Logging {
   private val datasourceProviderList =
     SparkSQLEngine.kyuubiConf.get(KyuubiEbayConf.KYUUBI_DESCRIBE_PATH_DATA_SOURCES)
 
-  override val output: Seq[Attribute] = DescribeCommandSchema.describeTableAttributes()
-
   override def run(sparkSession: SparkSession): Seq[Row] = {
+    val result = new ArrayBuffer[Row]()
+
     val (datasourceProvider, path) =
       sparkSession.sessionState.sqlParser.parseMultipartIdentifier(identifier) match {
         case Seq(_provider, _path) => Some(_provider) -> _path
@@ -46,20 +47,35 @@ case class KyuubiDescribePathCommand(identifier: String) extends RunnableCommand
         case _ => throw KyuubiSQLException("Invalid identifier as it has more than 2 name parts.")
       }
 
-    inferPathLogicalRelation(sparkSession, datasourceProvider, path).schema.fields.map { field =>
-      Row(field.name, field.dataType.simpleString, field.getComment().getOrElse(""))
+    val (inferredRelation, relationProvider) =
+      inferPathLogicalRelation(sparkSession, datasourceProvider, path)
+    describeSchema(inferredRelation.schema, result, false)
+    if (isExtended) {
+      describeFormattedPathInfo(result, relationProvider)
     }
+    result
+  }
+
+  private def describeFormattedPathInfo(buffer: ArrayBuffer[Row], provider: String): Unit = {
+    append(buffer, "", "", "")
+    append(buffer, "# Detailed Path Information", "", "")
+    append(buffer, "Datasource Provider", provider, "")
   }
 
   private def inferPathLogicalRelation(
       sparkSession: SparkSession,
       datasourceProvider: Option[String],
-      path: String): LogicalRelation = {
-    datasourceProvider.map(provider => getLogicalRelation(sparkSession, provider, path)).getOrElse {
+      path: String): (LogicalRelation, String) = {
+    datasourceProvider.map(provider => {
+      getLogicalRelation(sparkSession, provider, path) -> provider
+    }).getOrElse {
       var relation: LogicalRelation = null
+      var relationProvider: String = null
+
       for (provider <- datasourceProviderList if relation == null) {
         try {
           relation = getLogicalRelation(sparkSession, provider, path)
+          relationProvider = provider
         } catch {
           case e: Throwable =>
             logWarning(s"Error inferring the datasource relation for `$path` with $provider", e)
@@ -70,7 +86,7 @@ case class KyuubiDescribePathCommand(identifier: String) extends RunnableCommand
           s"Failed to infer the datasource relation for `$path` with datasource" +
             s" providers[${datasourceProviderList.mkString("(", ",", ")")}].")
       }
-      relation
+      relation -> relationProvider
     }
   }
 
