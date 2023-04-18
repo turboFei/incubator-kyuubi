@@ -20,8 +20,9 @@ package org.apache.kyuubi.server.api
 import scala.collection.JavaConverters._
 
 import org.apache.kyuubi.Utils
-import org.apache.kyuubi.client.api.v1.dto.{OperationData, SessionData}
+import org.apache.kyuubi.client.api.v1.dto.{OperationData, ServerData, SessionData}
 import org.apache.kyuubi.events.KyuubiOperationEvent
+import org.apache.kyuubi.ha.client.ServiceNodeInfo
 import org.apache.kyuubi.operation.KyuubiOperation
 import org.apache.kyuubi.session.KyuubiSession
 
@@ -61,5 +62,16 @@ object ApiUtils {
       operation.getSession.asInstanceOf[KyuubiSession].connectionUrl,
       operation.getSession.asInstanceOf[KyuubiSession].sessionCluster.getOrElse(""),
       operation.getSession.asInstanceOf[KyuubiSession].sessionQueue.getOrElse(""))
+  }
+
+  def serverData(nodeInfo: ServiceNodeInfo): ServerData = {
+    new ServerData(
+      nodeInfo.nodeName,
+      nodeInfo.namespace,
+      nodeInfo.instance,
+      nodeInfo.host,
+      nodeInfo.port,
+      nodeInfo.attributes.asJava,
+      "Running")
   }
 }
