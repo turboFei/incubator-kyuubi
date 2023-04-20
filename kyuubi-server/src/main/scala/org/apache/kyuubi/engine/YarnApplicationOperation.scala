@@ -35,8 +35,11 @@ import org.apache.kyuubi.util.KyuubiHadoopUtils
 class YarnApplicationOperation extends ApplicationOperation with Logging {
 
   private val yarnClients = new ConcurrentHashMap[Option[String], YarnClient]()
+  private var submitTimeout: Long = _
 
   override def initialize(conf: KyuubiConf): Unit = {
+    submitTimeout = conf.get(KyuubiConf.ENGINE_SUBMIT_TIMEOUT)
+
     val clusterOptList = KyuubiEbayConf.getNonCarmelClusterOptList(conf)
 
     clusterOptList.foreach { clusterOpt =>
@@ -95,7 +98,20 @@ class YarnApplicationOperation extends ApplicationOperation with Logging {
       val reports = yarnClient.getApplications(null, null, Set(tag).asJava)
       if (reports.isEmpty) {
         debug(s"Application with tag $tag not found")
-        ApplicationInfo(id = null, name = null, state = ApplicationState.NOT_FOUND)
+        submitTime match {
+          case Some(_submitTime) =>
+            val elapsedTime = System.currentTimeMillis - _submitTime
+            if (elapsedTime > submitTimeout) {
+              error(s"Can't find target yarn application by tag: $tag, " +
+                s"elapsed time: ${elapsedTime}ms exceeds ${submitTimeout}ms.")
+              ApplicationInfo.NOT_FOUND
+            } else {
+              warn("Wait for yarn application to be submitted, " +
+                s"elapsed time: ${elapsedTime}ms, return UNKNOWN status")
+              ApplicationInfo.UNKNOWN
+            }
+          case _ => ApplicationInfo.NOT_FOUND
+        }
       } else {
         val report = reports.get(0)
         val info = ApplicationInfo(
