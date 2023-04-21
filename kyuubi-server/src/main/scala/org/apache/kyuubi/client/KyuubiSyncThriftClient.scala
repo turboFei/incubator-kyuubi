@@ -137,14 +137,11 @@ class KyuubiSyncThriftClient(
   /**
    * Lock every rpc call to send them sequentially
    */
-  private def withLockAcquired[T](block: => T): T = {
-    try {
-      lock.lock()
-      if (!protocol.getTransport.isOpen) {
-        throw KyuubiSQLException.connectionDoesNotExist()
-      }
-      block
-    } finally lock.unlock()
+  private def withLockAcquired[T](block: => T): T = Utils.withLockRequired(lock) {
+    if (!protocol.getTransport.isOpen) {
+      throw KyuubiSQLException.connectionDoesNotExist()
+    }
+    block
   }
 
   private def withLockAcquiredAsyncRequest[T](block: => T): T = withLockAcquired {
