@@ -117,7 +117,7 @@ public class ZKThriftDiscovery implements ThriftDiscovery {
         }
       }
     } catch (Exception e) {
-      LOG.error("error when get thrift server data from zk node:{}", zkNodeName);
+      LOG.error("error when get thrift server data from zk node:" + zkNodeName, e);
     }
     return serverInfo;
   }
