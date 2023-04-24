@@ -28,7 +28,8 @@ class SparkOperationEbaySuite extends WithSparkSQLEngine with HiveJDBCTestHelper
 
   override protected def jdbcUrl: String = getJdbcUrl
 
-  override def withKyuubiConf: Map[String, String] = Map.empty
+  override def withKyuubiConf: Map[String, String] =
+    Map(KyuubiEbayConf.KYUUBI_DESCRIBE_PATH_DATA_SOURCES.key -> "parquet,orc")
 
   test("DLS-251: KYUUBI DESCRIBE PATH COMMAND") {
     withJdbcStatement() { statement =>
