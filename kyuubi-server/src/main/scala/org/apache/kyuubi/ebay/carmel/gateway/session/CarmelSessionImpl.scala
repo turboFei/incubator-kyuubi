@@ -94,8 +94,9 @@ class CarmelSessionImpl(
         } catch {
           case e: Throwable if attempt < maxAttempts =>
             if (_sparkEndpoint != null && _sparkEndpoint.getServerUrl != null) {
-              endpointMgr.markFailServer(_sparkEndpoint.getServerUrl);
-              _sparkEndpoint.close();
+              endpointMgr.markFailServer(_sparkEndpoint.getServerUrl)
+              _sparkEndpoint.close()
+              _sparkEndpoint = null
             }
             warn(
               s"Failed to open after $attempt/$maxAttempts times: ${e.getMessage}, retrying",

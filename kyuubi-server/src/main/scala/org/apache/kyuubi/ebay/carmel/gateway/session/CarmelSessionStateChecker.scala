@@ -38,7 +38,8 @@ class CarmelSessionStateChecker(sessionMgr: SessionManager) extends Runnable wit
     try {
       val futures = ListBuffer[Future[(SessionHandle, Boolean)]]()
       sessionMgr.allSessions().foreach {
-        case carmelSession: CarmelSessionImpl =>
+        case carmelSession: CarmelSessionImpl
+            if carmelSession.getSessionEvent.flatMap(_.exception).isEmpty =>
           val future = executorService.submit(new Callable[(SessionHandle, Boolean)] {
             override def call(): (SessionHandle, Boolean) = {
               val sessionHandle = carmelSession.handle
