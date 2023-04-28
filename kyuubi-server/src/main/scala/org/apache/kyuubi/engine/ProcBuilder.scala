@@ -17,11 +17,10 @@
 
 package org.apache.kyuubi.engine
 
-import java.io.{BufferedReader, File, FilenameFilter, InputStreamReader, IOException}
+import java.io.{File, FilenameFilter, IOException}
 import java.net.URI
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
-import java.util.UUID
 
 import scala.collection.JavaConverters._
 
@@ -141,15 +140,6 @@ trait ProcBuilder {
     }
   }
 
-  protected val KYUUBI_PROC_UNIQUE_ID: String = "kyuubi.proc.uniqueId"
-
-  protected lazy val procUniqueId = UUID.randomUUID().toString
-
-  /**
-   * The unique config item for process, used to be the key to kill.
-   */
-  protected def procConf(): Map[String, String] = Map(KYUUBI_PROC_UNIQUE_ID -> procUniqueId)
-
   final lazy val processBuilder: ProcessBuilder = {
     val pb = new ProcessBuilder(commands: _*)
 
@@ -160,25 +150,6 @@ trait ProcBuilder {
     pb.redirectOutput(engineLog)
     extraEngineLog.foreach(_.addExtraLog(engineLog.toPath))
     pb
-  }
-
-  protected def killProcessByUniqueId(): Unit = {
-    val psEf = Runtime.getRuntime.exec("ps -ef")
-    val input = new BufferedReader(new InputStreamReader(psEf.getInputStream))
-    val regex = s"$KYUUBI_PROC_UNIQUE_ID=$procUniqueId".r
-    var psInfo = input.readLine()
-    var found = false
-    while (!found && psInfo != null) {
-      regex findFirstIn (psInfo) match {
-        case Some(_) =>
-          found = true
-          psInfo.trim.split("\\s+").drop(1).headOption.foreach { psId =>
-            Runtime.getRuntime.exec(s"kill -9 $psId")
-          }
-        case None =>
-      }
-      psInfo = input.readLine()
-    }
   }
 
   @volatile private var error: Throwable = UNCAUGHT_ERROR
@@ -287,7 +258,6 @@ trait ProcBuilder {
       info("Destroy the process, since waitCompletion is false.")
       process.destroyForcibly()
       process = null
-      killProcessByUniqueId()
     }
   }
 
