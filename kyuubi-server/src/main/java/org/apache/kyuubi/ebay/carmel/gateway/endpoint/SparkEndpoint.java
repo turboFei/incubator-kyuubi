@@ -36,7 +36,10 @@ public class SparkEndpoint implements Comparable<SparkEndpoint> {
   private KyuubiSyncThriftClient syncThriftClient;
   private TTransport serviceTransport;
   private int connectTimeoutInMs;
+
   private String id;
+  private String name;
+  private String url;
 
   public SparkEndpoint(
       CarmelConfig config, QueueInfo queue, ThriftServerInfo serverInfo, UserInfo userInfo) {
@@ -112,6 +115,14 @@ public class SparkEndpoint implements Comparable<SparkEndpoint> {
     return id;
   }
 
+  public void setName(String name) {
+    this.name = name;
+  }
+
+  public void setUrl(String url) {
+    this.url = url;
+  }
+
   @Override
   public String toString() {
     return "SparkEndpoint{"
@@ -123,6 +134,12 @@ public class SparkEndpoint implements Comparable<SparkEndpoint> {
         + '\''
         + ", id='"
         + id
+        + '\''
+        + ", name='"
+        + name
+        + '\''
+        + ", url='"
+        + url
         + '\''
         + '}';
   }

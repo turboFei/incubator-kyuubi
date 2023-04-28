@@ -99,7 +99,7 @@ public class ZKThriftDiscovery implements ThriftDiscovery {
     }
     Set<ThriftServerInfo> result = Sets.newHashSet();
     for (String node : nodes) {
-      result.add(parseServerInfo(node));
+      result.add(parseServerInfo(ZKPaths.makePath(zkPath, node)));
     }
     return result;
   }
