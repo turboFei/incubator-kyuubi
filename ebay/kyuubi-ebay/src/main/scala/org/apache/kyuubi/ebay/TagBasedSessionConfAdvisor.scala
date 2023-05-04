@@ -37,6 +37,8 @@ class TagBasedSessionConfAdvisor extends SessionConfAdvisor with Logging {
     cluster.map(c => s"$tagConfFile.$c")
   }
 
+  private val tessConfAdvisor = new TessConfAdvisor()
+
   override def getConfOverlay(
       user: String,
       sessionConf: JMap[String, String]): JMap[String, String] = {
@@ -44,8 +46,8 @@ class TagBasedSessionConfAdvisor extends SessionConfAdvisor with Logging {
       KyuubiEbayConf.getSessionTag(sessionConf.asScala.toMap).getOrElse(KYUUBI_DEFAULT_TAG)
     val sessionCluster = sessionConf.asScala.get(SESSION_CLUSTER.key)
 
-    val tagConf = tagFileConfCache.get(tagConfFile)
-    val clusterTagConf = clusterTagConfFile(sessionCluster).map(tagFileConfCache.get)
+    val tagConf = fileConfCache.get(tagConfFile)
+    val clusterTagConf = clusterTagConfFile(sessionCluster).map(fileConfCache.get)
 
     val tagLevelConfOverlay = KyuubiEbayConf.getTagConfOnly(tagConf, sessionTag) ++
       clusterTagConf.map(KyuubiEbayConf.getTagConfOnly(_, sessionTag)).getOrElse(Map.empty)
@@ -53,7 +55,12 @@ class TagBasedSessionConfAdvisor extends SessionConfAdvisor with Logging {
       KyuubiEbayConf.getTagConfOnly(tagConf, KYUUBI_OVERWRITE_TAG) ++
         clusterTagConf.map(KyuubiEbayConf.getTagConfOnly(_, KYUUBI_OVERWRITE_TAG)).getOrElse(
           Map.empty)
-    (tagLevelConfOverlay ++ serviceOverwriteConfOverlay).asJava
+
+    val tagConfOverlay = tagLevelConfOverlay ++ serviceOverwriteConfOverlay
+    val tessConfOverlay =
+      tessConfAdvisor.getConfOverlay(user, (sessionConf.asScala ++ tagConfOverlay).asJava)
+
+    (tagConfOverlay ++ tessConfOverlay.asScala).asJava
   }
 }
 
@@ -64,7 +71,7 @@ object TagBasedSessionConfAdvisor extends Logging {
   val KYUUBI_DEFAULT_TAG = "kyuubi_default"
   val KYUUBI_OVERWRITE_TAG = "kyuubi_overwrite"
 
-  private lazy val tagFileConfCache: LoadingCache[String, KyuubiConf] =
+  private[ebay] lazy val fileConfCache: LoadingCache[String, KyuubiConf] =
     CacheBuilder.newBuilder()
       .expireAfterWrite(
         reloadInterval,

@@ -78,10 +78,11 @@ class KyuubiBatchSessionImpl(
 
   override val normalizedConf: Map[String, String] = {
     sessionConf.getBatchConf(batchRequest.getBatchType) ++
-      sessionManager.validateBatchConf(batchRequest.getConf.asScala.toMap)
+      sessionManager.validateBatchConf(batchRequest.getConf.asScala.toMap) ++
+      Map(KyuubiEbayConf.KYUUBI_SESSION_TYPE_KEY -> sessionType.toString)
   }
 
-  private val optimizedConf: Map[String, String] = {
+  private[kyuubi] val optimizedConf: Map[String, String] = {
     val confOverlay = sessionManager.sessionConfAdvisor.getConfOverlay(
       user,
       normalizedConf.asJava)

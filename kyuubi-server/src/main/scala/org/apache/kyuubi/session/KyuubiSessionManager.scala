@@ -108,6 +108,16 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
         sessionConf.getUserDefaults(user),
         parser)
     } else {
+      val userDefaultConf = sessionConf.getUserDefaults(user)
+      KyuubiEbayConf.getTagDefaultConf(
+        validateAndNormalizeConf(conf),
+        ENGINE_SPARK_TESS_ENABLED,
+        ENGINE_SPARK_TESS_CONFIG_TAG,
+        sessionConf,
+        userDefaultConf).foreach { case (key, value) =>
+        userDefaultConf.set(key, value)
+      }
+
       new KyuubiSessionImpl(
         protocol,
         user,
@@ -115,7 +125,7 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
         ipAddress,
         conf,
         this,
-        sessionConf.getUserDefaults(user),
+        userDefaultConf,
         parser)
     }
   }
@@ -170,14 +180,21 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
     val username = Option(user).filter(_.nonEmpty).getOrElse("anonymous")
     val sessionConf = getSessionConf(conf)
     val userDefaultConf = sessionConf.getUserDefaults(user)
-    if (conf.get(BATCH_SPARK_HBASE_ENABLED.key).map(_.toBoolean)
-        .getOrElse(userDefaultConf.get(BATCH_SPARK_HBASE_ENABLED))) {
-      val hbaseConfigTag = sessionConf.get(BATCH_SPARK_HBASE_CONFIG_TAG)
-      KyuubiEbayConf.getTagConfOnly(sessionConf, hbaseConfigTag).foreach { case (key, value) =>
-        userDefaultConf.set(key, value)
-      }
-      userDefaultConf.set(BATCH_SPARK_HBASE_ENABLED, true)
-      userDefaultConf.set(BATCH_SPARK_HBASE_CONFIG_TAG, hbaseConfigTag)
+    KyuubiEbayConf.getBatchTagDefaultConf(
+      conf,
+      BATCH_SPARK_HBASE_ENABLED,
+      BATCH_SPARK_HBASE_CONFIG_TAG,
+      sessionConf,
+      userDefaultConf).foreach { case (key, value) =>
+      userDefaultConf.set(key, value)
+    }
+    KyuubiEbayConf.getBatchTagDefaultConf(
+      conf,
+      ENGINE_SPARK_TESS_ENABLED,
+      ENGINE_SPARK_TESS_CONFIG_TAG,
+      sessionConf,
+      userDefaultConf).foreach { case (key, value) =>
+      userDefaultConf.set(key, value)
     }
     new KyuubiBatchSessionImpl(
       username,

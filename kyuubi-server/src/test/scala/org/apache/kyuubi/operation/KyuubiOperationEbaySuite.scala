@@ -20,7 +20,7 @@ package org.apache.kyuubi.operation
 import java.io.File
 import java.net.URI
 import java.nio.file.Files
-import java.sql.SQLException
+import java.sql.{SQLException, Statement}
 import java.util
 import java.util.{Base64, Collections, Properties, UUID}
 import javax.ws.rs.client.Entity
@@ -70,6 +70,13 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
         KyuubiConf.AUTHENTICATION_CUSTOM_CLASS,
         classOf[FakeApiKeyAuthenticationProviderImpl].getName)
       .set("kyuubi.server.redaction.regex", "(?i)secret|pass|token|access[.]key")
+      .set("___spark_tess___.spark.tess.key1", "value1")
+      .set("___spark_tess___.spark.tess.overwrite", "false")
+  }
+
+  override def beforeAll(): Unit = {
+    super.beforeAll()
+    System.setProperty(KyuubiEbayConf.SESSION_TAG_CONF_FILE.key, "kyuubi-defaults.conf.tag")
   }
 
   override protected def beforeEach(): Unit = {
@@ -86,9 +93,7 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
     withSessionConf(Map.empty)(Map.empty)(Map(
       KyuubiEbayConf.SESSION_CLUSTER.key -> "test")) {
       withJdbcStatement() { statement =>
-        val rs = statement.executeQuery("set spark.sql.kyuubi.session.cluster.test")
-        assert(rs.next())
-        assert(rs.getString(2).equals("yes"))
+        checkConfigValue(statement, "spark.sql.kyuubi.session.cluster.test", "yes")
       }
     }
   }
@@ -131,9 +136,7 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
       KyuubiEbayConf.SESSION_CLUSTER.key -> "test",
       "spark.sql.kyuubi.session.cluster.test" -> "false")) {
       withJdbcStatement() { statement =>
-        val rs = statement.executeQuery("set spark.sql.kyuubi.session.cluster.test")
-        assert(rs.next())
-        assert(rs.getString(2).equals("false"))
+        checkConfigValue(statement, "spark.sql.kyuubi.session.cluster.test", "false")
       }
     }
   }
@@ -142,12 +145,12 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
     withSessionConf(Map.empty)(Map.empty)(Map(
       KyuubiEbayConf.SESSION_CLUSTER.key -> "test")) {
       withJdbcStatement() { statement =>
-        val rs = statement.executeQuery("set spark.user.test")
+        val rs = statement.executeQuery("set `spark.user.test`")
         assert(rs.next())
         assert(!rs.getString(2).equals("b"))
       }
       withJdbcStatement() { statement =>
-        val rs = statement.executeQuery("set ___userb___.spark.user.test")
+        val rs = statement.executeQuery("set `___userb___.spark.user.test`")
         assert(rs.next())
         assert(!rs.getString(2).equals("b"))
       }
@@ -181,9 +184,7 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
       "queue" -> "yarn_queue",
       KyuubiEbayConf.SESSION_CLUSTER.key -> "test")) {
       withJdbcStatement() { statement =>
-        val rs = statement.executeQuery("set spark.yarn.queue")
-        assert(rs.next())
-        assert(rs.getString(2) === "yarn_queue")
+        checkConfigValue(statement, "spark.yarn.queue", "yarn_queue")
       }
     }
 
@@ -192,9 +193,7 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
       "spark.yarn.queue" -> "queue_2",
       KyuubiEbayConf.SESSION_CLUSTER.key -> "test")) {
       withJdbcStatement() { statement =>
-        val rs = statement.executeQuery("set spark.yarn.queue")
-        assert(rs.next())
-        assert(rs.getString(2) === "queue_2")
+        checkConfigValue(statement, "spark.yarn.queue", "queue_2")
       }
     }
   }
@@ -401,9 +400,7 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
     withSessionConf(Map.empty)(Map.empty)(Map(
       KyuubiEbayConf.SESSION_CLUSTER.key -> "test")) {
       withJdbcStatement() { statement =>
-        val rs = statement.executeQuery("set spark.sql.kyuubi.session.cluster.test")
-        assert(rs.next())
-        assert(rs.getString(2).equals("<undefined>"))
+        checkConfigValue(statement, "spark.sql.kyuubi.session.cluster.test", "<undefined>")
       }
     }
   }
@@ -653,5 +650,92 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
       .header(AUTHORIZATION_HEADER, s"BASIC $encodeAuthorization")
       .delete()
     assert(200 == response.getStatus)
+  }
+
+  test("HADP-49619: Support kyuubi spark on tess conf advisor - interactive") {
+    withSessionConf(Map.empty)(Map.empty)(Map(
+      KyuubiEbayConf.SESSION_CLUSTER.key -> "test",
+      KyuubiEbayConf.ENGINE_SPARK_TESS_ENABLED.key -> "true",
+      "kyuubi.hadoop.adlc.app" -> "adlc",
+      "kyuubi.hadoop.adlc.ai" -> "adlc-ai",
+      "kyuubi.hadoop.adlc.image" -> "spark:test")) {
+      withJdbcStatement() { statement =>
+        checkConfigValue(statement, "spark.tess.key1", "value1")
+        checkConfigValue(statement, "spark.tess.key2", "value2")
+        checkConfigValue(statement, "spark.tess.overwrite", "true")
+
+        checkConfigValue(
+          statement,
+          "spark.kubernetes.driver.annotation.application.tess.io/name",
+          "adlc")
+        checkConfigValue(
+          statement,
+          "spark.kubernetes.driver.annotation.io.sherlock.logs/namespace",
+          "adlc")
+        checkConfigValue(
+          statement,
+          "spark.kubernetes.driver.label.applicationinstance.tess.io/name",
+          "adlc-ai")
+        checkConfigValue(
+          statement,
+          "spark.kubernetes.executor.annotation.application.tess.io/name",
+          "adlc")
+        checkConfigValue(
+          statement,
+          "spark.kubernetes.executor.annotation.io.sherlock.logs/namespace",
+          "adlc")
+        checkConfigValue(
+          statement,
+          "spark.kubernetes.executor.label.applicationinstance.tess.io/name",
+          "adlc-ai")
+        checkConfigValue(statement, "spark.kubernetes.container.image", "spark:test")
+      }
+    }
+  }
+
+  test("HADP-49619: Support kyuubi spark on tess conf advisor - batch") {
+    val sessionMgr = server.backendService.sessionManager.asInstanceOf[KyuubiSessionManager]
+    val batchConf = Map(
+      "kyuubi.session.cluster" -> "test",
+      KyuubiEbayConf.ENGINE_SPARK_TESS_ENABLED.key -> "true",
+      "kyuubi.hadoop.adlc.app" -> "adlc",
+      "kyuubi.hadoop.adlc.ai" -> "adlc-ai",
+      "kyuubi.hadoop.adlc.image" -> "spark:test",
+      BatchUtils.KYUUBI_BATCH_ID_KEY -> UUID.randomUUID().toString)
+    val batchRequest = newSparkBatchRequest(batchConf)
+    val sessionHandle = sessionMgr.openBatchSession(
+      "user",
+      "password",
+      "127.0.0.1",
+      batchConf,
+      batchRequest)
+    val batchSession = sessionMgr.getBatchSessionImpl(sessionHandle)
+    val conf = batchSession.optimizedConf
+
+    assert(conf("spark.tess.key1") == "value1")
+    assert(conf("spark.tess.key2") == "value2")
+    assert(conf("spark.tess.overwrite") == "true")
+
+    assert(
+      conf("spark.kubernetes.driver.annotation.application.tess.io/name") == "adlc")
+    assert(conf("spark.kubernetes.driver.annotation.io.sherlock.logs/namespace") == "adlc")
+    assert(conf("spark.kubernetes.driver.label.applicationinstance.tess.io/name") == "adlc-ai")
+    assert(conf("spark.kubernetes.executor.annotation.application.tess.io/name") == "adlc")
+    assert(conf("spark.kubernetes.executor.annotation.io.sherlock.logs/namespace") == "adlc")
+    assert(conf("spark.kubernetes.executor.label.applicationinstance.tess.io/name") == "adlc-ai")
+    assert(conf("spark.kubernetes.container.image") == "spark:test")
+    batchSession.close()
+  }
+
+  def checkConfigValue(statement: Statement, config: String, expectedValue: String): Unit = {
+    val rs = statement.executeQuery(s"SET `$config`")
+    assert(rs.next())
+    try {
+      assert(
+        rs.getString(2) == expectedValue,
+        s"${rs.getString(1)}=${rs.getString(2)}/!=$expectedValue")
+    } finally {
+      rs.close()
+    }
   }
 }

@@ -258,6 +258,21 @@ object KyuubiEbayConf extends Logging {
       .stringConf
       .createWithDefault("spark_hbase")
 
+  val ENGINE_SPARK_TESS_ENABLED: ConfigEntry[Boolean] =
+    buildConf("kyuubi.engine.spark.tess.enabled")
+      .internal
+      .doc("Whether to enable the spark job on tess.")
+      .booleanConf
+      .createWithDefault(false)
+
+  val ENGINE_SPARK_TESS_CONFIG_TAG: ConfigEntry[String] =
+    buildConf("kyuubi.engine.spark.tess.config.tag")
+      .internal
+      .serverOnly
+      .doc("The config tag for spark tess conf.")
+      .stringConf
+      .createWithDefault("spark_tess")
+
   val SESSION_METADATA_RESERVE: ConfigEntry[Boolean] =
     buildConf("kyuubi.session.metadata.reserve")
       .serverOnly
@@ -428,7 +443,14 @@ object KyuubiEbayConf extends Logging {
       .internal
       .serverOnly
       .stringConf
-      .createWithDefault("kyuubi-defaults.conf.tag")
+      .createWithDefault("kyuubi-overwrite.conf.tag")
+
+  val SESSION_TESS_CONF_FILE: ConfigEntry[String] =
+    buildConf("kyuubi.session.tess.conf.file")
+      .internal
+      .serverOnly
+      .stringConf
+      .createWithDefault("kyuubi-overwrite.conf.spark_tess")
 
   val ELASTIC_SEARCH_CREDENTIAL_PROVIDER_CLASS: ConfigEntry[String] =
     buildConf("kyuubi.elastic.search.credential.provider.class")
@@ -790,6 +812,39 @@ object KyuubiEbayConf extends Logging {
     conf.getAllWithPrefix(s"___${tag}___", "")
   }
 
+  def getTagDefaultConf(
+      conf: Map[String, String],
+      tagEnabledKey: ConfigEntry[Boolean],
+      configTagKey: ConfigEntry[String],
+      sessionConf: KyuubiConf,
+      userDefaultConf: KyuubiConf): Map[String, String] = {
+    if (conf.get(tagEnabledKey.key).map(_.toBoolean).getOrElse(
+        userDefaultConf.get(tagEnabledKey))) {
+      getTagConfOnly(sessionConf, sessionConf.get(configTagKey))
+    } else {
+      Map.empty
+    }
+  }
+
+  def toBatchConf(conf: Map[String, String], batchType: String = "spark"): Map[String, String] = {
+    conf.map { case (key, value) =>
+      if (key.startsWith("kyuubi.")) {
+        key -> value
+      } else {
+        s"${KyuubiConf.KYUUBI_BATCH_CONF_PREFIX}.$batchType.$key" -> value
+      }
+    }
+  }
+
+  def getBatchTagDefaultConf(
+      conf: Map[String, String],
+      tagEnabledKey: ConfigEntry[Boolean],
+      configTagKey: ConfigEntry[String],
+      sessionConf: KyuubiConf,
+      userDefaultConf: KyuubiConf): Map[String, String] = {
+    toBatchConf(getTagDefaultConf(conf, tagEnabledKey, configTagKey, sessionConf, userDefaultConf))
+  }
+
   def getSessionTag(conf: KyuubiConf): Option[String] = {
     conf.get(SESSION_TAG).orElse(conf.getOption(org.apache.kyuubi.session.SESSION_TAG))
   }
@@ -803,5 +858,6 @@ object KyuubiEbayConf extends Logging {
   }
 
   final val KYUUBI_SESSION_ID_KEY = "kyuubi.session.id"
+  final val KYUUBI_SESSION_TYPE_KEY = "kyuubi.session.type"
   final val ZETA_TAG_KEY = "zeta"
 }
