@@ -36,6 +36,7 @@ import org.apache.kyuubi.Logging
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 
 object KyuubiHadoopUtils extends Logging {
+  val HADOOP_MASTER_CONF_DIR = "HADOOP_MASTER_CONF_DIR"
   val HADOOP_CONF_DIR = "HADOOP_CONF_DIR"
 
   private val subjectField =
@@ -60,12 +61,12 @@ object KyuubiHadoopUtils extends Logging {
       val clusterConf = KyuubiEbayConf.loadClusterConf(conf, clusterOpt)
       val clusterEnvs = clusterConf.getEnvs
       val hadoopConf = new Configuration(false)
-      clusterEnvs.get(HADOOP_CONF_DIR)
-        .map(new File(_))
-        .filter(_.isDirectory).foreach { confDir =>
-          confDir.listFiles().filter(_.getName.endsWith(".xml")).foreach { xmlFile =>
-            hadoopConf.addResource(xmlFile.toURI.toURL)
-          }
+      clusterEnvs.get(HADOOP_MASTER_CONF_DIR).map(new File(_)).filter(_.isDirectory)
+        .orElse(clusterEnvs.get(HADOOP_CONF_DIR).map(new File(_)).filter(_.isDirectory)).foreach {
+          confDir =>
+            confDir.listFiles().filter(_.getName.endsWith(".xml")).foreach { xmlFile =>
+              hadoopConf.addResource(xmlFile.toURI.toURL)
+            }
         }
       clusterConf.getAll.foreach { case (k, v) => hadoopConf.set(k, v) }
       hadoopConf
