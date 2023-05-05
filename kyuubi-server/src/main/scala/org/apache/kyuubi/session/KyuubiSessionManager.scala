@@ -53,16 +53,11 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
   val operationManager = new KyuubiOperationManager()
   val credentialsManager = new HadoopCredentialsManager()
   val applicationManager = new KyuubiApplicationManager()
-  private lazy val metadataManager: Option[MetadataManager] = {
-    // Currently, the metadata manager is used by the REST frontend which provides batch job APIs,
-    // so we initialize it only when Kyuubi starts with the REST frontend.
-    if (conf.get(FRONTEND_PROTOCOLS).map(FrontendProtocols.withName)
-        .contains(FrontendProtocols.REST)) {
-      Option(new MetadataManager())
-    } else {
-      None
-    }
-  }
+
+  // Currently, the metadata manager is used by the REST frontend which provides batch job APIs,
+  // so we initialize it only when Kyuubi starts with the REST frontend.
+  lazy val metadataManager: Option[MetadataManager] =
+    if (conf.isRESTEnabled) Some(new MetadataManager()) else None
 
   private val limiters = new ConcurrentHashMap[Option[String], SessionLimiter]().asScala
   private val batchLimiters = new ConcurrentHashMap[Option[String], SessionLimiter]().asScala
