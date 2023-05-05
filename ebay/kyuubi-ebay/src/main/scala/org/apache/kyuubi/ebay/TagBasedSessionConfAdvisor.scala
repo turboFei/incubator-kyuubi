@@ -17,14 +17,14 @@
 
 package org.apache.kyuubi.ebay
 
-import java.util.{Map => JMap}
+import java.util.{Locale, Map => JMap}
 import java.util.concurrent.TimeUnit
 
 import scala.collection.JavaConverters._
 
 import com.google.common.cache.{CacheBuilder, CacheLoader, LoadingCache}
 
-import org.apache.kyuubi.{Logging, Utils}
+import org.apache.kyuubi.{KyuubiException, Logging, Utils}
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiEbayConf.{SESSION_CLUSTER, SESSION_TAG_CONF_FILE}
 import org.apache.kyuubi.plugin.SessionConfAdvisor
@@ -38,6 +38,20 @@ class TagBasedSessionConfAdvisor extends SessionConfAdvisor with Logging {
   }
 
   private val tessConfAdvisor = new TessConfAdvisor()
+
+  private def validateSparkMaster(sessionConf: JMap[String, String]): Map[String, String] = {
+    Option(sessionConf.get(SPARK_MASTER_KEY)).map { sparkMaster =>
+      if (sparkMaster.toLowerCase(Locale.ROOT).startsWith("yarn")) {
+        Map(SPARK_MASTER_KEY -> "yarn")
+      } else if (sparkMaster.toLowerCase(Locale.ROOT).startsWith("k8s")) {
+        Map(SPARK_MASTER_KEY -> sparkMaster)
+      } else {
+        throw new KyuubiException(
+          s"Invalid spark master[$sparkMaster]." +
+            s" The valid spark master can be one of the following: `yarn`, `k8s://HOST:PORT`.")
+      }
+    }.getOrElse(Map.empty[String, String])
+  }
 
   override def getConfOverlay(
       user: String,
@@ -60,7 +74,7 @@ class TagBasedSessionConfAdvisor extends SessionConfAdvisor with Logging {
     val tessConfOverlay =
       tessConfAdvisor.getConfOverlay(user, (sessionConf.asScala ++ tagConfOverlay).asJava)
 
-    (tagConfOverlay ++ tessConfOverlay.asScala).asJava
+    (validateSparkMaster(sessionConf) ++ tagConfOverlay ++ tessConfOverlay.asScala).asJava
   }
 }
 
@@ -70,6 +84,8 @@ object TagBasedSessionConfAdvisor extends Logging {
   // for kyuubi service side conf
   val KYUUBI_DEFAULT_TAG = "kyuubi_default"
   val KYUUBI_OVERWRITE_TAG = "kyuubi_overwrite"
+
+  val SPARK_MASTER_KEY = "spark.master"
 
   private[ebay] lazy val fileConfCache: LoadingCache[String, KyuubiConf] =
     CacheBuilder.newBuilder()
