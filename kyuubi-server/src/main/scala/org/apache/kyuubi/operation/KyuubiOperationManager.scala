@@ -91,7 +91,8 @@ class KyuubiOperationManager private (name: String) extends OperationManager(nam
       className: String,
       batchConf: Map[String, String],
       batchArgs: Seq[String],
-      recoveryMetadata: Option[Metadata]): BatchJobSubmission = {
+      recoveryMetadata: Option[Metadata],
+      shouldRunAsync: Boolean): BatchJobSubmission = {
     val operation = new BatchJobSubmission(
       session,
       batchType,
@@ -100,7 +101,8 @@ class KyuubiOperationManager private (name: String) extends OperationManager(nam
       className,
       batchConf,
       batchArgs,
-      recoveryMetadata)
+      recoveryMetadata,
+      shouldRunAsync)
     addOperation(operation)
     operation
   }

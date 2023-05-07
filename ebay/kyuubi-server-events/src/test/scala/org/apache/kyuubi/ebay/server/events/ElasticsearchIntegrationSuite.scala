@@ -120,7 +120,8 @@ class ElasticsearchIntegrationSuite extends WithKyuubiServer with HiveJDBCTestHe
         batchRequest.getClassName,
         Map.empty,
         Seq.empty,
-        None)
+        None,
+        true)
       operationEvent = KyuubiOperationEvent(batchOperation)
       sessionEvent = KyuubiSessionEvent(batchSession)
       EventBus.post(sessionEvent)

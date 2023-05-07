@@ -90,7 +90,7 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
       conf: Map[String, String]): Session = {
     val sessionCluster = getSessionCluster(conf)
     limiters.get(sessionCluster).foreach(_.increment(UserIpAddress(user, ipAddress)))
-    val sessionConf = getSessionConf(conf)
+    val clusterConf = getClusterConf(conf)
 
     if (KyuubiEbayConf.isCarmelCluster(getConf, sessionCluster)) {
       new CarmelSessionImpl(
@@ -100,7 +100,7 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
         ipAddress,
         conf,
         this,
-        sessionConf.getUserDefaults(user),
+        clusterConf.getUserDefaults(user),
         parser)
     } else {
       new KyuubiSessionImpl(
@@ -110,7 +110,7 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
         ipAddress,
         conf,
         this,
-        sessionConf.getUserDefaults(user),
+        clusterConf.getUserDefaults(user),
         parser)
     }
   }
@@ -155,23 +155,31 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
     }
   }
 
-  private def createBatchSession(
+  // scalastyle:off
+  def createBatchSession(
       user: String,
       password: String,
       ipAddress: String,
       conf: Map[String, String],
-      batchRequest: BatchRequest,
-      recoveryMetadata: Option[Metadata] = None): KyuubiBatchSessionImpl = {
+      batchType: String,
+      batchName: Option[String],
+      resource: String,
+      className: String,
+      batchConf: Map[String, String],
+      batchArgs: Seq[String],
+      recoveryMetadata: Option[Metadata] = None,
+      shouldRunAsync: Boolean): KyuubiBatchSessionImpl = {
+    // scalastyle:on
     val username = Option(user).filter(_.nonEmpty).getOrElse("anonymous")
-    val sessionConf = getSessionConf(conf)
-    val userDefaultConf = sessionConf.getUserDefaults(user)
+    val clusterConf = getClusterConf(conf)
+    val sessionConf = clusterConf.getUserDefaults(user)
     KyuubiEbayConf.getBatchTagDefaultConf(
       conf,
       BATCH_SPARK_HBASE_ENABLED,
       BATCH_SPARK_HBASE_CONFIG_TAG,
-      sessionConf,
-      userDefaultConf).foreach { case (key, value) =>
-      userDefaultConf.set(key, value)
+      clusterConf,
+      sessionConf).foreach { case (key, value) =>
+      sessionConf.set(key, value)
     }
     new KyuubiBatchSessionImpl(
       username,
@@ -179,9 +187,15 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
       ipAddress,
       conf,
       this,
-      userDefaultConf,
-      batchRequest,
-      recoveryMetadata)
+      sessionConf,
+      batchType,
+      batchName,
+      resource,
+      className,
+      batchConf,
+      batchArgs,
+      recoveryMetadata,
+      shouldRunAsync)
   }
 
   private[kyuubi] def openBatchSession(batchSession: KyuubiBatchSessionImpl): SessionHandle = {
@@ -221,11 +235,24 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
       password: String,
       ipAddress: String,
       conf: Map[String, String],
-      batchRequest: BatchRequest): SessionHandle = {
+      batchRequest: BatchRequest,
+      shouldRunAsync: Boolean = true): SessionHandle = {
     if (KyuubiEbayConf.isCarmelCluster(getConf, getSessionCluster(conf))) {
       throw new KyuubiException(s"Batch function is disallowed for carmel cluster.")
     }
-    val batchSession = createBatchSession(user, password, ipAddress, conf, batchRequest)
+    val batchSession = createBatchSession(
+      user,
+      password,
+      ipAddress,
+      conf,
+      batchRequest.getBatchType,
+      Option(batchRequest.getName),
+      batchRequest.getResource,
+      batchRequest.getClassName,
+      batchRequest.getConf.asScala.toMap,
+      batchRequest.getArgs.asScala,
+      None,
+      shouldRunAsync)
     openBatchSession(batchSession)
   }
 
@@ -293,21 +320,19 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
         kyuubiInstance,
         0,
         Int.MaxValue).map { metadata =>
-        val batchRequest = new BatchRequest(
-          metadata.engineType,
-          metadata.resource,
-          metadata.className,
-          metadata.requestName,
-          metadata.requestConf.asJava,
-          metadata.requestArgs.asJava)
-
         createBatchSession(
           metadata.username,
           "anonymous",
           metadata.ipAddress,
           metadata.requestConf,
-          batchRequest,
-          Some(metadata))
+          metadata.engineType,
+          Option(metadata.requestName),
+          metadata.resource,
+          metadata.className,
+          metadata.requestConf,
+          metadata.requestArgs,
+          Some(metadata),
+          shouldRunAsync = true)
       }).getOrElse(Seq.empty)
     }
   }
@@ -394,11 +419,11 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
     KyuubiEbayConf.getSessionCluster(this, sessionConf)
   }
 
-  private[kyuubi] def getSessionConf(sessionConf: Map[String, String]): KyuubiConf = {
-    getSessionConf(getSessionCluster(sessionConf))
+  private[kyuubi] def getClusterConf(sessionConf: Map[String, String]): KyuubiConf = {
+    getClusterConf(getSessionCluster(sessionConf))
   }
 
-  private[kyuubi] def getSessionConf(clusterOpt: Option[String]): KyuubiConf = {
+  private[kyuubi] def getClusterConf(clusterOpt: Option[String]): KyuubiConf = {
     try {
       clusterOpt.map { c =>
         info(s"Getting session conf for cluster $c")

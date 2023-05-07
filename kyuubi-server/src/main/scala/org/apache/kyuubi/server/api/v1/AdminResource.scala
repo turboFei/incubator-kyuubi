@@ -386,7 +386,7 @@ private[v1] class AdminResource extends ApiRequestContext with Logging {
 
   private def getClusterConf(clusterOpt: Option[String]): KyuubiConf = {
     try {
-      fe.be.sessionManager.asInstanceOf[KyuubiSessionManager].getSessionConf(
+      fe.be.sessionManager.asInstanceOf[KyuubiSessionManager].getClusterConf(
         clusterOpt.map(c => Map(KyuubiEbayConf.SESSION_CLUSTER.key -> c)).getOrElse(Map.empty))
     } catch {
       case _: Throwable =>
