@@ -39,7 +39,7 @@ class YarnApplicationOperation extends ApplicationOperation with Logging {
   private var submitTimeout: Long = _
 
   override def initialize(conf: KyuubiConf): Unit = {
-    submitTimeout = conf.get(KyuubiConf.ENGINE_SUBMIT_TIMEOUT)
+    submitTimeout = conf.get(KyuubiConf.ENGINE_YARN_SUBMIT_TIMEOUT)
 
     val clusterOptList = KyuubiEbayConf.getNonCarmelClusterOptList(conf)
 
