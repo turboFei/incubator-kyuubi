@@ -22,7 +22,7 @@ import java.util.{Map => JMap}
 import scala.collection.JavaConverters._
 
 import org.apache.kyuubi.Logging
-import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiEbayConf._
 import org.apache.kyuubi.plugin.SessionConfAdvisor
 
@@ -30,7 +30,12 @@ class TessConfAdvisor extends SessionConfAdvisor with Logging {
   import TagBasedSessionConfAdvisor.fileConfCache
   import TessConfAdvisor._
 
-  private val tessConfFile = KyuubiConf().get(SESSION_TESS_CONF_FILE)
+  private val kyuubiConf = KyuubiConf()
+  private val tessConfFile = kyuubiConf.get(SESSION_TESS_CONF_FILE)
+  private val TESS_DEFAULT_SPARK_DRIVER_CORES =
+    kyuubiConf.get(SESSION_TESS_SPARK_DRIVER_CORES_DEFAULT)
+  private val TESS_DEFAULT_SPARK_EXECUTOR_CORES =
+    kyuubiConf.get(SESSION_TESS_SPARK_EXECUTOR_CORES_DEFAULT)
   private def clusterTessConfFile(cluster: Option[String]): Option[String] = {
     cluster.map(c => s"$tessConfFile.$c")
   }
@@ -56,7 +61,13 @@ class TessConfAdvisor extends SessionConfAdvisor with Logging {
         EXECUTOR_ANNOTATION_SHERLOCK_LOGS -> appName,
         CONTAINER_IMAGE -> appImage).filter(_._2.nonEmpty)
 
-      val allConf = tessConf.getAll ++ clusterTessConf.map(_.getAll).getOrElse(Map.empty) ++ appConf
+      val tessOverlayConf = tessConf.getAll ++ clusterTessConf.map(_.getAll).getOrElse(Map.empty)
+
+      val tessCoresConf = getTessCores(sessionConf.asScala.toMap ++ tessOverlayConf)
+
+      val tessUploadPathConf = getTessUploadPath(user, sessionConf.asScala.toMap ++ tessOverlayConf)
+
+      val allConf = tessOverlayConf ++ tessCoresConf ++ tessUploadPathConf ++ appConf
 
       if ("BATCH".equalsIgnoreCase(sessionConf.get(KYUUBI_SESSION_TYPE_KEY))) {
         toBatchConf(allConf).asJava
@@ -67,6 +78,38 @@ class TessConfAdvisor extends SessionConfAdvisor with Logging {
       Map.empty[String, String].asJava
     }
   }
+
+  private def getTessCores(conf: Map[String, String]): Map[String, String] = {
+    val driverRequestCores = conf.get(DRIVER_REQUEST_CORES)
+      .orElse(conf.get(DRIVER_CORES))
+      .orElse(Some(TESS_DEFAULT_SPARK_DRIVER_CORES))
+    val driverLimitCores = conf.get(DRIVER_LIMIT_CORES)
+      .orElse(driverRequestCores)
+
+    val executorRequestCores = conf.get(EXECUTOR_REQUEST_CORES)
+      .orElse(conf.get(EXECUTOR_CORES))
+      .orElse(Some(TESS_DEFAULT_SPARK_EXECUTOR_CORES))
+    val executorLimitCores = conf.get(EXECUTOR_LIMIT_CORES)
+      .orElse(executorRequestCores)
+
+    (driverRequestCores.map { c =>
+      DRIVER_REQUEST_CORES -> c
+    } ++ driverLimitCores.map { c =>
+      DRIVER_LIMIT_CORES -> c
+    } ++ executorRequestCores.map { c =>
+      EXECUTOR_REQUEST_CORES -> c
+    } ++ executorLimitCores.map { c =>
+      EXECUTOR_LIMIT_CORES -> c
+    }).toSeq.toMap
+  }
+
+  private def getTessUploadPath(user: String, conf: Map[String, String]): Map[String, String] = {
+    conf.get(KUBERNETES_FILE_UPLOAD_PATH).orElse {
+      conf.get(KyuubiEbayConf.SESSION_TESS_SCRATCH_DIR.key).map(_ + s"/$user")
+    }.map { p =>
+      KUBERNETES_FILE_UPLOAD_PATH -> p
+    }.toMap
+  }
 }
 
 object TessConfAdvisor {
@@ -76,10 +119,25 @@ object TessConfAdvisor {
   final val ADLC_AI = ADLC + "ai"
   final val ADLC_IMAGE = ADLC + "image"
 
-  final private val DRIVER_LABEL_PREFIX = "spark.kubernetes.driver.label."
-  final private val DRIVER_ANNOTATION_PREFIX = "spark.kubernetes.driver.annotation."
-  final private val EXECUTOR_LABEL_PREFIX = "spark.kubernetes.executor.label."
-  final private val EXECUTOR_ANNOTATION_PREFIX = "spark.kubernetes.executor.annotation."
+  final private val KUBERNETES_DRIVER = "spark.kubernetes.driver."
+  final private val KUBERNETES_EXECUTOR = "spark.kubernetes.executor."
+  final private val LABEL = "label."
+  final private val ANNOTATION = "annotation."
+
+  final private val DRIVER_LABEL_PREFIX = KUBERNETES_DRIVER + LABEL
+  final private val DRIVER_ANNOTATION_PREFIX = KUBERNETES_DRIVER + ANNOTATION
+  final private val EXECUTOR_LABEL_PREFIX = KUBERNETES_EXECUTOR + LABEL
+  final private val EXECUTOR_ANNOTATION_PREFIX = KUBERNETES_EXECUTOR + ANNOTATION
+
+  final private val REQUEST_CORES = "request.cores"
+  final private val LIMIT_CORES = "limit.cores"
+
+  final private val DRIVER_CORES = "spark.driver.cores"
+  final private val EXECUTOR_CORES = "spark.executor.cores"
+  final private val DRIVER_REQUEST_CORES = KUBERNETES_DRIVER + REQUEST_CORES
+  final private val DRIVER_LIMIT_CORES = KUBERNETES_DRIVER + LIMIT_CORES
+  final private val EXECUTOR_REQUEST_CORES = KUBERNETES_EXECUTOR + REQUEST_CORES
+  final private val EXECUTOR_LIMIT_CORES = KUBERNETES_EXECUTOR + LIMIT_CORES
 
   final private val APPLICATION_NAME = "application.tess.io/name"
   final private val APPLICATION_INSTANCE = "applicationinstance.tess.io/name"
@@ -93,4 +151,6 @@ object TessConfAdvisor {
   final val EXECUTOR_ANNOTATION_SHERLOCK_LOGS = EXECUTOR_ANNOTATION_PREFIX + SHERLOCK_LOGS
 
   final val CONTAINER_IMAGE = "spark.kubernetes.container.image"
+
+  final val KUBERNETES_FILE_UPLOAD_PATH = "spark.kubernetes.file.upload.path"
 }

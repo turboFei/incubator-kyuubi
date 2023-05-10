@@ -452,6 +452,27 @@ object KyuubiEbayConf extends Logging {
       .stringConf
       .createWithDefault("kyuubi-overwrite.conf.spark_tess")
 
+  val SESSION_TESS_SPARK_DRIVER_CORES_DEFAULT: ConfigEntry[String] =
+    buildConf("kyuubi.session.tess.spark.driver.cores.default")
+      .internal
+      .serverOnly
+      .stringConf
+      .createWithDefaultString("2")
+
+  val SESSION_TESS_SPARK_EXECUTOR_CORES_DEFAULT: ConfigEntry[String] =
+    buildConf("kyuubi.session.tess.spark.executor.cores.default")
+      .internal
+      .serverOnly
+      .stringConf
+      .createWithDefaultString("2")
+
+  val SESSION_TESS_SCRATCH_DIR: OptionalConfigEntry[String] =
+    buildConf("kyuubi.session.tess.scratchdir")
+      .internal
+      .serverOnly
+      .stringConf
+      .createOptional
+
   val ELASTIC_SEARCH_CREDENTIAL_PROVIDER_CLASS: ConfigEntry[String] =
     buildConf("kyuubi.elastic.search.credential.provider.class")
       .internal
@@ -820,7 +841,7 @@ object KyuubiEbayConf extends Logging {
       userDefaultConf: KyuubiConf): Map[String, String] = {
     if (conf.get(tagEnabledKey.key).map(_.toBoolean).getOrElse(
         userDefaultConf.get(tagEnabledKey))) {
-      getTagConfOnly(sessionConf, sessionConf.get(configTagKey))
+      getTagConfOnly(sessionConf, sessionConf.get(configTagKey)).filter(c => conf.get(c._1).isEmpty)
     } else {
       Map.empty
     }

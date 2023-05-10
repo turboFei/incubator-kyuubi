@@ -77,6 +77,8 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
   override def beforeAll(): Unit = {
     super.beforeAll()
     System.setProperty(KyuubiEbayConf.SESSION_TAG_CONF_FILE.key, "kyuubi-defaults.conf.tag")
+    System.setProperty(KyuubiEbayConf.SESSION_TESS_SPARK_DRIVER_CORES_DEFAULT.key, "2")
+    System.setProperty(KyuubiEbayConf.SESSION_TESS_SPARK_EXECUTOR_CORES_DEFAULT.key, "2")
   }
 
   override protected def beforeEach(): Unit = {
@@ -658,7 +660,8 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
       KyuubiEbayConf.ENGINE_SPARK_TESS_ENABLED.key -> "true",
       "kyuubi.hadoop.adlc.app" -> "adlc",
       "kyuubi.hadoop.adlc.ai" -> "adlc-ai",
-      "kyuubi.hadoop.adlc.image" -> "spark:test")) {
+      "kyuubi.hadoop.adlc.image" -> "spark:test",
+      "spark.driver.cores" -> "3")) {
       withJdbcStatement() { statement =>
         checkConfigValue(statement, "spark.tess.key1", "value1")
         checkConfigValue(statement, "spark.tess.key2", "value2")
@@ -688,6 +691,22 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
           statement,
           "spark.kubernetes.executor.label.applicationinstance.tess.io/name",
           "adlc-ai")
+        checkConfigValue(
+          statement,
+          "spark.kubernetes.driver.request.cores",
+          "3")
+        checkConfigValue(
+          statement,
+          "spark.kubernetes.driver.limit.cores",
+          "3")
+        checkConfigValue(
+          statement,
+          "spark.kubernetes.executor.request.cores",
+          "2")
+        checkConfigValue(
+          statement,
+          "spark.kubernetes.executor.limit.cores",
+          "2")
         checkConfigValue(statement, "spark.kubernetes.container.image", "spark:test")
       }
     }
@@ -701,6 +720,7 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
       "kyuubi.hadoop.adlc.app" -> "adlc",
       "kyuubi.hadoop.adlc.ai" -> "adlc-ai",
       "kyuubi.hadoop.adlc.image" -> "spark:test",
+      "spark.driver.cores" -> "3",
       BatchUtils.KYUUBI_BATCH_ID_KEY -> UUID.randomUUID().toString)
     val batchRequest = newSparkBatchRequest(batchConf)
     val sessionHandle = sessionMgr.openBatchSession(
@@ -724,6 +744,10 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
     assert(conf("spark.kubernetes.executor.annotation.io.sherlock.logs/namespace") == "adlc")
     assert(conf("spark.kubernetes.executor.label.applicationinstance.tess.io/name") == "adlc-ai")
     assert(conf("spark.kubernetes.container.image") == "spark:test")
+    assert(conf("spark.kubernetes.driver.request.cores") == "3")
+    assert(conf("spark.kubernetes.driver.limit.cores") == "3")
+    assert(conf("spark.kubernetes.executor.request.cores") == "2")
+    assert(conf("spark.kubernetes.executor.limit.cores") == "2")
     batchSession.close()
   }
 

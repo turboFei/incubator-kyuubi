@@ -109,21 +109,19 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
         parser)
     } else {
       val userDefaultConf = sessionConf.getUserDefaults(user)
-      KyuubiEbayConf.getTagDefaultConf(
+      val tessDefaultConf = KyuubiEbayConf.getTagDefaultConf(
         validateAndNormalizeConf(conf),
         ENGINE_SPARK_TESS_ENABLED,
         ENGINE_SPARK_TESS_CONFIG_TAG,
         sessionConf,
-        userDefaultConf).foreach { case (key, value) =>
-        userDefaultConf.set(key, value)
-      }
+        userDefaultConf)
 
       new KyuubiSessionImpl(
         protocol,
         user,
         password,
         ipAddress,
-        conf,
+        tessDefaultConf ++ conf,
         this,
         userDefaultConf,
         parser)
