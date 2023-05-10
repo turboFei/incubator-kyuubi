@@ -23,7 +23,7 @@ import CarmelSessionStatus.CarmelSessionStatus
 import com.codahale.metrics.MetricRegistry
 import org.apache.hive.service.rpc.thrift.{TGetInfoType, TGetInfoValue, TProtocolVersion, TStringValue}
 
-import org.apache.kyuubi.KyuubiSQLException
+import org.apache.kyuubi.{KyuubiSQLException, Utils}
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiConf.{ENGINE_OPEN_MAX_ATTEMPTS, ENGINE_OPEN_RETRY_WAIT}
 import org.apache.kyuubi.config.KyuubiEbayConf.CARMEL_ENGINE_URL_KEY
@@ -141,14 +141,21 @@ class CarmelSessionImpl(
     try {
       val opHandle = client.executeStatement(s"set $config", Map.empty, false, 0)
       val result = client.fetchResults(opHandle, FetchOrientation.FETCH_NEXT, Int.MaxValue, false)
-      result.getRows.asScala.headOption.map(row => {
-        row.getColVals.asScala.lastOption.map { col =>
+      result.getRows.asScala.headOption.foreach(row => {
+        row.getColVals.asScala.lastOption.foreach { col =>
           if (col.getStringVal.isSetValue) {
             configValue =
               Some(col.getStringVal.getFieldValue(TStringValue._Fields.VALUE).asInstanceOf[String])
           }
         }
       })
+      if (configValue.isEmpty) {
+        Utils.tryLogNonFatalError {
+          result.getColumns.asScala.lastOption.foreach { col =>
+            configValue = col.getStringVal.getValues.asScala.headOption
+          }
+        }
+      }
     } catch {
       case e: Throwable => throw KyuubiSQLException(s"Error fetching engine config: $config", e)
     }
