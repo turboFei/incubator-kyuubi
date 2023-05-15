@@ -327,32 +327,33 @@ class ExecuteStatement(
     resultDF.take(maxRows)
   }
 
-  protected def executeStatement(): Unit = withLocalProperties {
+  protected def executeStatement(): Unit =
     try {
-      setState(OperationState.RUNNING)
-      info(diagnostics)
-      Thread.currentThread().setContextClassLoader(spark.sharedState.jarClassLoader)
-      addOperationListener()
-      result = spark.sql(statement)
-      schema = result.schema
-      // only save to temp table for incremental collect mode
-      if (tempTableCollect && incrementalCollect && ExecuteStatementHelper.isDQL(statement)) {
-        if (ExecuteStatementHelper.sortable(result.queryExecution.sparkPlan)) {
-          saveSortableQueryResult()
-        } else {
-          saveIntoTempTable(statement)
+      withLocalProperties {
+        setState(OperationState.RUNNING)
+        info(diagnostics)
+        Thread.currentThread().setContextClassLoader(spark.sharedState.jarClassLoader)
+        addOperationListener()
+        result = spark.sql(statement)
+        schema = result.schema
+        // only save to temp table for incremental collect mode
+        if (tempTableCollect && incrementalCollect && ExecuteStatementHelper.isDQL(statement)) {
+          if (ExecuteStatementHelper.sortable(result.queryExecution.sparkPlan)) {
+            saveSortableQueryResult()
+          } else {
+            saveIntoTempTable(statement)
+          }
         }
+        withMetrics(result.queryExecution)
+        iter = collectAsIterator(result)
+        setCompiledStateIfNeeded()
+        setState(OperationState.FINISHED)
       }
-      withMetrics(result.queryExecution)
-      iter = collectAsIterator(result)
-      setCompiledStateIfNeeded()
-      setState(OperationState.FINISHED)
     } catch {
       onError(cancel = true)
     } finally {
       shutdownTimeoutMonitor()
     }
-  }
 
   override protected def runInternal(): Unit = {
     addTimeoutMonitor(queryTimeout)

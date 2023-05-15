@@ -243,10 +243,10 @@ abstract class SparkOperation(session: Session)
     resp
   }
 
-  override def getNextRowSet(order: FetchOrientation, rowSetSize: Int): TRowSet =
-    withLocalProperties {
-      var resultRowSet: TRowSet = null
-      try {
+  override def getNextRowSet(order: FetchOrientation, rowSetSize: Int): TRowSet = {
+    var resultRowSet: TRowSet = null
+    try {
+      withLocalProperties {
         validateDefaultFetchOrientation(order)
         assertState(OperationState.FINISHED)
         setHasResultSet(true)
@@ -271,10 +271,11 @@ abstract class SparkOperation(session: Session)
               getProtocolVersion)
           }
         resultRowSet.setStartRowOffset(iter.getPosition)
-      } catch onError(cancel = true)
+      }
+    } catch onError(cancel = true)
 
-      resultRowSet
-    }
+    resultRowSet
+  }
 
   override def shouldRunAsync: Boolean = false
 
