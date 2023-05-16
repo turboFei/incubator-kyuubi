@@ -185,6 +185,7 @@ private[v1] class SessionsResource extends ApiRequestContext with Logging {
   @Path("{sessionHandle}")
   def closeSession(@PathParam("sessionHandle") sessionHandleStr: String): Response = {
     checkSessionAccessPermission(sessionHandleStr)
+    info(s"Received request of closing $sessionHandleStr")
     fe.be.closeSession(sessionHandleStr)
     Response.ok().build()
   }
