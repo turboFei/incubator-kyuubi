@@ -70,8 +70,6 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
         KyuubiConf.AUTHENTICATION_CUSTOM_CLASS,
         classOf[FakeApiKeyAuthenticationProviderImpl].getName)
       .set("kyuubi.server.redaction.regex", "(?i)secret|pass|token|access[.]key")
-      .set("___spark_tess___.spark.tess.key1", "value1")
-      .set("___spark_tess___.spark.tess.overwrite", "false")
   }
 
   override def beforeAll(): Unit = {

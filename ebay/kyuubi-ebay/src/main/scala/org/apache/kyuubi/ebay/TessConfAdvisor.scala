@@ -24,6 +24,7 @@ import scala.collection.JavaConverters._
 import org.apache.kyuubi.Logging
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiEbayConf._
+import org.apache.kyuubi.ebay.TagBasedSessionConfAdvisor.getSessionTagDefaultConf
 import org.apache.kyuubi.plugin.SessionConfAdvisor
 
 class TessConfAdvisor extends SessionConfAdvisor with Logging {
@@ -31,22 +32,31 @@ class TessConfAdvisor extends SessionConfAdvisor with Logging {
   import TessConfAdvisor._
 
   private val kyuubiConf = KyuubiConf()
-  private val tessConfFile = kyuubiConf.get(SESSION_TESS_CONF_FILE)
+
+  private val tessConfOverlayFile = kyuubiConf.get(SESSION_TESS_CONF_FILE)
+  private val tessConfTag = kyuubiConf.get(ENGINE_SPARK_TESS_CONFIG_TAG)
+  private val tessEnabledDefault = kyuubiConf.get(ENGINE_SPARK_TESS_ENABLED)
+
   private val TESS_DEFAULT_SPARK_DRIVER_CORES =
     kyuubiConf.get(SESSION_TESS_SPARK_DRIVER_CORES_DEFAULT)
   private val TESS_DEFAULT_SPARK_EXECUTOR_CORES =
     kyuubiConf.get(SESSION_TESS_SPARK_EXECUTOR_CORES_DEFAULT)
   private def clusterTessConfFile(cluster: Option[String]): Option[String] = {
-    cluster.map(c => s"$tessConfFile.$c")
+    cluster.map(c => s"$tessConfOverlayFile.$c")
   }
 
   override def getConfOverlay(
       user: String,
       sessionConf: JMap[String, String]): JMap[String, String] = {
-    if ("true".equalsIgnoreCase(sessionConf.get(ENGINE_SPARK_TESS_ENABLED.key))) {
+    if ("true".equalsIgnoreCase(sessionConf.getOrDefault(
+        ENGINE_SPARK_TESS_ENABLED.key,
+        tessEnabledDefault.toString))) {
       val sessionCluster = sessionConf.asScala.get(SESSION_CLUSTER.key)
-      val tessConf = fileConfCache.get(tessConfFile)
-      val clusterTessConf = clusterTessConfFile(sessionCluster).map(fileConfCache.get)
+
+      val tessDefaultConf = getSessionTagDefaultConf(sessionConf, tessConfTag, sessionCluster)
+
+      val tessConfOverlay = fileConfCache.get(tessConfOverlayFile)
+      val clusterTessConfOverlay = clusterTessConfFile(sessionCluster).map(fileConfCache.get)
 
       val appName = Option(sessionConf.get(ADLC_APP)).map(_.trim).getOrElse("")
       val appInstance = Option(sessionConf.get(ADLC_AI)).map(_.trim).getOrElse("")
@@ -61,7 +71,8 @@ class TessConfAdvisor extends SessionConfAdvisor with Logging {
         EXECUTOR_ANNOTATION_SHERLOCK_LOGS -> appName,
         CONTAINER_IMAGE -> appImage).filter(_._2.nonEmpty)
 
-      val tessOverlayConf = tessConf.getAll ++ clusterTessConf.map(_.getAll).getOrElse(Map.empty)
+      val tessOverlayConf = tessDefaultConf ++ tessConfOverlay.getAll ++ clusterTessConfOverlay.map(
+        _.getAll).getOrElse(Map.empty)
 
       val tessCoresConf = getTessCores(sessionConf.asScala.toMap ++ tessOverlayConf)
 

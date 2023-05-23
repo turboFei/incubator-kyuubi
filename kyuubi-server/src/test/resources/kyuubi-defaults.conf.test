@@ -18,3 +18,5 @@
 spark.sql.kyuubi.session.cluster.test yes
 spark.master=local
 ___userb___.spark.user.test=b
+___spark_tess___.spark.tess.key1=value1
+___spark_tess___.spark.tess.overwrite=false

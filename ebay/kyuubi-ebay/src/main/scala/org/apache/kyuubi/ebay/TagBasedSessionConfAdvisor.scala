@@ -32,9 +32,9 @@ import org.apache.kyuubi.plugin.SessionConfAdvisor
 class TagBasedSessionConfAdvisor extends SessionConfAdvisor with Logging {
   import TagBasedSessionConfAdvisor._
 
-  private val tagConfFile = KyuubiConf().get(SESSION_TAG_CONF_FILE)
-  private def clusterTagConfFile(cluster: Option[String]): Option[String] = {
-    cluster.map(c => s"$tagConfFile.$c")
+  private val overlayConfFile = KyuubiConf().get(SESSION_TAG_CONF_FILE)
+  private def clusterOverlayConfFile(cluster: Option[String]): Option[String] = {
+    cluster.map(c => s"$overlayConfFile.$c")
   }
 
   private val tessConfAdvisor = new TessConfAdvisor()
@@ -60,17 +60,19 @@ class TagBasedSessionConfAdvisor extends SessionConfAdvisor with Logging {
       KyuubiEbayConf.getSessionTag(sessionConf.asScala.toMap).getOrElse(KYUUBI_DEFAULT_TAG)
     val sessionCluster = sessionConf.asScala.get(SESSION_CLUSTER.key)
 
-    val tagConf = fileConfCache.get(tagConfFile)
-    val clusterTagConf = clusterTagConfFile(sessionCluster).map(fileConfCache.get)
+    val tagDefaultConf = getSessionTagDefaultConf(sessionConf, sessionTag, sessionCluster)
 
-    val tagLevelConfOverlay = KyuubiEbayConf.getTagConfOnly(tagConf, sessionTag) ++
-      clusterTagConf.map(KyuubiEbayConf.getTagConfOnly(_, sessionTag)).getOrElse(Map.empty)
+    val overlayConf = fileConfCache.get(overlayConfFile)
+    val clusterOverlayConf = clusterOverlayConfFile(sessionCluster).map(fileConfCache.get)
+
+    val tagLevelConfOverlay = KyuubiEbayConf.getTagConfOnly(overlayConf, sessionTag) ++
+      clusterOverlayConf.map(KyuubiEbayConf.getTagConfOnly(_, sessionTag)).getOrElse(Map.empty)
     val serviceOverwriteConfOverlay =
-      KyuubiEbayConf.getTagConfOnly(tagConf, KYUUBI_OVERWRITE_TAG) ++
-        clusterTagConf.map(KyuubiEbayConf.getTagConfOnly(_, KYUUBI_OVERWRITE_TAG)).getOrElse(
+      KyuubiEbayConf.getTagConfOnly(overlayConf, KYUUBI_OVERWRITE_TAG) ++
+        clusterOverlayConf.map(KyuubiEbayConf.getTagConfOnly(_, KYUUBI_OVERWRITE_TAG)).getOrElse(
           Map.empty)
 
-    val tagConfOverlay = tagLevelConfOverlay ++ serviceOverwriteConfOverlay
+    val tagConfOverlay = tagDefaultConf ++ tagLevelConfOverlay ++ serviceOverwriteConfOverlay
     val tessConfOverlay =
       tessConfAdvisor.getConfOverlay(user, (sessionConf.asScala ++ tagConfOverlay).asJava)
 
@@ -109,4 +111,22 @@ object TagBasedSessionConfAdvisor extends Logging {
           conf
         }
       })
+
+  private val defaultConfFile = KyuubiConf.KYUUBI_CONF_FILE_NAME
+  private def clusterDefaultConfFile(cluster: Option[String]): Option[String] = {
+    cluster.map(c => s"$defaultConfFile.$c")
+  }
+
+  def getSessionTagDefaultConf(
+      sessionConf: JMap[String, String],
+      sessionTag: String,
+      sessionCluster: Option[String]): Map[String, String] = {
+    val defaultConf = fileConfCache.get(defaultConfFile)
+    val clusterDefaultConf = clusterDefaultConfFile(sessionCluster).map(fileConfCache.get)
+    val tagLevelDefaultConf = KyuubiEbayConf.getTagConfOnly(defaultConf, sessionTag) ++
+      clusterDefaultConf.map(KyuubiEbayConf.getTagConfOnly(_, sessionTag)).getOrElse(Map.empty)
+    tagLevelDefaultConf.filterNot { case (key, _) =>
+      sessionConf.containsKey(key)
+    }
+  }
 }

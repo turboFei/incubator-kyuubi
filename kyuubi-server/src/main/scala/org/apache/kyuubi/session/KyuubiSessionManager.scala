@@ -108,22 +108,14 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
         sessionConf.getUserDefaults(user),
         parser)
     } else {
-      val userDefaultConf = sessionConf.getUserDefaults(user)
-      val tessDefaultConf = KyuubiEbayConf.getTagDefaultConf(
-        validateAndNormalizeConf(conf),
-        ENGINE_SPARK_TESS_ENABLED,
-        ENGINE_SPARK_TESS_CONFIG_TAG,
-        sessionConf,
-        userDefaultConf)
-
       new KyuubiSessionImpl(
         protocol,
         user,
         password,
         ipAddress,
-        tessDefaultConf ++ conf,
+        conf,
         this,
-        userDefaultConf,
+        sessionConf.getUserDefaults(user),
         parser)
     }
   }
@@ -182,14 +174,6 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
       conf,
       BATCH_SPARK_HBASE_ENABLED,
       BATCH_SPARK_HBASE_CONFIG_TAG,
-      sessionConf,
-      userDefaultConf).foreach { case (key, value) =>
-      userDefaultConf.set(key, value)
-    }
-    KyuubiEbayConf.getBatchTagDefaultConf(
-      conf,
-      ENGINE_SPARK_TESS_ENABLED,
-      ENGINE_SPARK_TESS_CONFIG_TAG,
       sessionConf,
       userDefaultConf).foreach { case (key, value) =>
       userDefaultConf.set(key, value)
