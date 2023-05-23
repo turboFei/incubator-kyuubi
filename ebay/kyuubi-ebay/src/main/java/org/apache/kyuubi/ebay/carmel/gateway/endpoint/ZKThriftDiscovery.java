@@ -16,9 +16,9 @@
  */
 package org.apache.kyuubi.ebay.carmel.gateway.endpoint;
 
-import static org.apache.curator.framework.recipes.cache.PathChildrenCacheEvent.Type.CHILD_ADDED;
 import static org.apache.kyuubi.ebay.carmel.gateway.config.CarmelConfig.ConfVars.CARMEL_COMMON_ZK_QUORUM;
 import static org.apache.kyuubi.ebay.carmel.gateway.config.CarmelConfig.ConfVars.CARMEL_GATEWAY_THRIFT_ZOOKEEPER_NAMESPACE;
+import static org.apache.kyuubi.shaded.curator.framework.recipes.cache.PathChildrenCacheEvent.Type.CHILD_ADDED;
 
 import com.google.common.cache.*;
 import com.google.common.collect.Lists;
@@ -30,16 +30,16 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.curator.framework.CuratorFramework;
-import org.apache.curator.framework.recipes.cache.PathChildrenCache;
-import org.apache.curator.framework.recipes.cache.PathChildrenCacheEvent;
-import org.apache.curator.framework.recipes.cache.PathChildrenCacheListener;
-import org.apache.curator.utils.ZKPaths;
 import org.apache.kyuubi.config.KyuubiConf;
 import org.apache.kyuubi.ebay.carmel.gateway.config.CarmelConfig;
 import org.apache.kyuubi.ebay.carmel.gateway.tools.JsonUtils;
 import org.apache.kyuubi.ha.HighAvailabilityConf;
 import org.apache.kyuubi.ha.client.zookeeper.ZookeeperClientProvider;
+import org.apache.kyuubi.shaded.curator.framework.CuratorFramework;
+import org.apache.kyuubi.shaded.curator.framework.recipes.cache.PathChildrenCache;
+import org.apache.kyuubi.shaded.curator.framework.recipes.cache.PathChildrenCacheEvent;
+import org.apache.kyuubi.shaded.curator.framework.recipes.cache.PathChildrenCacheListener;
+import org.apache.kyuubi.shaded.curator.utils.ZKPaths;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
