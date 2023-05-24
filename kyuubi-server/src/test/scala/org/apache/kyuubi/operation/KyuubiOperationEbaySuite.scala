@@ -313,6 +313,13 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
         assert(col3.get(2).isEmpty)
         assert(col4.get(2) === -1)
 
+        // download op metrics
+        val metrics = server.backendService.sessionManager.operationManager.allOperations()
+          .filter(_.isInstanceOf[DownloadDataOperation])
+          .head.asInstanceOf[DownloadDataOperation].metrics
+        assert(metrics.get("downloadDataSize").isDefined)
+        assert(metrics.get("downloadDataSize").forall(_.toInt > 0))
+
         // create table ta
         val executeStmtReq = new TExecuteStatementReq()
         executeStmtReq.setStatement("create table ta(c1 string) using parquet")
