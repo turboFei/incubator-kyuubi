@@ -17,7 +17,7 @@
 
 package org.apache.kyuubi.ebay
 
-import java.util.{Map => JMap}
+import java.util.{Map => JMap, UUID}
 
 import scala.collection.JavaConverters._
 
@@ -58,9 +58,18 @@ class TessConfAdvisor extends SessionConfAdvisor with Logging {
       val tessConfOverlay = fileConfCache.get(tessConfOverlayFile)
       val clusterTessConfOverlay = clusterTessConfFile(sessionCluster).map(fileConfCache.get)
 
-      val appName = Option(sessionConf.get(ADLC_APP)).map(_.trim).getOrElse("")
-      val appInstance = Option(sessionConf.get(ADLC_AI)).map(_.trim).getOrElse("")
-      val appImage = Option(sessionConf.get(ADLC_IMAGE)).map(_.trim).getOrElse("")
+      val tessOverlayConf = tessDefaultConf ++ tessConfOverlay.getAll ++ clusterTessConfOverlay.map(
+        _.getAll).getOrElse(Map.empty)
+
+      val tempSessionConf = sessionConf.asScala.toMap ++ tessOverlayConf
+
+      val appName = tempSessionConf.get(ADLC_APP).map(_.trim).getOrElse("")
+      val appInstance = tempSessionConf.get(ADLC_AI).map(_.trim).getOrElse("")
+      val appImage = tempSessionConf.get(ADLC_IMAGE).map(_.trim).getOrElse("")
+
+      require(
+        appName.nonEmpty && appInstance.nonEmpty,
+        s"$ADLC_APP and $ADLC_AI must be specified for Spark on TESS.")
 
       val appConf = Map(
         DRIVER_ANNOTATION_APPLICATION_NAME -> appName,
@@ -71,12 +80,9 @@ class TessConfAdvisor extends SessionConfAdvisor with Logging {
         EXECUTOR_ANNOTATION_SHERLOCK_LOGS -> appName,
         CONTAINER_IMAGE -> appImage).filter(_._2.nonEmpty)
 
-      val tessOverlayConf = tessDefaultConf ++ tessConfOverlay.getAll ++ clusterTessConfOverlay.map(
-        _.getAll).getOrElse(Map.empty)
+      val tessCoresConf = getTessCores(tempSessionConf)
 
-      val tessCoresConf = getTessCores(sessionConf.asScala.toMap ++ tessOverlayConf)
-
-      val tessUploadPathConf = getTessUploadPath(user, sessionConf.asScala.toMap ++ tessOverlayConf)
+      val tessUploadPathConf = getTessUploadPath(user, tempSessionConf)
 
       val allConf = tessOverlayConf ++ tessCoresConf ++ tessUploadPathConf ++ appConf
 
@@ -116,7 +122,8 @@ class TessConfAdvisor extends SessionConfAdvisor with Logging {
 
   private def getTessUploadPath(user: String, conf: Map[String, String]): Map[String, String] = {
     conf.get(KUBERNETES_FILE_UPLOAD_PATH).orElse {
-      conf.get(KyuubiEbayConf.SESSION_TESS_SCRATCH_DIR.key).map(_ + s"/$user")
+      val randomDirName = s"kyuubi-spark-upload-${UUID.randomUUID()}"
+      conf.get(KyuubiEbayConf.SESSION_TESS_SCRATCH_DIR.key).map(_ + s"/$user/$randomDirName")
     }.map { p =>
       KUBERNETES_FILE_UPLOAD_PATH -> p
     }.toMap
@@ -128,6 +135,7 @@ object TessConfAdvisor {
 
   final val ADLC_APP = ADLC + "app"
   final val ADLC_AI = ADLC + "ai"
+  @deprecated("using spark.kubernetes.container.image directly")
   final val ADLC_IMAGE = ADLC + "image"
 
   final private val KUBERNETES_DRIVER = "spark.kubernetes.driver."
