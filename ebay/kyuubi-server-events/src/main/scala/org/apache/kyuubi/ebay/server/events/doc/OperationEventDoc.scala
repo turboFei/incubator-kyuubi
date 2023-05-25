@@ -32,6 +32,7 @@ case class OperationEventDoc(
     sessionUser: String,
     sessionType: String,
     kyuubiInstance: String,
+    metrics: Map[String, String],
     eventType: String,
     sessionCluster: String,
     sessionQueue: String)

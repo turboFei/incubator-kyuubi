@@ -114,6 +114,7 @@ object EventDoc {
           e.sessionUser,
           e.sessionType,
           e.kyuubiInstance,
+          e.metrics,
           e.eventType,
           e.sessionCluster,
           e.sessionQueue)
