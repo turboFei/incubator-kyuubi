@@ -60,6 +60,7 @@ object ApiUtils {
       opEvent.sessionUser,
       opEvent.sessionType,
       operation.getSession.asInstanceOf[KyuubiSession].connectionUrl,
+      operation.metrics.asJava,
       operation.getSession.asInstanceOf[KyuubiSession].sessionCluster.getOrElse(""),
       operation.getSession.asInstanceOf[KyuubiSession].sessionQueue.getOrElse(""))
   }
