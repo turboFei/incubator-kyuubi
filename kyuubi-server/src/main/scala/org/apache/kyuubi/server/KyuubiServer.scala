@@ -32,7 +32,7 @@ import org.apache.kyuubi.config.KyuubiConf.{FRONTEND_PROTOCOLS, FrontendProtocol
 import org.apache.kyuubi.config.KyuubiConf.FrontendProtocols._
 import org.apache.kyuubi.events.{EventBus, KyuubiServerInfoEvent, ServerEventHandlerRegister}
 import org.apache.kyuubi.ha.HighAvailabilityConf._
-import org.apache.kyuubi.ha.client.{AuthTypes, KyuubiServiceDiscovery}
+import org.apache.kyuubi.ha.client.{AuthTypes, ServiceDiscovery}
 import org.apache.kyuubi.metrics.{MetricsConf, MetricsSystem}
 import org.apache.kyuubi.server.metadata.jdbc.JDBCMetadataStoreConf
 import org.apache.kyuubi.service.{AbstractBackendService, AbstractFrontendService, Serverable, ServiceState}
@@ -50,8 +50,7 @@ object KyuubiServer extends Logging {
   def startServer(conf: KyuubiConf): KyuubiServer = {
     clusterModeEnabled = conf.get(KyuubiEbayConf.SESSION_CLUSTER_MODE_ENABLED)
     loadHadoopConf(Some(conf))
-    if (KyuubiServiceDiscovery.enableServiceDiscovery(conf) &&
-      !KyuubiServiceDiscovery.supportServiceDiscovery(conf)) {
+    if (!ServiceDiscovery.supportServiceDiscovery(conf)) {
       zkServer.initialize(conf)
       zkServer.start()
       conf.set(HA_ADDRESSES, zkServer.getConnectString)

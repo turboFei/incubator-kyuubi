@@ -25,20 +25,18 @@ import javax.ws.rs.core.{GenericType, MediaType}
 import scala.collection.JavaConverters._
 
 import org.apache.hive.service.rpc.thrift.TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V2
-import org.mockito.Mockito.lenient
 import org.scalatest.time.SpanSugar.convertIntToGrainOfTime
-import org.scalatestplus.mockito.MockitoSugar.mock
 
 import org.apache.kyuubi.{KYUUBI_VERSION, KyuubiFunSuite, RestFrontendTestHelper, Utils}
 import org.apache.kyuubi.client.api.v1.dto.{Engine, OperationData, ServerData, SessionData, SessionHandle, SessionOpenRequest}
-import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiReservedKeys.KYUUBI_SESSION_CONNECTION_URL_KEY
 import org.apache.kyuubi.engine.{ApplicationState, EngineRef, KyuubiApplicationManager}
 import org.apache.kyuubi.engine.EngineType.SPARK_SQL
 import org.apache.kyuubi.engine.ShareLevel.{CONNECTION, GROUP, USER}
 import org.apache.kyuubi.ha.HighAvailabilityConf
-import org.apache.kyuubi.ha.client.{DiscoveryPaths, ServiceDiscovery}
 import org.apache.kyuubi.ha.client.DiscoveryClientProvider.withDiscoveryClient
+import org.apache.kyuubi.ha.client.DiscoveryPaths
 import org.apache.kyuubi.plugin.PluginLoader
 import org.apache.kyuubi.server.KyuubiRestFrontendService
 import org.apache.kyuubi.server.http.authentication.AuthenticationHandler.AUTHORIZATION_HEADER
@@ -540,34 +538,27 @@ class AdminResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper {
   }
 
   test("list server") {
-    // Mock Kyuubi Server
-    val serverDiscovery = mock[ServiceDiscovery]
-    lenient.when(serverDiscovery.fe).thenReturn(fe)
-    val namespace = conf.get(HighAvailabilityConf.HA_NAMESPACE)
-    withDiscoveryClient(conf) { client =>
-      client.registerService(conf, namespace, serverDiscovery)
+    val namespace = conf.get(KyuubiEbayConf.REST_HA_NAMESPACE)
+    val response = webTarget.path("api/v1/admin/server")
+      .request()
+      .header(AUTHORIZATION_HEADER, s"BASIC $encodeAuthorization")
+      .get
 
-      val response = webTarget.path("api/v1/admin/server")
-        .request()
-        .header(AUTHORIZATION_HEADER, s"BASIC $encodeAuthorization")
-        .get
+    assert(200 == response.getStatus)
+    val result = response.readEntity(new GenericType[Seq[ServerData]]() {})
+    assert(result.size == 1)
+    val testServer = result.head
+    val export = fe.asInstanceOf[KyuubiRestFrontendService]
 
-      assert(200 == response.getStatus)
-      val result = response.readEntity(new GenericType[Seq[ServerData]]() {})
-      assert(result.size == 1)
-      val testServer = result.head
-      val export = fe.asInstanceOf[KyuubiRestFrontendService]
-
-      assert(namespace.equals(testServer.getNamespace.replaceFirst("/", "")))
-      assert(export.host.equals(testServer.getHost))
-      assert(export.connectionUrl.equals(testServer.getInstance()))
-      assert(!testServer.getAttributes.isEmpty)
-      val attributes = testServer.getAttributes
-      assert(attributes.containsKey("serviceUri") &&
-        attributes.get("serviceUri").equals(fe.connectionUrl))
-      assert(attributes.containsKey("version"))
-      assert(attributes.containsKey("sequence"))
-      assert("Running".equals(testServer.getStatus))
-    }
+    assert(namespace.equals(testServer.getNamespace.replaceFirst("/", "")))
+    assert(export.host.equals(testServer.getHost))
+    assert(export.connectionUrl.equals(testServer.getInstance()))
+    assert(!testServer.getAttributes.isEmpty)
+    val attributes = testServer.getAttributes
+    assert(attributes.containsKey("serviceUri") &&
+      attributes.get("serviceUri").equals(fe.connectionUrl))
+    assert(attributes.containsKey("version"))
+    assert(attributes.containsKey("sequence"))
+    assert("Running".equals(testServer.getStatus))
   }
 }

@@ -29,28 +29,29 @@ import org.apache.kyuubi.session.SessionManager
 object KyuubiEbayConf extends Logging {
   private def buildConf(key: String): ConfigBuilder = KyuubiConf.buildConf(key)
 
-  val SERVER_HA_ZK_ENABLED: ConfigEntry[Boolean] = buildConf("kyuubi.server.ha.zookeeper.enabled")
-    .doc("Whether to enable the ha zookeeper discovery in server side")
-    .internal
-    .serverOnly
-    .booleanConf
-    .createWithDefault(true)
-
-  val REST_HA_ZK_ENABLED: ConfigEntry[Boolean] =
-    buildConf("kyuubi.server.rest.ha.zookeeper.enabled")
-      .doc("Whether to enable the ha zookeeper discovery for rest server")
-      .internal
-      .serverOnly
-      .booleanConf
-      .createWithDefault(false)
-
+  @deprecated("using kyuubi.rest.ha.namespace instead")
   val REST_HA_ZK_NAMESPACE: ConfigEntry[String] =
     buildConf("kyuubi.server.rest.ha.zookeeper.namespace")
-      .doc("he root directory for the kyuubi server to deploy its rest instance uri")
+      .doc("The root directory for the kyuubi server to deploy its rest instance uri")
       .internal
       .serverOnly
       .stringConf
       .createWithDefault("kyuubi_rest")
+
+  val REST_HA_NAMESPACE: ConfigEntry[String] =
+    buildConf("kyuubi.rest.ha.namespace")
+      .doc("The root directory for the kyuubi server to deploy its rest instance uri")
+      .internal
+      .serverOnly
+      .fallbackConf(REST_HA_ZK_NAMESPACE)
+
+  val BINARY_SSL_HA_NAMESPACE: ConfigEntry[String] =
+    buildConf("kyuubi.binary.ssl.ha.namespace")
+      .doc("The root directory for the kyuubi server to deploy its thrift binary ssl instance uri.")
+      .internal
+      .serverOnly
+      .stringConf
+      .createWithDefault("kyuubi_binary_ssl")
 
   val SESSION_CLUSTER_MODE_ENABLED: ConfigEntry[Boolean] =
     buildConf("kyuubi.session.cluster.mode.enabled")

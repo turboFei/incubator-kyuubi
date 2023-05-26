@@ -27,6 +27,6 @@ class KyuubiRestServiceDiscovery(fe: FrontendService) extends KyuubiServiceDisco
 
   override def initialize(conf: KyuubiConf): Unit = {
     super.initialize(conf)
-    _restNamespace = conf.get(KyuubiEbayConf.REST_HA_ZK_NAMESPACE)
+    _restNamespace = conf.get(KyuubiEbayConf.REST_HA_NAMESPACE)
   }
 }

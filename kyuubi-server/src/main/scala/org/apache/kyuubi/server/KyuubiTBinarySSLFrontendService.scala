@@ -19,15 +19,24 @@ package org.apache.kyuubi.server
 
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf.FRONTEND_SSL_KEYSTORE_TYPE
-import org.apache.kyuubi.ebay.SSLUtils
+import org.apache.kyuubi.ebay.{KyuubiBinarySSLServiceDiscovery, SSLUtils}
+import org.apache.kyuubi.ha.client.ServiceDiscovery
 import org.apache.kyuubi.metrics.MetricsSystem
-import org.apache.kyuubi.service.Serverable
+import org.apache.kyuubi.service.{Serverable, Service}
 
 class KyuubiTBinarySSLFrontendService(
     override val serverable: Serverable) extends KyuubiTBinaryFrontendService(serverable) {
   override protected lazy val portNum: Int =
     conf.get(KyuubiConf.FRONTEND_THRIFT_BINARY_SSL_BIND_PORT)
   override protected def sslEnabled: Boolean = true
+
+  override lazy val discoveryService: Option[Service] = {
+    if (ServiceDiscovery.supportServiceDiscovery(conf)) {
+      Some(new KyuubiBinarySSLServiceDiscovery(this))
+    } else {
+      None
+    }
+  }
 
   private def traceKeyStoreExpiration(): Unit = {
     val keyStorePath = conf.get(KyuubiConf.FRONTEND_SSL_KEYSTORE_PATH)

@@ -29,7 +29,7 @@ import org.apache.kyuubi.cli.Handle
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiConf.FrontendProtocols
 import org.apache.kyuubi.config.KyuubiReservedKeys._
-import org.apache.kyuubi.ha.client.KyuubiServiceDiscovery
+import org.apache.kyuubi.ha.client.{KyuubiServiceDiscovery, ServiceDiscovery}
 import org.apache.kyuubi.metrics.MetricsConstants._
 import org.apache.kyuubi.metrics.MetricsSystem
 import org.apache.kyuubi.service.{Serverable, Service, TBinaryFrontendService}
@@ -41,7 +41,7 @@ class KyuubiTBinaryFrontendService(
   extends TBinaryFrontendService("KyuubiTBinaryFrontend") {
 
   override lazy val discoveryService: Option[Service] = {
-    if (KyuubiServiceDiscovery.supportServiceDiscovery(conf)) {
+    if (ServiceDiscovery.supportServiceDiscovery(conf)) {
       Some(new KyuubiServiceDiscovery(this))
     } else {
       None

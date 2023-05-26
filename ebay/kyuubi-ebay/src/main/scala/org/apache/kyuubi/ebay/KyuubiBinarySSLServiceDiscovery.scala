@@ -15,27 +15,18 @@
  * limitations under the License.
  */
 
-package org.apache.kyuubi.ha.client
+package org.apache.kyuubi.ebay
 
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
+import org.apache.kyuubi.ha.client.KyuubiServiceDiscovery
 import org.apache.kyuubi.service.FrontendService
 
-/**
- * A service for service discovery used by kyuubi server side.
- * We add another zk watch so that we can stop server more genteelly.
- *
- * @param fe the frontend service to publish for service discovery
- */
-class KyuubiServiceDiscovery(
-    fe: FrontendService) extends ServiceDiscovery("KyuubiServiceDiscovery", fe) {
+class KyuubiBinarySSLServiceDiscovery(fe: FrontendService) extends KyuubiServiceDiscovery(fe) {
+  private var _binarySSLNamespace: String = _
+  override def namespace: String = _binarySSLNamespace
 
-  override def stop(): Unit = synchronized {
-    if (!isServerLost.get()) {
-      discoveryClient.deregisterService()
-      discoveryClient.closeClient()
-      gracefulShutdownLatch.await() // wait for graceful shutdown triggered by watcher
-    } else {
-      warn(s"The Zookeeper ensemble is LOST")
-    }
-    super.stop()
+  override def initialize(conf: KyuubiConf): Unit = {
+    super.initialize(conf)
+    _binarySSLNamespace = conf.get(KyuubiEbayConf.BINARY_SSL_HA_NAMESPACE)
   }
 }
