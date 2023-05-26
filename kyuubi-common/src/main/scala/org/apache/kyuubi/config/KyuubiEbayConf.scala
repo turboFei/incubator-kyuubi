@@ -29,30 +29,6 @@ import org.apache.kyuubi.session.SessionManager
 object KyuubiEbayConf extends Logging {
   private def buildConf(key: String): ConfigBuilder = KyuubiConf.buildConf(key)
 
-  @deprecated("using kyuubi.rest.ha.namespace instead")
-  val REST_HA_ZK_NAMESPACE: ConfigEntry[String] =
-    buildConf("kyuubi.server.rest.ha.zookeeper.namespace")
-      .doc("The root directory for the kyuubi server to deploy its rest instance uri")
-      .internal
-      .serverOnly
-      .stringConf
-      .createWithDefault("kyuubi_rest")
-
-  val REST_HA_NAMESPACE: ConfigEntry[String] =
-    buildConf("kyuubi.rest.ha.namespace")
-      .doc("The root directory for the kyuubi server to deploy its rest instance uri")
-      .internal
-      .serverOnly
-      .fallbackConf(REST_HA_ZK_NAMESPACE)
-
-  val BINARY_SSL_HA_NAMESPACE: ConfigEntry[String] =
-    buildConf("kyuubi.binary.ssl.ha.namespace")
-      .doc("The root directory for the kyuubi server to deploy its thrift binary ssl instance uri.")
-      .internal
-      .serverOnly
-      .stringConf
-      .createWithDefault("kyuubi_binary_ssl")
-
   val SESSION_CLUSTER_MODE_ENABLED: ConfigEntry[Boolean] =
     buildConf("kyuubi.session.cluster.mode.enabled")
       .doc("Whether to enable session with cluster specify mode. If it is enabled," +

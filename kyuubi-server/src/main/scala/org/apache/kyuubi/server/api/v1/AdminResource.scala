@@ -33,7 +33,6 @@ import org.apache.kyuubi.{KYUUBI_VERSION, Logging, Utils}
 import org.apache.kyuubi.client.api.v1.dto.{Engine, OperationData, ServerData, SessionData}
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiConf._
-import org.apache.kyuubi.config.KyuubiEbayConf.REST_HA_NAMESPACE
 import org.apache.kyuubi.ha.HighAvailabilityConf.HA_NAMESPACE
 import org.apache.kyuubi.ha.client.{DiscoveryPaths, ServiceNodeInfo}
 import org.apache.kyuubi.ha.client.DiscoveryClientProvider.withDiscoveryClient
@@ -329,7 +328,7 @@ private[v1] class AdminResource extends ApiRequestContext with Logging {
     }
     val kyuubiConf = fe.getConf
     val servers = ListBuffer[ServerData]()
-    val serverSpec = DiscoveryPaths.makePath(null, kyuubiConf.get(REST_HA_NAMESPACE))
+    val serverSpec = DiscoveryPaths.makePath(null, kyuubiConf.get(HA_NAMESPACE))
     withDiscoveryClient(kyuubiConf) { discoveryClient =>
       discoveryClient.getServiceNodesInfo(serverSpec).map(nodeInfo => {
         servers += ApiUtils.serverData(nodeInfo)
