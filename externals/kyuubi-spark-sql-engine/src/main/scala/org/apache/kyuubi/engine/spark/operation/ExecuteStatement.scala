@@ -453,6 +453,8 @@ class ArrowBasedExecuteStatement(
     incrementalCollect,
     handle) {
 
+  checkUseLargeVarType()
+
   override protected def incrementalCollectResult(resultDF: DataFrame): Iterator[Any] = {
     toArrowBatchLocalIterator(convertComplexType(resultDF))
   }
@@ -471,5 +473,18 @@ class ArrowBasedExecuteStatement(
 
   private def convertComplexType(df: DataFrame): DataFrame = {
     convertTopLevelComplexTypeToHiveString(df, timestampAsString)
+  }
+
+  def checkUseLargeVarType(): Unit = {
+    // TODO: largeVarType support, see SPARK-39979.
+    val useLargeVarType = session.asInstanceOf[SparkSessionImpl].spark
+      .conf
+      .get("spark.sql.execution.arrow.useLargeVarType", "false")
+      .toBoolean
+    if (useLargeVarType) {
+      throw new KyuubiSQLException(
+        "`spark.sql.execution.arrow.useLargeVarType = true` not support now.",
+        null)
+    }
   }
 }
