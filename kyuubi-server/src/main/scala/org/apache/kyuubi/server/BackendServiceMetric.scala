@@ -20,7 +20,7 @@ package org.apache.kyuubi.server
 import org.apache.hive.service.rpc.thrift._
 
 import org.apache.kyuubi.metrics.{MetricsConstants, MetricsSystem}
-import org.apache.kyuubi.operation.{KyuubiOperation, OperationHandle, OperationStatus}
+import org.apache.kyuubi.operation.{DownloadDataOperation, KyuubiOperation, OperationHandle, OperationStatus}
 import org.apache.kyuubi.operation.FetchOrientation.FetchOrientation
 import org.apache.kyuubi.service.BackendService
 import org.apache.kyuubi.session.SessionHandle
@@ -215,6 +215,15 @@ trait BackendServiceMetric extends BackendService {
         operation.increaseFetchLogCount(rowsSize)
       } else {
         operation.increaseFetchResultsCount(rowsSize)
+        operation match {
+          case dwp: DownloadDataOperation =>
+            val downloadDataSize = DownloadDataOperation.getDownloadDataSize(rowSet)
+            MetricsSystem.tracing(_.markMeter(
+              MetricsConstants.BS_DOWNLOAD_DATA_SIZE_RATE,
+              downloadDataSize))
+            dwp.increaseDownloadDataSize(downloadDataSize)
+          case _ =>
+        }
       }
 
       rowSet

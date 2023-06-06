@@ -22,7 +22,6 @@ import scala.collection.JavaConverters._
 import org.apache.hive.service.rpc.thrift.{TI64Value, TRowSet}
 
 import org.apache.kyuubi.Utils
-import org.apache.kyuubi.operation.FetchOrientation.FetchOrientation
 import org.apache.kyuubi.session.Session
 
 class DownloadDataOperation(
@@ -40,36 +39,15 @@ class DownloadDataOperation(
 
   @volatile private var _downloadDataSize = 0L
 
+  protected[kyuubi] def increaseDownloadDataSize(dataSize: Long): Unit = {
+    _downloadDataSize += dataSize
+  }
+
   override protected def executeStatement(): Unit = {
     try {
       _remoteOpHandle = client.downloadData(tableName, query, format, options)
       setHasResultSet(_remoteOpHandle.isHasResultSet)
     } catch onError()
-  }
-
-  override def getNextRowSet(order: FetchOrientation, rowSetSize: Int): TRowSet = {
-    val tRowSet = super.getNextRowSet(order, rowSetSize)
-    Utils.tryLogNonFatalError {
-      if (tRowSet.getColumnsSize > 0) {
-        tRowSet.getColumns.asScala.lastOption.foreach { col =>
-          if (col.getI64Val.isSetValues) {
-            col.getI64Val.getValues.asScala.foreach { value =>
-              Option(value).foreach(_downloadDataSize += _)
-            }
-          }
-        }
-      } else {
-        tRowSet.getRows.asScala.foreach { row =>
-          row.getColVals.asScala.lastOption.foreach { col =>
-            if (col.getI64Val.isSetValue) {
-              _downloadDataSize +=
-                col.getI64Val.getFieldValue(TI64Value._Fields.VALUE).asInstanceOf[Long]
-            }
-          }
-        }
-      }
-    }
-    tRowSet
   }
 
   override def metrics: Map[String, String] = super.metrics ++ Map(
@@ -83,5 +61,30 @@ object DownloadDataOperation {
       format: String,
       options: Map[String, String]): String = {
     s"Downloading data with arguments [$tableName, $query, $format, $options]"
+  }
+
+  private[kyuubi] def getDownloadDataSize(tRowSet: TRowSet): Long = {
+    var dataSize = 0L
+    Utils.tryLogNonFatalError {
+      if (tRowSet.getColumnsSize > 0) {
+        tRowSet.getColumns.asScala.lastOption.foreach { col =>
+          if (col.getI64Val.isSetValues) {
+            col.getI64Val.getValues.asScala.foreach { value =>
+              Option(value).filter(_ > 0).foreach(dataSize += _)
+            }
+          }
+        }
+      } else {
+        tRowSet.getRows.asScala.foreach { row =>
+          row.getColVals.asScala.lastOption.foreach { col =>
+            if (col.getI64Val.isSetValue) {
+              val value = col.getI64Val.getFieldValue(TI64Value._Fields.VALUE).asInstanceOf[Long]
+              Option(value).filter(_ > 0).foreach(dataSize += _)
+            }
+          }
+        }
+      }
+    }
+    dataSize
   }
 }

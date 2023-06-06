@@ -68,6 +68,7 @@ object MetricsConstants {
   final private val BACKEND_SERVICE = KYUUBI + "backend_service."
   final val BS_FETCH_LOG_ROWS_RATE = BACKEND_SERVICE + "fetch_log_rows_rate"
   final val BS_FETCH_RESULT_ROWS_RATE = BACKEND_SERVICE + "fetch_result_rows_rate"
+  final val BS_DOWNLOAD_DATA_SIZE_RATE = BACKEND_SERVICE + "download_data_size_rate"
   final val BS_OPEN_SESSION = BACKEND_SERVICE + "open_session"
   final val BS_CLOSE_SESSION = BACKEND_SERVICE + "close_session"
   final val BS_GET_INFO = BACKEND_SERVICE + "get_info"
