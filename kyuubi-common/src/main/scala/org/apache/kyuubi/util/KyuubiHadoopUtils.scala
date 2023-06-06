@@ -34,13 +34,11 @@ import org.apache.hadoop.yarn.conf.YarnConfiguration
 
 import org.apache.kyuubi.Logging
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
+import org.apache.kyuubi.util.reflect.ReflectUtils._
 
 object KyuubiHadoopUtils extends Logging {
   val HADOOP_MASTER_CONF_DIR = "HADOOP_MASTER_CONF_DIR"
   val HADOOP_CONF_DIR = "HADOOP_CONF_DIR"
-
-  private val tokenMapField = classOf[Credentials].getDeclaredField("tokenMap")
-  tokenMapField.setAccessible(true)
 
   /**
    * TODO: enhance the usage for EventLoggingService and UserGroupInformation
@@ -103,12 +101,8 @@ object KyuubiHadoopUtils extends Logging {
    * Get [[Credentials#tokenMap]] by reflection as [[Credentials#getTokenMap]] is not present before
    * Hadoop 3.2.1.
    */
-  def getTokenMap(credentials: Credentials): Map[Text, Token[_ <: TokenIdentifier]] = {
-    tokenMapField.get(credentials)
-      .asInstanceOf[JMap[Text, Token[_ <: TokenIdentifier]]]
-      .asScala
-      .toMap
-  }
+  def getTokenMap(credentials: Credentials): Map[Text, Token[_ <: TokenIdentifier]] =
+    getField[JMap[Text, Token[_ <: TokenIdentifier]]](credentials, "tokenMap").asScala.toMap
 
   def getTokenIssueDate(token: Token[_ <: TokenIdentifier]): Option[Long] = {
     token.decodeIdentifier() match {
