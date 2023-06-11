@@ -42,7 +42,7 @@ import org.apache.kyuubi.plugin.{GroupProvider, PluginLoader, SessionConfAdvisor
 import org.apache.kyuubi.server.metadata.{MetadataManager, MetadataRequestsRetryRef}
 import org.apache.kyuubi.server.metadata.api.Metadata
 import org.apache.kyuubi.sql.parser.server.KyuubiParser
-import org.apache.kyuubi.util.SignUtils
+import org.apache.kyuubi.util.{SignUtils, ThreadUtils}
 
 class KyuubiSessionManager private (name: String) extends SessionManager(name) {
 
@@ -66,6 +66,9 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
   lazy val groupProvider: GroupProvider = PluginLoader.loadGroupProvider(conf)
 
   lazy val (signingPrivateKey, signingPublicKey) = SignUtils.generateKeyPair()
+
+  private val engineAliveChecker =
+    ThreadUtils.newDaemonSingleThreadScheduledExecutor(s"$name-engine-alive-checker")
 
   val bdpManager = new BdpAccessManager()
   val carmelEndpointManager = new CarmelEndpointManager(this)
@@ -311,6 +314,7 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
       ms.registerGauge(EXEC_POOL_WORK_QUEUE_SIZE, getWorkQueueSize, 0)
     }
     super.start()
+    startEngineAliveChecker()
   }
 
   def getBatchSessionsToRecover(kyuubiInstance: String): Seq[KyuubiBatchSessionImpl] = {
@@ -442,5 +446,24 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
       s"${session.asInstanceOf[KyuubiSession].sessionCluster.map("/" + _).getOrElse("")}" +
       s"${session.name.map("/" + _).getOrElse("")} is $action," +
       s" current opening sessions $getOpenSessionCount")
+  }
+
+  private def startEngineAliveChecker(): Unit = {
+    val interval = conf.get(KyuubiConf.ENGINE_ALIVE_PROBE_INTERVAL)
+    val checkTask: Runnable = () => {
+      allSessions.foreach { session =>
+        if (!session.asInstanceOf[KyuubiSessionImpl].checkEngineAlive()) {
+          try {
+            closeSession(session.handle)
+            logger.info(s"The session ${session.handle} has been closed " +
+              s"due to engine unresponsiveness (checked by the engine alive checker).")
+          } catch {
+            case e: KyuubiSQLException =>
+              warn(s"Error closing session ${session.handle}", e)
+          }
+        }
+      }
+    }
+    engineAliveChecker.scheduleWithFixedDelay(checkTask, interval, interval, TimeUnit.MILLISECONDS)
   }
 }
