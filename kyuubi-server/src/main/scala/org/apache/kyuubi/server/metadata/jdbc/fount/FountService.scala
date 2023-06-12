@@ -25,6 +25,7 @@ import com.zaxxer.hikari.{HikariConfig, HikariDataSource}
 import org.apache.kyuubi.{Logging, Utils}
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.server.metadata.jdbc.{JDBCMetadataStore, JDBCMetadataStoreConf}
+import org.apache.kyuubi.server.metadata.jdbc.JDBCMetadataStoreConf.METADATA_STORE_JDBC_DRIVER
 
 object FountService extends FountDatasourceChangeListener with Logging {
   private var conf: KyuubiConf = _
@@ -51,7 +52,8 @@ object FountService extends FountDatasourceChangeListener with Logging {
     val fountConfig = fountClient.getDatasourceConfig(conf.get(FountConf.FOUNT_DATASOURCE))
     val datasourceProperties = JDBCMetadataStoreConf.getMetadataStoreJDBCDataSourceProperties(conf)
     val hikariConfig = new HikariConfig(datasourceProperties)
-    hikariConfig.setDriverClassName(jdbcMetadataStore.driverClass)
+    hikariConfig.setDriverClassName(
+      conf.get(METADATA_STORE_JDBC_DRIVER).getOrElse("com.mysql.jdbc.Driver"))
     hikariConfig.setJdbcUrl(fountConfig.getUrl.replace("amp;", ""))
     hikariConfig.setUsername(fountConfig.getUser)
     hikariConfig.setPassword(fountConfig.getPassword)

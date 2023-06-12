@@ -21,7 +21,7 @@ import java.nio.charset.StandardCharsets
 import java.util
 import java.util.{Base64, Collections}
 import javax.ws.rs.client.Entity
-import javax.ws.rs.core.{MediaType, Response}
+import javax.ws.rs.core.{GenericType, MediaType, Response}
 
 import scala.collection.JavaConverters._
 

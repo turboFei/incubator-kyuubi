@@ -46,7 +46,8 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
 
   private val dbType = DatabaseType.withName(conf.get(METADATA_STORE_JDBC_DATABASE_TYPE))
   private val driverClassOpt = conf.get(METADATA_STORE_JDBC_DRIVER)
-  private[jdbc] val driverClass = dbType match {
+  private val driverClass = dbType match {
+    case SQLITE => driverClassOpt.getOrElse("org.sqlite.JDBC")
     case DERBY => driverClassOpt.getOrElse("org.apache.derby.jdbc.AutoloadedDriver")
     case MYSQL | FOUNT => driverClassOpt.getOrElse("com.mysql.jdbc.Driver")
     case CUSTOM => driverClassOpt.getOrElse(
@@ -55,7 +56,8 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
 
   private val databaseAdaptor = dbType match {
     case DERBY => new DerbyDatabaseDialect
-    case MYSQL | FOUNT => new MysqlDatabaseDialect
+    case SQLITE => new SQLiteDatabaseDialect
+    case MYSQL | FOUNT => new MySQLDatabaseDialect
     case CUSTOM => new GenericDatabaseDialect
   }
 
