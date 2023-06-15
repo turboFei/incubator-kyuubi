@@ -28,8 +28,8 @@ import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiReservedKeys.KYUUBI_SESSION_HANDLE_KEY
 import org.apache.kyuubi.engine.spark.events.SessionEvent
 import org.apache.kyuubi.engine.spark.operation.SparkSQLOperationManager
-import org.apache.kyuubi.engine.spark.shim.SparkCatalogShim
 import org.apache.kyuubi.engine.spark.udf.KDFRegistry
+import org.apache.kyuubi.engine.spark.util.SparkCatalogUtils
 import org.apache.kyuubi.events.EventBus
 import org.apache.kyuubi.operation.{Operation, OperationHandle}
 import org.apache.kyuubi.session._
@@ -66,7 +66,7 @@ class SparkSessionImpl(
 
     useCatalogAndDatabaseConf.get(USE_CATALOG).foreach { catalog =>
       try {
-        SparkCatalogShim().setCurrentCatalog(spark, catalog)
+        SparkCatalogUtils.setCurrentCatalog(spark, catalog)
       } catch {
         case e if e.getMessage.contains("Cannot find catalog plugin class for catalog") =>
           warn(e.getMessage())
@@ -75,7 +75,7 @@ class SparkSessionImpl(
 
     useCatalogAndDatabaseConf.get("use:database").foreach { database =>
       try {
-        SparkCatalogShim().setCurrentDatabase(spark, database)
+        spark.sessionState.catalogManager.setCurrentNamespace(Array(database))
       } catch {
         case e
             if database == "default" &&
