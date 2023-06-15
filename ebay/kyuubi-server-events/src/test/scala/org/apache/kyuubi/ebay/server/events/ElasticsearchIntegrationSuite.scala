@@ -111,7 +111,7 @@ class ElasticsearchIntegrationSuite extends WithKyuubiServer with HiveJDBCTestHe
         "127.0.0.1",
         Map.empty,
         batchRequest)
-      val batchSession = sessionMgr.getBatchSessionImpl(batchSessionHandle)
+      val batchSession = sessionMgr.getBatchSession(batchSessionHandle).get
       val batchOperation = sessionMgr.operationManager.newBatchJobSubmissionOperation(
         batchSession,
         batchRequest.getBatchType,

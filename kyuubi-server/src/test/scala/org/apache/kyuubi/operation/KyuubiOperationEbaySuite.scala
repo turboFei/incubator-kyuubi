@@ -46,7 +46,7 @@ import org.apache.kyuubi.jdbc.hive.KyuubiConnection
 import org.apache.kyuubi.jdbc.hive.logs.KyuubiEngineLogListener
 import org.apache.kyuubi.server.http.authentication.AuthenticationHandler.AUTHORIZATION_HEADER
 import org.apache.kyuubi.service.authentication.{AuthTypes, KyuubiAuthenticationFactory}
-import org.apache.kyuubi.session.{KyuubiBatchSessionImpl, KyuubiSessionImpl, KyuubiSessionManager}
+import org.apache.kyuubi.session.{KyuubiBatchSession, KyuubiSessionImpl, KyuubiSessionManager}
 
 class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
   with BatchTestHelper with RestFrontendTestHelper {
@@ -602,8 +602,8 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
           batchConf,
           batchRequest)
       }
-      assert(sessionMgr.allSessions().filter(_.isInstanceOf[KyuubiBatchSessionImpl])
-        .map(_.asInstanceOf[KyuubiBatchSessionImpl])
+      assert(sessionMgr.allSessions().filter(_.isInstanceOf[KyuubiBatchSession])
+        .map(_.asInstanceOf[KyuubiBatchSession])
         .filter(_.sessionCluster == Some(cluster)).size == sessionNum)
     }
     sessionMgr.allSessions().foreach(_.close())
@@ -734,7 +734,7 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
       "127.0.0.1",
       batchConf,
       batchRequest)
-    val batchSession = sessionMgr.getBatchSessionImpl(sessionHandle)
+    val batchSession = sessionMgr.getBatchSession(sessionHandle).get
     val conf = batchSession.optimizedConf
 
     assert(conf("spark.tess.key1") == "value1")
