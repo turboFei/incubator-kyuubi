@@ -127,9 +127,7 @@ private[v1] class AdminResource extends ApiRequestContext with Logging {
       val usersSet = users.split(",").toSet
       sessions = sessions.filter(session => usersSet.contains(session.user))
     }
-    sessions.map { case session =>
-      ApiUtils.sessionData(session.asInstanceOf[KyuubiSession])
-    }.toSeq
+    sessions.map(session => ApiUtils.sessionData(session.asInstanceOf[KyuubiSession])).toSeq
   }
 
   @ApiResponse(
@@ -268,7 +266,7 @@ private[v1] class AdminResource extends ApiRequestContext with Logging {
       val engine = getEngine(userName, engineType, shareLevel, subdomain, "", clusterConf)
       val engineSpace = getEngineSpace(engine, clusterConf)
 
-      var engineNodes = ListBuffer[ServiceNodeInfo]()
+      val engineNodes = ListBuffer[ServiceNodeInfo]()
       Option(subdomain).filter(_.nonEmpty) match {
         case Some(_) =>
           withDiscoveryClient(clusterConf) { discoveryClient =>
@@ -381,7 +379,7 @@ private[v1] class AdminResource extends ApiRequestContext with Logging {
   }
 
   private def isAdministrator(userName: String): Boolean = {
-    administrators.contains(userName);
+    administrators.contains(userName)
   }
 
   private def getClusterConf(clusterOpt: Option[String]): KyuubiConf = {
