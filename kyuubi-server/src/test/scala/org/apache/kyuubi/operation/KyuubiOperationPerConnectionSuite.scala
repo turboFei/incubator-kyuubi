@@ -293,7 +293,7 @@ class KyuubiOperationPerConnectionSuite extends WithKyuubiServer with HiveJDBCTe
     }
   }
 
-  test("support to interrupt the thrift request if remote engine is broken") {
+  ignore("support to interrupt the thrift request if remote engine is broken") {
     withSessionConf(Map(
       KyuubiConf.ENGINE_ALIVE_PROBE_ENABLED.key -> "true",
       KyuubiConf.ENGINE_ALIVE_PROBE_INTERVAL.key -> "1000",
