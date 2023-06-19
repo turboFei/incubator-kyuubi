@@ -1,0 +1,236 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!--
+  ~ Licensed to the Apache Software Foundation (ASF) under one or more
+  ~ contributor license agreements.  See the NOTICE file distributed with
+  ~ this work for additional information regarding copyright ownership.
+  ~ The ASF licenses this file to You under the Apache License, Version 2.0
+  ~ (the "License"); you may not use this file except in compliance with
+  ~ the License.  You may obtain a copy of the License at
+  ~
+  ~    http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
+<settings>
+  <localRepository>${user.home}/.m2/raptor2</localRepository>
+  <!-- 
+        For Authenticated accss one server entry needed per ID in 
+        Profiles -> Profile -> repositories ->
+    -->
+  <servers>
+    <server>
+      <id>raptor.aggregator</id>
+      <username>RaptorTeam</username>
+      <password>RaptorTeam</password>
+    </server>
+    <server>
+      <id>central</id>
+      <username>RaptorTeam</username>
+      <password>RaptorTeam</password>
+    </server>
+    <server>
+      <id>raptor.releases</id>
+      <username>RaptorTeam</username>
+      <password>RaptorTeam</password>
+    </server>
+    <server>
+      <id>raptor.snapshots</id>
+      <username>RaptorTeam</username>
+      <password>RaptorTeam</password>
+    </server>
+    <server>
+      <id>raptor.plugins</id>
+      <username>RaptorTeam</username>
+      <password>RaptorTeam</password>
+    </server>
+    <server>
+      <id>raptor.thirdparty</id>
+      <username>RaptorTeam</username>
+      <password>RaptorTeam</password>
+    </server>
+    <server>
+      <id>raptor.commercial</id>
+      <username>RaptorTeam</username>
+      <password>RaptorTeam</password>
+    </server>
+    <server>
+      <id>raptor.v3debt</id>
+      <username>RaptorTeam</username>
+      <password>RaptorTeam</password>
+    </server>
+  </servers>
+  <mirrors>
+    <mirror>
+      <id>central</id>
+      <!-- 
+                Below entry Honors all repositories defined in the pom file of direct/transitive dependencies
+             -->
+      <mirrorOf>central</mirrorOf>
+      <!-- 
+                Following entry forces maven to use only ebaycentral.qa.ebay.com. This improved build time.
+                If you add new repository, make sure to enter the text !newrepoID in the list below, and add auth above if that repo needs authentication.
+            -->
+      <!-- <mirrorOf>*,!raptor.aggregator,!raptor.releases,!raptor.snapshots,!raptor.thirdparty,!raptor.plugins,!raptor.commercial,!raptor.v3debt,!raptor.extn1,!raptor.extn2</mirrorOf> -->
+      <url>https://ebaycentral.qa.ebay.com/content/repositories/central</url>
+    </mirror>
+  </mirrors>
+  <profiles>
+    <profile>
+      <id>ebay</id>
+      <!-- add a repository property to ease the archetype:generate usage -->
+      <properties>
+        <archetypeCatalog>https://ebaycentral.qa.ebay.com/content/repositories/releases/archetype-catalog.xml</archetypeCatalog>
+      </properties>
+      <repositories>
+        <!-- Raptor Repository -->
+        <repository>
+          <id>raptor.aggregator</id>
+          <url>https://ebaycentral.corp.ebay.com/content/groups/aggregator/</url>
+          <releases>
+            <enabled>true</enabled>
+            <updatePolicy>never</updatePolicy>
+          </releases>
+          <snapshots>
+            <enabled>false</enabled>
+          </snapshots>
+        </repository>
+        <repository>
+          <id>raptor.releases</id>
+          <url>https://ebaycentral.qa.ebay.com/content/repositories/releases</url>
+          <releases>
+            <enabled>true</enabled>
+          </releases>
+          <snapshots>
+            <enabled>false</enabled>
+          </snapshots>
+        </repository>
+        <repository>
+          <id>raptor.v3debt</id>
+          <url>https://ebaycentral.qa.ebay.com/content/repositories/v3debt</url>
+          <releases>
+            <enabled>true</enabled>
+          </releases>
+          <snapshots>
+            <enabled>false</enabled>
+          </snapshots>
+        </repository>
+        <repository>
+          <id>raptor.snapshots</id>
+          <url>https://ebaycentral.qa.ebay.com/content/repositories/snapshots</url>
+          <releases>
+            <enabled>false</enabled>
+          </releases>
+          <snapshots>
+            <enabled>true</enabled>
+          </snapshots>
+        </repository>
+        <repository>
+          <id>raptor.thirdparty</id>
+          <url>https://ebaycentral.qa.ebay.com/content/repositories/thirdparty</url>
+          <releases>
+            <enabled>true</enabled>
+          </releases>
+          <snapshots>
+            <enabled>false</enabled>
+          </snapshots>
+        </repository>
+        <repository>
+          <id>raptor.commercial</id>
+          <url>https://ebaycentral.qa.ebay.com/content/repositories/commercial</url>
+          <releases>
+            <enabled>true</enabled>
+          </releases>
+          <snapshots>
+            <enabled>false</enabled>
+          </snapshots>
+        </repository>
+      </repositories>
+      <pluginRepositories>
+        <pluginRepository>
+          <id>raptor.aggregator</id>
+          <url>https://ebaycentral.corp.ebay.com/content/groups/aggregator/</url>
+          <releases>
+            <enabled>true</enabled>
+            <updatePolicy>never</updatePolicy>
+          </releases>
+          <snapshots>
+            <enabled>false</enabled>
+          </snapshots>
+        </pluginRepository>
+        <pluginRepository>
+          <id>central</id>
+          <url>https://ebaycentral.qa.ebay.com/content/repositories/central</url>
+          <releases>
+            <enabled>true</enabled>
+          </releases>
+          <snapshots>
+            <enabled>false</enabled>
+          </snapshots>
+        </pluginRepository>
+        <pluginRepository>
+          <id>raptor.releases</id>
+          <url>https://ebaycentral.qa.ebay.com/content/repositories/releases</url>
+          <releases>
+            <enabled>true</enabled>
+          </releases>
+          <snapshots>
+            <enabled>false</enabled>
+          </snapshots>
+        </pluginRepository>
+        <pluginRepository>
+          <id>raptor.v3debt</id>
+          <url>https://ebaycentral.qa.ebay.com/content/repositories/v3debt</url>
+          <releases>
+            <enabled>true</enabled>
+          </releases>
+          <snapshots>
+            <enabled>false</enabled>
+          </snapshots>
+        </pluginRepository>
+        <pluginRepository>
+          <id>raptor.plugins</id>
+          <url>https://ebaycentral.qa.ebay.com/content/repositories/plugins</url>
+          <releases>
+            <enabled>true</enabled>
+          </releases>
+          <snapshots>
+            <enabled>false</enabled>
+          </snapshots>
+        </pluginRepository>
+        <pluginRepository>
+          <id>raptor.snapshots</id>
+          <url>https://ebaycentral.qa.ebay.com/content/repositories/snapshots</url>
+          <releases>
+            <enabled>false</enabled>
+          </releases>
+          <snapshots>
+            <enabled>true</enabled>
+          </snapshots>
+        </pluginRepository>
+        <pluginRepository>
+          <id>raptor.thirdparty</id>
+          <url>https://ebaycentral.qa.ebay.com/content/repositories/thirdparty</url>
+          <releases>
+            <enabled>true</enabled>
+          </releases>
+          <snapshots>
+            <enabled>false</enabled>
+          </snapshots>
+        </pluginRepository>
+      </pluginRepositories>
+    </profile>
+  </profiles>
+  <activeProfiles>
+    <activeProfile>ebay</activeProfile>
+  </activeProfiles>
+  <pluginGroups>
+    <pluginGroup>org.mortbay.jetty</pluginGroup>
+    <pluginGroup>com.ebay.raptor.build</pluginGroup>
+    <pluginGroup>org.codehaus.mojo</pluginGroup>
+    <pluginGroup>org.sonatype.maven.plugins</pluginGroup>
+  </pluginGroups>
+</settings>
