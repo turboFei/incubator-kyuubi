@@ -42,7 +42,7 @@ import org.apache.kyuubi.config.KyuubiConf._
 import org.apache.kyuubi.config.KyuubiEbayConf
 import org.apache.kyuubi.config.KyuubiReservedKeys._
 import org.apache.kyuubi.ebay.BatchLogAggManager
-import org.apache.kyuubi.engine.{ApplicationInfo, KyuubiApplicationManager}
+import org.apache.kyuubi.engine.{ApplicationInfo, KillResponse, KyuubiApplicationManager}
 import org.apache.kyuubi.operation.{BatchJobSubmission, FetchOrientation, OperationState}
 import org.apache.kyuubi.server.api.ApiRequestContext
 import org.apache.kyuubi.server.api.v1.BatchesResource._
@@ -421,28 +421,40 @@ private[v1] class BatchesResource extends ApiRequestContext with Logging {
       @QueryParam("hive.server2.proxy.user") hs2ProxyUser: String,
       @deprecated("using hive.server2.proxy.user instead", "1.7.0")
       @QueryParam("kyuubi.proxy.batchAccount") proxyBatchAccount: String): CloseBatchResponse = {
+
+    def checkPermission(operator: String, owner: String): Unit = {
+      if (operator != owner) {
+        throw new WebApplicationException(
+          s"$operator is not allowed to close the session belong to $owner",
+          Status.METHOD_NOT_ALLOWED)
+      }
+    }
+
+    def forceKill(
+        clusterManager: Option[String],
+        batchId: String,
+        cluster: Option[String]): KillResponse = {
+      val (killed, message) = sessionManager.applicationManager
+        .killApplication(clusterManager, batchId, cluster)
+      info(s"Mark batch[$batchId] closed by ${fe.connectionUrl}")
+      sessionManager.updateMetadata(Metadata(identifier = batchId, peerInstanceClosed = true))
+      (killed, message)
+    }
+
     val sessionHandle = formatSessionHandle(batchId)
     val userName = fe.getSessionUser(Option(hs2ProxyUser).getOrElse(proxyBatchAccount))
 
     sessionManager.getBatchSession(sessionHandle).map { batchSession =>
-      if (userName != batchSession.user) {
-        throw new WebApplicationException(
-          s"$userName is not allowed to close the session belong to ${batchSession.user}",
-          Status.METHOD_NOT_ALLOWED)
-      }
+      checkPermission(userName, batchSession.user)
       sessionManager.closeSession(batchSession.handle)
-      val (success, msg) = batchSession.batchJobSubmissionOp.getKillMessage
-      new CloseBatchResponse(success, msg)
+      val (killed, msg) = batchSession.batchJobSubmissionOp.getKillMessage
+      new CloseBatchResponse(killed, msg)
     }.getOrElse {
       sessionManager.getBatchMetadata(batchId).map { metadata =>
-        if (userName != metadata.username) {
-          throw new WebApplicationException(
-            s"$userName is not allowed to close the session belong to ${metadata.username}",
-            Status.METHOD_NOT_ALLOWED)
-        } else if (OperationState.isTerminal(OperationState.withName(metadata.state)) ||
-          metadata.kyuubiInstance == fe.connectionUrl) {
+        checkPermission(userName, metadata.username)
+        if (OperationState.isTerminal(OperationState.withName(metadata.state))) {
           new CloseBatchResponse(false, s"The batch[$metadata] has been terminated.")
-        } else {
+        } else if (metadata.kyuubiInstance != fe.connectionUrl) {
           info(s"Redirecting delete batch[$batchId] to ${metadata.kyuubiInstance}")
           val internalRestClient = getInternalRestClient(metadata.kyuubiInstance)
           try {
@@ -450,21 +462,13 @@ private[v1] class BatchesResource extends ApiRequestContext with Logging {
           } catch {
             case e: KyuubiRestException =>
               error(s"Error redirecting delete batch[$batchId] to ${metadata.kyuubiInstance}", e)
-              val appMgrKillResp = sessionManager.applicationManager.killApplication(
-                metadata.clusterManager,
-                batchId,
-                metadata.cluster)
-              info(
-                s"Marking batch[$batchId/${metadata.kyuubiInstance}] closed by ${fe.connectionUrl}")
-              sessionManager.updateMetadata(Metadata(
-                identifier = batchId,
-                peerInstanceClosed = true))
-              if (appMgrKillResp._1) {
-                new CloseBatchResponse(appMgrKillResp._1, appMgrKillResp._2)
-              } else {
-                new CloseBatchResponse(false, Utils.stringifyException(e))
-              }
+              val (killed, msg) = forceKill(metadata.clusterManager, batchId, metadata.cluster)
+              new CloseBatchResponse(killed, if (killed) msg else Utils.stringifyException(e))
           }
+        } else { // should not happen, but handle this for safe
+          warn(s"Something wrong on deleting batch[$batchId], try forcibly killing application")
+          val (killed, msg) = forceKill(metadata.clusterManager, batchId, metadata.cluster)
+          new CloseBatchResponse(killed, msg)
         }
       }.getOrElse {
         error(s"Invalid batchId: $batchId")
