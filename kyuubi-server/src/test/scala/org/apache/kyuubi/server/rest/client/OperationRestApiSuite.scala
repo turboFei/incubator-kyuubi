@@ -106,7 +106,7 @@ class OperationRestApiSuite extends RestClientTestHelper {
   def getOpHandleStr(statement: String = "show tables"): String = {
     val sessionHandle = fe.be.openSession(
       HIVE_CLI_SERVICE_PROTOCOL_V2,
-      "admin",
+      ldapUser,
       "123456",
       "localhost",
       Map("testConfig" -> "testValue"))
