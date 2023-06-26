@@ -80,11 +80,10 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
       resource = "intern",
       className = "org.apache.kyuubi.SparkWC",
       requestName = "kyuubi_batch",
-      requestConf = Map("spark.master" -> "local"),
+      requestConf = Map("spark.master" -> "local", "kyuubi.session.cluster" -> "cluster"),
       requestArgs = Seq("100"),
       createTime = System.currentTimeMillis(),
       engineType = "spark",
-      cluster = Some("cluster"),
       clusterManager = Some("local"))
 
     var batchStateOnlyMetadata = batchMetadata.copy(

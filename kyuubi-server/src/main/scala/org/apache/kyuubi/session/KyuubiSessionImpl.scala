@@ -57,16 +57,18 @@ class KyuubiSessionImpl(
   val sessionTag = KyuubiEbayConf.getSessionTag(normalizedConf)
 
   private[kyuubi] val optimizedConf: Map[String, String] = {
+    val sessionClusterConf =
+      sessionCluster.map(c => Map(KyuubiEbayConf.SESSION_CLUSTER.key -> c)).getOrElse(Map.empty)
     val queueConf =
       normalizedConf.get(QUEUE).map(queue => Map(YARN_QUEUE -> queue)).getOrElse(Map.empty)
     val confOverlay = sessionManager.sessionConfAdvisor.getConfOverlay(
       user,
       normalizedConf.asJava)
     if (confOverlay != null) {
-      queueConf ++ normalizedConf ++ confOverlay.asScala
+      sessionClusterConf ++ queueConf ++ normalizedConf ++ confOverlay.asScala
     } else {
       warn(s"the server plugin return null value for user: $user, ignore it")
-      queueConf ++ normalizedConf
+      sessionClusterConf ++ queueConf ++ normalizedConf
     }
   }
 

@@ -174,7 +174,6 @@ class KyuubiBatchSession(
         requestArgs = batchArgs,
         createTime = createTime,
         engineType = batchType,
-        cluster = sessionCluster,
         clusterManager = batchJobSubmissionOp.builder.clusterManager())
 
       if (!reserveMetadata) {

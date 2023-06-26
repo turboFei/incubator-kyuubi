@@ -67,7 +67,6 @@ case class Metadata(
     requestArgs: Seq[String] = Seq.empty,
     createTime: Long = 0L,
     engineType: String = null,
-    cluster: Option[String] = None,
     clusterManager: Option[String] = None,
     engineOpenTime: Long = 0L,
     engineId: String = null,
@@ -77,11 +76,13 @@ case class Metadata(
     engineError: Option[String] = None,
     endTime: Long = 0L,
     peerInstanceClosed: Boolean = false) {
+  def cluster: Option[String] = requestConf.get(KyuubiEbayConf.SESSION_CLUSTER.key)
+
   def appMgrInfo: ApplicationManagerInfo = {
     ApplicationManagerInfo(
       clusterManager,
       requestConf.get(KyuubiConf.KUBERNETES_CONTEXT.key),
       requestConf.get(KyuubiConf.KUBERNETES_NAMESPACE.key),
-      requestConf.get(KyuubiEbayConf.SESSION_CLUSTER.key))
+      cluster)
   }
 }
