@@ -41,8 +41,9 @@ class JpsApplicationOperation extends ApplicationOperation {
       }
   }
 
-  override def isSupported(clusterManager: Option[String], clusterOpt: Option[String]): Boolean = {
-    runner != null && (clusterManager.isEmpty || clusterManager.get == "local")
+  override def isSupported(appMgrInfo: ApplicationManagerInfo): Boolean = {
+    runner != null &&
+    (appMgrInfo.resourceManager.isEmpty || appMgrInfo.resourceManager.get == "local")
   }
 
   private def getEngine(tag: String): Option[String] = {
@@ -58,10 +59,7 @@ class JpsApplicationOperation extends ApplicationOperation {
     }
   }
 
-  private def killJpsApplicationByTag(
-      tag: String,
-      clusterOpt: Option[String],
-      retryable: Boolean): KillResponse = {
+  private def killJpsApplicationByTag(tag: String, retryable: Boolean): KillResponse = {
     val commandOption = getEngine(tag)
     if (commandOption.nonEmpty) {
       val idAndCmd = commandOption.get
@@ -73,7 +71,7 @@ class JpsApplicationOperation extends ApplicationOperation {
         case e: Exception =>
           // the application might generate multiple processes, ensure that it is killed eventually.
           if (retryable && getEngine(tag).nonEmpty) {
-            killJpsApplicationByTag(tag, clusterOpt, false)
+            killJpsApplicationByTag(tag, false)
           } else {
             (false, s"Failed to terminate: $idAndCmd, due to ${e.getMessage}")
           }
@@ -83,14 +81,16 @@ class JpsApplicationOperation extends ApplicationOperation {
     }
   }
 
-  override def killApplicationByTag(tag: String, clusterOpt: Option[String]): KillResponse = {
-    killJpsApplicationByTag(tag, clusterOpt, true)
+  override def killApplicationByTag(
+      appMgrInfo: ApplicationManagerInfo,
+      tag: String): KillResponse = {
+    killJpsApplicationByTag(tag, true)
   }
 
   override def getApplicationInfoByTag(
+      appMgrInfo: ApplicationManagerInfo,
       tag: String,
-      submitTime: Option[Long],
-      clusterOpt: Option[String]): ApplicationInfo = {
+      submitTime: Option[Long]): ApplicationInfo = {
     val commandOption = getEngine(tag)
     if (commandOption.nonEmpty) {
       val idAndCmd = commandOption.get

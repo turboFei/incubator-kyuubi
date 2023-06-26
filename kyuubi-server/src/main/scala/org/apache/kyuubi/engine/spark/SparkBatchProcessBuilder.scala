@@ -113,6 +113,18 @@ class SparkBatchProcessBuilder(
     batchConf.get(MASTER_KEY).orElse(super.clusterManager())
   }
 
+  override def kubernetesContext(): Option[String] = {
+    batchConf.get(KUBERNETES_CONTEXT_KEY).orElse(super.kubernetesContext())
+  }
+
+  override def kubernetesNamespace(): Option[String] = {
+    batchConf.get(KUBERNETES_NAMESPACE_KEY).orElse(super.kubernetesNamespace())
+  }
+
+  override def cluster(): Option[String] = {
+    batchConf.get(KyuubiEbayConf.SESSION_CLUSTER.key).orElse(super.cluster())
+  }
+
   override def close(destroyProcess: Boolean = !waitCompletion): Unit = {
     super.close(destroyProcess)
     Option(batchSqlFileDir).foreach { dir =>

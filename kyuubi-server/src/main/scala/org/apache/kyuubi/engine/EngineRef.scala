@@ -26,7 +26,7 @@ import com.codahale.metrics.MetricRegistry
 import com.google.common.annotations.VisibleForTesting
 
 import org.apache.kyuubi.{KYUUBI_VERSION, KyuubiSQLException, Logging, Utils}
-import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiConf._
 import org.apache.kyuubi.config.KyuubiReservedKeys.KYUUBI_ENGINE_SUBMIT_TIME_KEY
 import org.apache.kyuubi.engine.EngineType._
@@ -57,8 +57,7 @@ private[kyuubi] class EngineRef(
     user: String,
     groupProvider: GroupProvider,
     engineRefId: String,
-    engineManager: KyuubiApplicationManager,
-    clusterOpt: Option[String] = None)
+    engineManager: KyuubiApplicationManager)
   extends Logging {
   // The corresponding ServerSpace where the engine belongs to
   private val serverSpace: String = conf.get(HA_NAMESPACE)
@@ -128,7 +127,7 @@ private[kyuubi] class EngineRef(
    */
   @VisibleForTesting
   private[kyuubi] val defaultEngineName: String = {
-    val clusterPlaceHolder = clusterOpt.map(_ + "_").getOrElse("")
+    val clusterPlaceHolder = conf.get(KyuubiEbayConf.SESSION_CLUSTER).map(_ + "_").getOrElse("")
     val commonNamePrefix = s"kyuubi_${clusterPlaceHolder}${shareLevel}_${engineType}_${appUser}"
     shareLevel match {
       case CONNECTION => s"${commonNamePrefix}_$engineRefId"
@@ -225,10 +224,7 @@ private[kyuubi] class EngineRef(
         }
 
         if (started + timeout <= System.currentTimeMillis()) {
-          val killMessage = engineManager.killApplication(
-            builder.clusterManager(),
-            engineRefId,
-            clusterOpt)
+          val killMessage = engineManager.killApplication(builder.appMgrInfo(), engineRefId)
           process.destroyForcibly()
           MetricsSystem.tracing(_.incCount(MetricRegistry.name(ENGINE_TIMEOUT, appUser)))
           throw KyuubiSQLException(
@@ -247,25 +243,23 @@ private[kyuubi] class EngineRef(
             }
 
             val applicationInfo = engineMgr.getApplicationInfo(
-              builder.clusterManager(),
+              builder.appMgrInfo(),
               engineRefId,
-              Some(started),
-              clusterOpt)
+              Some(started))
 
-            applicationInfo.foreach {
-              appInfo =>
-                if (ApplicationState.isTerminated(appInfo.state)) {
-                  MetricsSystem.tracing { ms =>
-                    ms.incCount(MetricRegistry.name(ENGINE_FAIL, appUser))
-                    ms.incCount(MetricRegistry.name(ENGINE_FAIL, "ENGINE_TERMINATE"))
-                  }
-                  throw new KyuubiSQLException(
-                    s"""
-                       |The engine application has been terminated. Please check the engine log.
-                       |ApplicationInfo: ${appInfo.toMap.mkString("(\n", ",\n", "\n)")}
-                       |""".stripMargin,
-                    builder.getError)
+            applicationInfo.foreach { appInfo =>
+              if (ApplicationState.isTerminated(appInfo.state)) {
+                MetricsSystem.tracing { ms =>
+                  ms.incCount(MetricRegistry.name(ENGINE_FAIL, appUser))
+                  ms.incCount(MetricRegistry.name(ENGINE_FAIL, "ENGINE_TERMINATE"))
                 }
+                throw new KyuubiSQLException(
+                  s"""
+                     |The engine application has been terminated. Please check the engine log.
+                     |ApplicationInfo: ${appInfo.toMap.mkString("(\n", ",\n", "\n)")}
+                     |""".stripMargin,
+                  builder.getError)
+              }
             }
 
             lastApplicationInfo = applicationInfo
@@ -298,9 +292,9 @@ private[kyuubi] class EngineRef(
   def close(): Unit = {
     if (shareLevel == CONNECTION && builder != null) {
       try {
-        val clusterManager = builder.clusterManager()
+        val appMgrInfo = builder.appMgrInfo()
         builder.close(true)
-        engineManager.killApplication(clusterManager, engineRefId, clusterOpt)
+        engineManager.killApplication(appMgrInfo, engineRefId)
       } catch {
         case e: Exception =>
           warn(s"Error closing engine builder, engineRefId: $engineRefId", e)

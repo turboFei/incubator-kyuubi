@@ -55,13 +55,15 @@ class YarnApplicationOperation extends ApplicationOperation with Logging {
     }
   }
 
-  override def isSupported(clusterManager: Option[String], clusterOpt: Option[String]): Boolean = {
-    yarnClients.get(clusterOpt) != null && clusterManager.exists(
+  override def isSupported(appMgrInfo: ApplicationManagerInfo): Boolean = {
+    yarnClients.get(appMgrInfo.clusterOpt) != null && appMgrInfo.resourceManager.exists(
       _.toLowerCase(Locale.ROOT).startsWith("yarn"))
   }
 
-  override def killApplicationByTag(tag: String, clusterOpt: Option[String]): KillResponse = {
-    val yarnClient = yarnClients.get(clusterOpt)
+  override def killApplicationByTag(
+      appMgrInfo: ApplicationManagerInfo,
+      tag: String): KillResponse = {
+    val yarnClient = yarnClients.get(appMgrInfo.clusterOpt)
     if (yarnClient != null) {
       try {
         val reports = yarnClient.getApplications(null, null, Set(tag).asJava)
@@ -90,10 +92,10 @@ class YarnApplicationOperation extends ApplicationOperation with Logging {
   }
 
   override def getApplicationInfoByTag(
+      appMgrInfo: ApplicationManagerInfo,
       tag: String,
-      submitTime: Option[Long],
-      clusterOpt: Option[String]): ApplicationInfo = {
-    val yarnClient = yarnClients.get(clusterOpt)
+      submitTime: Option[Long]): ApplicationInfo = {
+    val yarnClient = yarnClients.get(appMgrInfo.clusterOpt)
     if (yarnClient != null) {
       debug(s"Getting application info from Yarn cluster by $tag tag")
       val reports = yarnClient.getApplications(null, null, Set(tag).asJava)

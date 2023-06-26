@@ -17,6 +17,8 @@
 
 package org.apache.kyuubi.server.metadata.api
 
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
+import org.apache.kyuubi.engine.ApplicationManagerInfo
 import org.apache.kyuubi.session.SessionType.SessionType
 
 /**
@@ -74,4 +76,12 @@ case class Metadata(
     engineState: String = null,
     engineError: Option[String] = None,
     endTime: Long = 0L,
-    peerInstanceClosed: Boolean = false)
+    peerInstanceClosed: Boolean = false) {
+  def appMgrInfo: ApplicationManagerInfo = {
+    ApplicationManagerInfo(
+      clusterManager,
+      requestConf.get(KyuubiConf.KUBERNETES_CONTEXT.key),
+      requestConf.get(KyuubiConf.KUBERNETES_NAMESPACE.key),
+      requestConf.get(KyuubiEbayConf.SESSION_CLUSTER.key))
+  }
+}

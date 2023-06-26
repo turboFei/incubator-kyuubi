@@ -60,14 +60,11 @@ class KyuubiApplicationManager extends AbstractService("KyuubiApplicationManager
     super.stop()
   }
 
-  def killApplication(
-      resourceManager: Option[String],
-      tag: String,
-      clusterOpt: Option[String] = None): KillResponse = {
+  def killApplication(appMgrInfo: ApplicationManagerInfo, tag: String): KillResponse = {
     var (killed, lastMessage): KillResponse = (false, null)
     for (operation <- operations if !killed) {
-      if (operation.isSupported(resourceManager, clusterOpt)) {
-        val (k, m) = operation.killApplicationByTag(tag, clusterOpt)
+      if (operation.isSupported(appMgrInfo)) {
+        val (k, m) = operation.killApplicationByTag(appMgrInfo, tag)
         killed = k
         lastMessage = m
       }
@@ -76,7 +73,7 @@ class KyuubiApplicationManager extends AbstractService("KyuubiApplicationManager
     val finalMessage =
       if (lastMessage == null) {
         s"No ${classOf[ApplicationOperation]} Service found in ServiceLoader" +
-          s" for $resourceManager"
+          s" for $appMgrInfo"
       } else {
         lastMessage
       }
@@ -84,13 +81,12 @@ class KyuubiApplicationManager extends AbstractService("KyuubiApplicationManager
   }
 
   def getApplicationInfo(
-      clusterManager: Option[String],
+      appMgrInfo: ApplicationManagerInfo,
       tag: String,
-      submitTime: Option[Long] = None,
-      clusterOpt: Option[String] = None): Option[ApplicationInfo] = {
-    val operation = operations.find(_.isSupported(clusterManager, clusterOpt))
+      submitTime: Option[Long] = None): Option[ApplicationInfo] = {
+    val operation = operations.find(_.isSupported(appMgrInfo))
     operation match {
-      case Some(op) => Some(op.getApplicationInfoByTag(tag, submitTime, clusterOpt))
+      case Some(op) => Some(op.getApplicationInfoByTag(appMgrInfo, tag, submitTime))
       case None => None
     }
   }

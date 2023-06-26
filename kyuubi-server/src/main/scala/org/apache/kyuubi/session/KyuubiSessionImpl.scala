@@ -84,8 +84,7 @@ class KyuubiSessionImpl(
       user,
       sessionManager.groupProvider,
       handle.identifier.toString,
-      sessionManager.applicationManager,
-      sessionCluster)
+      sessionManager.applicationManager)
   private[kyuubi] val launchEngineOp = sessionManager.operationManager
     .newLaunchEngineOperation(this, sessionConf.get(SESSION_ENGINE_LAUNCH_ASYNC))
 

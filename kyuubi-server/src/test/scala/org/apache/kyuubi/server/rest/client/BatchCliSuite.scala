@@ -33,6 +33,7 @@ import org.apache.kyuubi.client.util.BatchUtils._
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.ctl.{CtlConf, TestPrematureExit}
 import org.apache.kyuubi.ctl.cmd.create.CreateBatchCommand
+import org.apache.kyuubi.engine.ApplicationManagerInfo
 import org.apache.kyuubi.metrics.{MetricsConstants, MetricsSystem}
 import org.apache.kyuubi.session.KyuubiSessionManager
 
@@ -109,7 +110,7 @@ class BatchCliSuite extends RestClientTestHelper with TestPrematureExit with Bat
       0,
       Int.MaxValue).foreach {
       batch =>
-        sessionManager.applicationManager.killApplication(None, batch.getId)
+        sessionManager.applicationManager.killApplication(ApplicationManagerInfo(None), batch.getId)
         sessionManager.cleanupMetadata(batch.getId)
     }
   }

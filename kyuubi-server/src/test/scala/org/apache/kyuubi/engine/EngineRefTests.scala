@@ -275,7 +275,7 @@ trait EngineRefTests extends KyuubiFunSuite {
     conf.set(KyuubiConf.ENGINE_SHARE_LEVEL, USER.toString)
     conf.set(KyuubiConf.ENGINE_TYPE, SPARK_SQL.toString)
     conf.set(KyuubiEbayConf.SESSION_CLUSTER, "cluster")
-    val appName = new EngineRef(conf, user, null, id, null, Some("cluster"))
+    val appName = new EngineRef(conf, user, null, id, null)
     assert(appName.defaultEngineName === s"kyuubi_cluster_${USER}_${SPARK_SQL}_${user}_default_$id")
   }
 
