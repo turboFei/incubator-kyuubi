@@ -2227,7 +2227,7 @@
                 <spark.binary.version>3.1</spark.binary.version>
                 <hadoop.version>3.3.3.1.0.9</hadoop.version>
                 <delta.version>1.0.2.0.1.0</delta.version>
-                <iceberg.version>0.13.1.1.0.2-SNAPSHOT</iceberg.version>
+                <iceberg.version>1.2.1.0.1.0</iceberg.version>
                 <spark.archive.name>spark-${spark.version}-bin-hadoop3.2.tgz</spark.archive.name>
                 <maven.plugin.scalatest.exclude.tags>org.scalatest.tags.Slow</maven.plugin.scalatest.exclude.tags>
             </properties>
