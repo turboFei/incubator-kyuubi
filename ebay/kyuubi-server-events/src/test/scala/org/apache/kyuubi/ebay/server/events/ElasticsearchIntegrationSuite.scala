@@ -25,7 +25,7 @@ import org.scalatest.time.SpanSugar._
 
 import org.apache.kyuubi.{BatchTestHelper, WithKyuubiServer}
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
-import org.apache.kyuubi.ebay.TagBasedSessionConfAdvisor
+import org.apache.kyuubi.ebay.ChainedSessionConfAdvisor
 import org.apache.kyuubi.ebay.server.events.doc.EventDoc
 import org.apache.kyuubi.events.{EventBus, KyuubiOperationEvent, KyuubiServerInfoEvent, KyuubiSessionEvent}
 import org.apache.kyuubi.operation.{ExecuteStatement, HiveJDBCTestHelper}
@@ -49,7 +49,7 @@ class ElasticsearchIntegrationSuite extends WithKyuubiServer with HiveJDBCTestHe
       .set(KyuubiEbayConf.SESSION_CLUSTER, "test")
       .set(KyuubiEbayConf.OPERATION_INTERCEPT_ENABLED, true)
       .set(KyuubiEbayConf.SESSION_CLUSTER_LIST, Seq("test"))
-      .set(KyuubiConf.SESSION_CONF_ADVISOR, classOf[TagBasedSessionConfAdvisor].getName)
+      .set(KyuubiConf.SESSION_CONF_ADVISOR, classOf[ChainedSessionConfAdvisor].getName)
       .set(KyuubiConf.SERVER_EVENT_LOGGERS, Seq("CUSTOM"))
       .set(KyuubiEbayConf.ELASTIC_SEARCH_SERVER_EVENT_INDEX, s"$indexUUID-server-index")
       .set(KyuubiEbayConf.ELASTIC_SEARCH_SESSION_EVENT_INDEX, s"$indexUUID-session-index")
@@ -264,7 +264,7 @@ class ElasticsearchIntegrationNonClusterModeSuite extends ElasticsearchIntegrati
       .set(KyuubiEbayConf.SESSION_CLUSTER_MODE_ENABLED, false)
       .set(KyuubiEbayConf.SESSION_CLUSTER, "test")
       .set(KyuubiEbayConf.OPERATION_INTERCEPT_ENABLED, true)
-      .set(KyuubiConf.SESSION_CONF_ADVISOR, classOf[TagBasedSessionConfAdvisor].getName)
+      .set(KyuubiConf.SESSION_CONF_ADVISOR, classOf[ChainedSessionConfAdvisor].getName)
       .set(KyuubiConf.SERVER_EVENT_LOGGERS, Seq("CUSTOM"))
       .set(KyuubiEbayConf.ELASTIC_SEARCH_SERVER_EVENT_INDEX, s"$indexUUID-server-index")
       .set(KyuubiEbayConf.ELASTIC_SEARCH_SESSION_EVENT_INDEX, s"$indexUUID-session-index")

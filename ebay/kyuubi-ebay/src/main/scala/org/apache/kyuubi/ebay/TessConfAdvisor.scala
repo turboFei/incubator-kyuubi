@@ -48,6 +48,28 @@ class TessConfAdvisor extends SessionConfAdvisor with Logging {
   override def getConfOverlay(
       user: String,
       sessionConf: JMap[String, String]): JMap[String, String] = {
+    val tessConfOverlay = internalGetConfOverlay(user, sessionConf)
+
+    // add session conf profile to apply kubernetes conf
+    val temporaryConf = sessionConf.asScala ++ tessConfOverlay.asScala
+    val kubernetesContext = temporaryConf.get(SPARK_KUBERNETES_CONTEXT)
+      .orElse(temporaryConf.get(KyuubiConf.KUBERNETES_CONTEXT.key))
+    val kubernetesProfilesConf = kubernetesContext.map { context =>
+      val tessProfile = s"tess-$context"
+      temporaryConf.get(KyuubiConf.SESSION_CONF_PROFILE.key) match {
+        case Some(profile) =>
+          Map(KyuubiConf.SESSION_CONF_PROFILE.key -> s"$profile,$tessProfile")
+        case _ =>
+          Map(KyuubiConf.SESSION_CONF_PROFILE.key -> tessProfile)
+      }
+    }.getOrElse(Map.empty)
+
+    (tessConfOverlay.asScala ++ kubernetesProfilesConf).asJava
+  }
+
+  private def internalGetConfOverlay(
+      user: String,
+      sessionConf: JMap[String, String]): JMap[String, String] = {
     if ("true".equalsIgnoreCase(sessionConf.getOrDefault(
         ENGINE_SPARK_TESS_ENABLED.key,
         tessEnabledDefault.toString))) {
@@ -172,4 +194,6 @@ object TessConfAdvisor {
   final val CONTAINER_IMAGE = "spark.kubernetes.container.image"
 
   final val KUBERNETES_FILE_UPLOAD_PATH = "spark.kubernetes.file.upload.path"
+
+  final val SPARK_KUBERNETES_CONTEXT = "spark.kubernetes.context"
 }

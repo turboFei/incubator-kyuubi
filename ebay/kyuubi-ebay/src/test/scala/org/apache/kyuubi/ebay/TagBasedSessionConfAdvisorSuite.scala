@@ -22,6 +22,8 @@ import scala.collection.JavaConverters._
 import org.apache.kyuubi.KyuubiFunSuite
 
 class TagBasedSessionConfAdvisorSuite extends KyuubiFunSuite {
+  import TagBasedSessionConfAdvisorSuite._
+
   test("test tag based session conf advisor") {
     val sessionConfAdvisor = new TagBasedSessionConfAdvisor()
     val zetaConf = Map("spark.dynamicAllocation.minExecutors" -> "0")
@@ -35,6 +37,8 @@ class TagBasedSessionConfAdvisorSuite extends KyuubiFunSuite {
       === (zetaConf ++ downGradeConf).asJava)
     assert(sessionConfAdvisor.getConfOverlay("kyuubi", Map("kyuubi.session.tag" -> "zeta").asJava)
       === (zetaConf ++ downGradeConf).asJava)
+    assert(sessionConfAdvisor.getConfOverlay("demo", SESSION_CONF_DEMO.asJava)
+      === OVERLAY_CONF_DEMO.asJava)
     assert(sessionConfAdvisor.getConfOverlay(
       "b_stf",
       Map("kyuubi.session.tag" -> "big_result").asJava)
@@ -61,4 +65,11 @@ class TagBasedSessionConfAdvisorSuite extends KyuubiFunSuite {
       Map("kyuubi.session.tag" -> "zeta-kyuubi", "kyuubi.session.cluster" -> "herculeslvs").asJava)
       === (zetaConf ++ herculesZetaConf ++ downGradeConf).asJava)
   }
+}
+
+object TagBasedSessionConfAdvisorSuite {
+  val SESSION_CONF_DEMO = Map("kyuubi.session.tag" -> "zeta")
+  val OVERLAY_CONF_DEMO = Map(
+    "spark.dynamicAllocation.minExecutors" -> "0",
+    "kyuubi.session.engine.launch.moveQueue.enabled" -> "false")
 }

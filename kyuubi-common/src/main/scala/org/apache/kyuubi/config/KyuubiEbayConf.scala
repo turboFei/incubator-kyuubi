@@ -705,7 +705,7 @@ object KyuubiEbayConf extends Logging {
           }.filter(_.exists())
         }.orElse(throw KyuubiSQLException(
           s"""
-             |Failed to get properties file for cluster [$cluster].
+             |Failed to get properties file[$clusterPropertiesFileName] for cluster[$cluster].
              |It should be one of ${KyuubiEbayConf.getClusterList(conf).mkString("[", ",", "]")}.
         """.stripMargin))
     }.getOrElse(None)

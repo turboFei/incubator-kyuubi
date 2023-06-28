@@ -41,7 +41,7 @@ import org.apache.kyuubi.client.util.BatchUtils
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiConf.FrontendProtocols
 import org.apache.kyuubi.config.KyuubiConf.FrontendProtocols.FrontendProtocol
-import org.apache.kyuubi.ebay.{FakeApiKeyAuthenticationProviderImpl, TagBasedSessionConfAdvisor}
+import org.apache.kyuubi.ebay.{ChainedSessionConfAdvisor, FakeApiKeyAuthenticationProviderImpl}
 import org.apache.kyuubi.jdbc.hive.KyuubiConnection
 import org.apache.kyuubi.jdbc.hive.logs.KyuubiEngineLogListener
 import org.apache.kyuubi.server.http.authentication.AuthenticationHandler.AUTHORIZATION_HEADER
@@ -64,7 +64,7 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
       .set(KyuubiEbayConf.SESSION_CLUSTER, "invalid-cluster")
       .set(KyuubiEbayConf.OPERATION_INTERCEPT_ENABLED, true)
       .set(KyuubiEbayConf.SESSION_CLUSTER_LIST, Seq("test", "cluster_limit"))
-      .set(KyuubiConf.SESSION_CONF_ADVISOR, classOf[TagBasedSessionConfAdvisor].getName)
+      .set(KyuubiConf.SESSION_CONF_ADVISOR, classOf[ChainedSessionConfAdvisor].getName)
       .set(KyuubiConf.AUTHENTICATION_METHOD, Seq(AuthTypes.CUSTOM.toString))
       .set(
         KyuubiConf.AUTHENTICATION_CUSTOM_CLASS,
@@ -74,7 +74,6 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
 
   override def beforeAll(): Unit = {
     super.beforeAll()
-    System.setProperty(KyuubiEbayConf.SESSION_TAG_CONF_FILE.key, "kyuubi-defaults.conf.tag")
     System.setProperty(KyuubiEbayConf.SESSION_TESS_SPARK_DRIVER_CORES_DEFAULT.key, "2")
     System.setProperty(KyuubiEbayConf.SESSION_TESS_SPARK_EXECUTOR_CORES_DEFAULT.key, "2")
   }

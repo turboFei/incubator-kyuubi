@@ -37,8 +37,6 @@ class TagBasedSessionConfAdvisor extends SessionConfAdvisor with Logging {
     cluster.map(c => s"$overlayConfFile.$c")
   }
 
-  private val tessConfAdvisor = new TessConfAdvisor()
-
   private def validateSparkMaster(sessionConf: JMap[String, String]): Map[String, String] = {
     Option(sessionConf.get(SPARK_MASTER_KEY)).map { sparkMaster =>
       if (sparkMaster.toLowerCase(Locale.ROOT).startsWith("yarn")) {
@@ -73,10 +71,8 @@ class TagBasedSessionConfAdvisor extends SessionConfAdvisor with Logging {
           Map.empty)
 
     val tagConfOverlay = tagDefaultConf ++ tagLevelConfOverlay ++ serviceOverwriteConfOverlay
-    val tessConfOverlay =
-      tessConfAdvisor.getConfOverlay(user, (sessionConf.asScala ++ tagConfOverlay).asJava)
 
-    (validateSparkMaster(sessionConf) ++ tagConfOverlay ++ tessConfOverlay.asScala).asJava
+    (validateSparkMaster(sessionConf) ++ tagConfOverlay).asJava
   }
 }
 
