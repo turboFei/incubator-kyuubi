@@ -25,8 +25,7 @@ import org.apache.kyuubi.Logging
 import org.apache.kyuubi.plugin.SessionConfAdvisor
 
 class ChainedSessionConfAdvisor extends SessionConfAdvisor with Logging {
-  private val sessionConfAdvisorChain =
-    List(new TagBasedSessionConfAdvisor(), new TessConfAdvisor(), new FileSessionConfAdvisor())
+  val sessionConfAdvisorChain = List(new TagBasedSessionConfAdvisor(), new TessConfAdvisor())
 
   override def getConfOverlay(
       user: String,

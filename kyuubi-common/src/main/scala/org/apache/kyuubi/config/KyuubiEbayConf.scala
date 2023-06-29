@@ -834,6 +834,16 @@ object KyuubiEbayConf extends Logging {
     }
   }
 
+  def confOverlayForSessionType(
+      sessionConf: Map[String, String],
+      confOverlay: Map[String, String]): Map[String, String] = {
+    if (sessionConf.get(KYUUBI_SESSION_TYPE_KEY).exists(_.equalsIgnoreCase("BATCH"))) {
+      KyuubiEbayConf.toBatchConf(confOverlay)
+    } else {
+      confOverlay
+    }
+  }
+
   def getBatchTagDefaultConf(
       conf: Map[String, String],
       tagEnabledKey: ConfigEntry[Boolean],

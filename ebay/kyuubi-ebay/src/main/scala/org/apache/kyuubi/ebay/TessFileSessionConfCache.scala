@@ -26,43 +26,29 @@ import com.google.common.cache.{CacheBuilder, CacheLoader, LoadingCache}
 
 import org.apache.kyuubi.{Logging, Utils}
 import org.apache.kyuubi.config.KyuubiConf
-import org.apache.kyuubi.ebay.FileSessionConfAdvisor.sessionConfCache
-import org.apache.kyuubi.plugin.SessionConfAdvisor
 
-/** Copied from org.apache.kyuubi.session.FileSessionConfAdvisor and support multiple profiles */
-class FileSessionConfAdvisor extends SessionConfAdvisor {
-  override def getConfOverlay(
-      user: String,
-      sessionConf: JMap[String, String]): JMap[String, String] = {
-    val profile: String = sessionConf.get(KyuubiConf.SESSION_CONF_PROFILE.key)
-    profile match {
-      case null => Collections.emptyMap()
-      case _ =>
-        // support multiple profiles
-        Utils.strToSeq(profile).flatMap { p =>
-          sessionConfCache.get(p).asScala
-        }.toMap.asJava
-    }
-  }
-}
-
-object FileSessionConfAdvisor extends Logging {
+/** Copied from org.apache.kyuubi.session.FileSessionConfAdvisor */
+object TessFileSessionConfCache extends Logging {
   private val reloadInterval: Long = KyuubiConf().get(KyuubiConf.SESSION_CONF_FILE_RELOAD_INTERVAL)
-  private lazy val sessionConfCache: LoadingCache[String, JMap[String, String]] =
+  private lazy val sessionTessContextConfCache: LoadingCache[String, JMap[String, String]] =
     CacheBuilder.newBuilder()
       .expireAfterWrite(
         reloadInterval,
         TimeUnit.MILLISECONDS)
       .build(new CacheLoader[String, JMap[String, String]] {
-        override def load(profile: String): JMap[String, String] = {
-          val propsFile = Utils.getPropertiesFile(s"kyuubi-session-$profile.conf")
+        override def load(context: String): JMap[String, String] = {
+          val propsFile = Utils.getPropertiesFile(s"kyuubi-session-tess-$context.conf")
           propsFile match {
             case None =>
-              error("File not found: $KYUUBI_CONF_DIR/" + s"kyuubi-session-$profile.conf")
+              error("File not found: $KYUUBI_CONF_DIR/" + s"kyuubi-session-tess-$context.conf")
               Collections.emptyMap()
             case Some(_) =>
               Utils.getPropertiesFromFile(propsFile).asJava
           }
         }
       })
+
+  def getTessContextSessionConf(context: String): Map[String, String] = {
+    sessionTessContextConfCache.get(context).asScala.toMap
+  }
 }

@@ -20,7 +20,6 @@ package org.apache.kyuubi.ebay
 import scala.collection.JavaConverters._
 
 import org.apache.kyuubi.KyuubiFunSuite
-import org.apache.kyuubi.config.KyuubiConf._
 import org.apache.kyuubi.config.KyuubiEbayConf
 
 class TessConfAdvisorSuite extends KyuubiFunSuite {
@@ -31,10 +30,13 @@ class TessConfAdvisorSuite extends KyuubiFunSuite {
     assert(advisor.getConfOverlay("demo", SESSION_CONF_DEMO.asJava).asScala ==
       OVERLAY_CONF_DEMO)
 
+    assert(advisor.getConfOverlay("demo", Map.empty[String, String].asJava).asScala == Map.empty)
+
     assert(advisor.getConfOverlay(
       "demo",
-      (SESSION_CONF_DEMO ++ Map(SESSION_CONF_PROFILE.key -> "profile1")).asJava).asScala ==
-      OVERLAY_CONF_DEMO ++ Map(SESSION_CONF_PROFILE.key -> "profile1,tess-28"))
+      (SESSION_CONF_DEMO.asJava.asScala ++ Map(
+        KyuubiEbayConf.KYUUBI_SESSION_TYPE_KEY -> "BATCH")).asJava).asScala ==
+      KyuubiEbayConf.toBatchConf(OVERLAY_CONF_DEMO))
   }
 }
 
@@ -57,5 +59,5 @@ object TessConfAdvisorSuite {
     "spark.kubernetes.executor.annotation.io.sherlock.logs/namespace" -> "adlc",
     "spark.kubernetes.driver.label.applicationinstance.tess.io/name" -> "adlc-ai",
     "spark.tess.overwrite" -> "true",
-    SESSION_CONF_PROFILE.key -> "tess-28")
+    "kyuubi.kubernetes.context" -> "28")
 }

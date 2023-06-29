@@ -20,20 +20,16 @@ package org.apache.kyuubi.ebay
 import scala.collection.JavaConverters._
 
 import org.apache.kyuubi.KyuubiFunSuite
-import org.apache.kyuubi.config.KyuubiConf._
 
 class ChainedSessionConfAdvisorSuite extends KyuubiFunSuite {
   test("test chained session conf advisor") {
     val advisor = new ChainedSessionConfAdvisor()
     val sessionConf = TagBasedSessionConfAdvisorSuite.SESSION_CONF_DEMO ++
-      TessConfAdvisorSuite.SESSION_CONF_DEMO ++
-      FileSessionConfAdvisorSuite.SESSION_CONF_DEMO ++
-      Map(SESSION_CONF_PROFILE.key -> "profile1")
+      TessConfAdvisorSuite.SESSION_CONF_DEMO
 
     val overlayConf = TagBasedSessionConfAdvisorSuite.OVERLAY_CONF_DEMO ++
       TessConfAdvisorSuite.OVERLAY_CONF_DEMO ++
-      FileSessionConfAdvisorSuite.OVERLAY_CONF_DEMO ++
-      Map(SESSION_CONF_PROFILE.key -> "profile1,tess-28")
+      Map("kyuubi.kubernetes.context" -> "28")
 
     assert(advisor.getConfOverlay("demo", sessionConf.asJava).asScala == overlayConf)
   }
