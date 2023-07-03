@@ -95,6 +95,20 @@ class SparkOperationEbaySuite extends WithSparkSQLEngine with HiveJDBCTestHelper
     }
   }
 
+  test("HADP-50216: fix NullPointerException with temp table collect") {
+    withSessionConf(Map.empty)(Map.empty)(Map(
+      "kyuubi.operation.incremental.collect" -> "true",
+      "kyuubi.operation.temp.table.collect" -> "true")) {
+      withJdbcStatement() { statement =>
+        val rs = statement.executeQuery(
+          s"select CONCAT(from_unixtime(unix_timestamp(), 'yyyyMM'),'01')")
+        assert(rs.next())
+        assert(!rs.next())
+        statement.executeQuery("create or replace view test_view as select 1")
+      }
+    }
+  }
+
   protected def checkAnswer(query: String, result: Seq[Row]): Unit = {
     assert(spark.sql(query).collect() === result)
   }

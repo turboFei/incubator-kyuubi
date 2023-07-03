@@ -160,7 +160,9 @@ class ExecuteStatement(
   private val filesMiniPartNum = spark.sessionState.conf.getConf(SQLConf.FILES_MIN_PARTITION_NUM)
   private val topKThreshold = spark.sessionState.conf.getConf(SQLConf.TOP_K_SORT_FALLBACK_THRESHOLD)
   private def setFilesMiniPartitionNum(minPartitionNum: Option[Int]): Unit = {
-    spark.sessionState.conf.setConf(SQLConf.FILES_MIN_PARTITION_NUM, minPartitionNum)
+    minPartitionNum.map { num =>
+      spark.sessionState.conf.setConfString(SQLConf.FILES_MIN_PARTITION_NUM.key, num.toString)
+    }.getOrElse(spark.sessionState.conf.unsetConf(SQLConf.FILES_MIN_PARTITION_NUM))
   }
   private def setTopKThreshold(topKThreshold: Int): Unit = {
     spark.sessionState.conf.setConf(SQLConf.TOP_K_SORT_FALLBACK_THRESHOLD, topKThreshold)
