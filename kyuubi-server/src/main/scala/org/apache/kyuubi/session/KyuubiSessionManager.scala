@@ -67,7 +67,7 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
 
   lazy val (signingPrivateKey, signingPublicKey) = SignUtils.generateKeyPair()
 
-  private val engineAliveChecker =
+  private val engineConnectionAliveChecker =
     ThreadUtils.newDaemonSingleThreadScheduledExecutor(s"$name-engine-alive-checker")
 
   val bdpManager = new BdpAccessManager()
@@ -452,7 +452,7 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
     val interval = conf.get(KyuubiConf.ENGINE_ALIVE_PROBE_INTERVAL)
     val checkTask: Runnable = () => {
       allSessions().foreach { session =>
-        if (!session.asInstanceOf[KyuubiSessionImpl].checkEngineAlive()) {
+        if (!session.asInstanceOf[KyuubiSessionImpl].checkEngineConnectionAlive()) {
           try {
             closeSession(session.handle)
             logger.info(s"The session ${session.handle} has been closed " +
@@ -464,6 +464,10 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
         }
       }
     }
-    engineAliveChecker.scheduleWithFixedDelay(checkTask, interval, interval, TimeUnit.MILLISECONDS)
+    engineConnectionAliveChecker.scheduleWithFixedDelay(
+      checkTask,
+      interval,
+      interval,
+      TimeUnit.MILLISECONDS)
   }
 }
