@@ -232,7 +232,7 @@ class SparkSQLOperationManager private (name: String) extends OperationManager(n
   }
 
   override def getQueryId(operation: Operation): String = {
-    throw KyuubiSQLException.featureNotSupported()
+    operation.getHandle.identifier.toString
   }
 
   override def newTransferDataOperation(
