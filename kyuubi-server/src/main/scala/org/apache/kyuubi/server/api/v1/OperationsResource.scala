@@ -32,13 +32,15 @@ import org.apache.kyuubi.{KyuubiSQLException, Logging}
 import org.apache.kyuubi.client.api.v1.dto._
 import org.apache.kyuubi.events.KyuubiOperationEvent
 import org.apache.kyuubi.operation.{FetchOrientation, KyuubiOperation, Operation, OperationHandle}
-import org.apache.kyuubi.server.api.ApiRequestContext
+import org.apache.kyuubi.server.api.{ApiRequestContext, ApiUtils}
 import org.apache.kyuubi.session.KyuubiSession
 
 @Tag(name = "Operation")
 @Produces(Array(MediaType.APPLICATION_JSON))
 @Consumes(Array(MediaType.APPLICATION_JSON))
 private[v1] class OperationsResource extends ApiRequestContext with Logging {
+  import ApiUtils.logAndRefineErrorMsg
+
   private def checkOperationAccessPermission(operationHandleStr: String): Unit = {
     var operation: Operation = null
     try {
@@ -69,8 +71,7 @@ private[v1] class OperationsResource extends ApiRequestContext with Logging {
     } catch {
       case NonFatal(e) =>
         val errorMsg = "Error getting an operation event"
-        error(errorMsg, e)
-        throw new NotFoundException(errorMsg)
+        throw new NotFoundException(logAndRefineErrorMsg(errorMsg, e))
     }
   }
 
@@ -97,8 +98,7 @@ private[v1] class OperationsResource extends ApiRequestContext with Logging {
       case NonFatal(e) =>
         val errorMsg =
           s"Error applying ${request.getAction} for operation handle $operationHandleStr"
-        error(errorMsg, e)
-        throw new NotFoundException(errorMsg)
+        throw new NotFoundException(logAndRefineErrorMsg(errorMsg, e))
     }
   }
 
@@ -138,8 +138,7 @@ private[v1] class OperationsResource extends ApiRequestContext with Logging {
     } catch {
       case NonFatal(e) =>
         val errorMsg = s"Error getting result set metadata for operation handle $operationHandleStr"
-        error(errorMsg, e)
-        throw new NotFoundException(errorMsg)
+        throw new NotFoundException(logAndRefineErrorMsg(errorMsg, e))
     }
   }
 
@@ -173,8 +172,7 @@ private[v1] class OperationsResource extends ApiRequestContext with Logging {
         throw e
       case NonFatal(e) =>
         val errorMsg = s"Error getting operation log for operation handle $operationHandleStr"
-        error(errorMsg, e)
-        throw new NotFoundException(errorMsg)
+        throw new NotFoundException(logAndRefineErrorMsg(errorMsg, e))
     }
   }
 
@@ -256,8 +254,7 @@ private[v1] class OperationsResource extends ApiRequestContext with Logging {
         throw new BadRequestException(e.getMessage)
       case NonFatal(e) =>
         val errorMsg = s"Error getting result row set for operation handle $operationHandleStr"
-        error(errorMsg, e)
-        throw new NotFoundException(errorMsg)
+        throw new NotFoundException(logAndRefineErrorMsg(errorMsg, e))
     }
   }
 }
