@@ -270,34 +270,31 @@ class KyuubiRestFrontendService(override val serverable: Serverable)
       realUser
     } else {
       sessionConf.get(KyuubiAuthenticationFactory.HS2_PROXY_USER).map { proxyUser =>
-        try {
-          KyuubiAuthenticationFactory.verifyProxyAccess(
-            realUser,
-            proxyUser,
-            ipAddress,
-            hadoopConf(sessionConf))
-        } catch {
-          case e: Throwable =>
-            try {
-              KyuubiAuthenticationFactory.verifyBatchAccountAccess(
-                realUser,
-                proxyUser,
-                conf)
-            } catch {
-              case be: Throwable =>
-                error("Error fallback to verify batch account access", be)
-                throw e
-            }
+        if (!getConf.get(KyuubiConf.SERVER_ADMINISTRATORS).contains(realUser)) {
+          try {
+            KyuubiAuthenticationFactory.verifyProxyAccess(
+              realUser,
+              proxyUser,
+              ipAddress,
+              hadoopConf(sessionConf))
+          } catch {
+            case e: Throwable =>
+              try {
+                KyuubiAuthenticationFactory.verifyBatchAccountAccess(realUser, proxyUser, conf)
+              } catch {
+                case be: Throwable =>
+                  error("Error fallback to verify batch account access", be)
+                  throw e
+              }
+          }
         }
         proxyUser
       }.orElse {
-        sessionConf.get(KyuubiAuthenticationFactory.KYUUBI_PROXY_BATCH_ACCOUNT).map {
-          batchAccount =>
-            KyuubiAuthenticationFactory.verifyBatchAccountAccess(
-              realUser,
-              batchAccount,
-              conf)
-            batchAccount
+        sessionConf.get(KyuubiAuthenticationFactory.KYUUBI_PROXY_BATCH_ACCOUNT).map { batchUser =>
+          if (!getConf.get(KyuubiConf.SERVER_ADMINISTRATORS).contains(realUser)) {
+            KyuubiAuthenticationFactory.verifyBatchAccountAccess(realUser, batchUser, conf)
+          }
+          batchUser
         }
       }.getOrElse(realUser)
     }
