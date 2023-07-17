@@ -125,7 +125,7 @@ class SparkBatchProcessBuilder(
     batchConf.get(KyuubiEbayConf.SESSION_CLUSTER.key).orElse(super.cluster())
   }
 
-  override def close(destroyProcess: Boolean = !waitCompletion): Unit = {
+  override def close(destroyProcess: Boolean): Unit = {
     super.close(destroyProcess)
     Option(batchSqlFileDir).foreach { dir =>
       Utils.tryLogNonFatalError(Utils.deleteDirectoryRecursively(dir))
