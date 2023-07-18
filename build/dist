@@ -379,6 +379,17 @@ cp -r "$KYUUBI_HOME/conf" "$DISTDIR"
 cp -r "$KYUUBI_HOME/docker" "$DISTDIR"
 cp -r "$KYUUBI_HOME/charts" "$DISTDIR"
 
+# Copy kyuubi data jars
+mkdir -p "$DISTDIR/data-jars"
+cp "$KYUUBI_HOME"/ebay/kyuubi-data/target/*.jar "$DISTDIR/data-jars/"
+for jar in $(ls "$DISTDIR/data-jars/"); do
+  if [[ -f "$DISTDIR/beeline-jars/$jar" ]]; then
+    (cd $DISTDIR/data-jars; ln -snf "../beeline-jars/$jar" "$DISTDIR/data-jars/$jar")
+  elif [[ -f "$DISTDIR/jars/$jar" ]]; then
+    (cd $DISTDIR/data-jars; ln -snf "../jars/$jar" "$DISTDIR/data-jars/$jar")
+  fi
+done
+
 if [[ "$MAKE_TGZ" == "true" ]]; then
   TARDIR_NAME="apache-kyuubi-$VERSION-bin$SUFFIX"
   TARDIR="$KYUUBI_HOME/$TARDIR_NAME"
