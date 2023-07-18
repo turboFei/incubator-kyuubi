@@ -289,7 +289,8 @@ class ExecuteStatement(
       /**
        * The expected partition number to read results, used to prevent splitting many partitions.
        */
-      val partitionNumber = math.max(dataSize / tempTableCollectPartitionBytes, 1).toInt
+      val partitionNumber =
+        math.max(math.ceil(dataSize.toDouble / tempTableCollectPartitionBytes), 1).toInt
       setFilesMiniPartitionNum(Some(partitionNumber))
 
       val selectedColNames = validColsSchema.fields.map(_.name)
