@@ -45,7 +45,7 @@ class SparkBatchProcessBuilder(
 
   private var batchSqlFileDir: File = _
 
-  override protected val commands: Array[String] = {
+  override protected lazy val commands: Array[String] = {
     val buffer = new ArrayBuffer[String]()
     buffer += executable
     Option(mainClass).foreach { cla =>
@@ -85,7 +85,7 @@ class SparkBatchProcessBuilder(
     // tag batch application
     KyuubiApplicationManager.tagApplication(batchId, "spark", clusterManager(), batchKyuubiConf)
 
-    (batchKyuubiConf.getAll ++ sparkAppNameConf() ++ mergeKyuubiFiles(
+    (batchKyuubiConf.getAll ++ sparkAppNameConf() ++ engineLogPathConf() ++ mergeKyuubiFiles(
       batchConf) ++ mergeKyuubiJars(batchConf)).foreach { case (k, v) =>
       buffer += CONF
       buffer += s"${convertConfigKey(k)}=$v"
