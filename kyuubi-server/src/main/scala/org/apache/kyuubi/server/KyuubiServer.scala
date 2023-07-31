@@ -28,7 +28,7 @@ import org.apache.hadoop.security.UserGroupInformation
 
 import org.apache.kyuubi._
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
-import org.apache.kyuubi.config.KyuubiConf.{FRONTEND_PROTOCOLS, FrontendProtocols, KYUUBI_KUBERNETES_CONF_PREFIX}
+import org.apache.kyuubi.config.KyuubiConf.{BATCH_SUBMITTER_ENABLED, FRONTEND_PROTOCOLS, FrontendProtocols, KYUUBI_KUBERNETES_CONF_PREFIX}
 import org.apache.kyuubi.config.KyuubiConf.FrontendProtocols._
 import org.apache.kyuubi.events.{EventBus, KyuubiServerInfoEvent, ServerEventHandlerRegister}
 import org.apache.kyuubi.ha.HighAvailabilityConf._
@@ -210,6 +210,12 @@ class KyuubiServer(name: String) extends Serverable(name) {
 
     if (conf.get(MetricsConf.METRICS_ENABLED)) {
       addService(new MetricsSystem)
+    }
+
+    if (conf.isRESTEnabled && conf.get(BATCH_SUBMITTER_ENABLED)) {
+      addService(new KyuubiBatchService(
+        this,
+        backendService.sessionManager.asInstanceOf[KyuubiSessionManager]))
     }
     super.initialize(conf)
 
