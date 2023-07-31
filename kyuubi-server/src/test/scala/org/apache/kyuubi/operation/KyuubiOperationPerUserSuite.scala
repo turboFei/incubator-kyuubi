@@ -17,7 +17,7 @@
 
 package org.apache.kyuubi.operation
 
-import java.util.UUID
+import java.util.{Properties, UUID}
 
 import org.apache.hadoop.fs.{FileSystem, FileUtil, Path}
 import org.apache.hive.service.rpc.thrift.{TExecuteStatementReq, TGetInfoReq, TGetInfoType, TStatusCode}
@@ -27,7 +27,8 @@ import org.apache.kyuubi.{Utils, WithKyuubiServer, WithSimpleDFSService}
 import org.apache.kyuubi.KYUUBI_VERSION
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf.KYUUBI_ENGINE_ENV_PREFIX
-import org.apache.kyuubi.jdbc.hive.KyuubiStatement
+import org.apache.kyuubi.jdbc.KyuubiHiveDriver
+import org.apache.kyuubi.jdbc.hive.{KyuubiConnection, KyuubiStatement}
 import org.apache.kyuubi.metrics.{MetricsConstants, MetricsSystem}
 import org.apache.kyuubi.session.{KyuubiSessionImpl, SessionHandle}
 import org.apache.kyuubi.util.SemanticVersion
@@ -66,6 +67,19 @@ class KyuubiOperationPerUserSuite
       assert(rs.next())
       assert(rs.getString(1) === Utils.currentUser)
       assert(rs.getString(2) === Utils.currentUser)
+    }
+  }
+
+  test("kyuubi defined function - engine_url") {
+    withSessionConf(Map.empty)(Map.empty)(Map(
+      "spark.ui.enabled" -> "true")) {
+      val driver = new KyuubiHiveDriver()
+      val connection = driver.connect(jdbcUrlWithConf, new Properties())
+        .asInstanceOf[KyuubiConnection]
+      val stmt = connection.createStatement()
+      val rs = stmt.executeQuery("SELECT engine_url()")
+      assert(rs.next())
+      assert(rs.getString(1).nonEmpty)
     }
   }
 
