@@ -21,7 +21,7 @@ import java.nio.ByteBuffer
 import java.util.{ArrayList => JArrayList, Collections}
 
 import com.google.common.primitives.Ints
-import org.apache.hive.service.rpc.thrift.{TColumn, TColumnDesc, TGetResultSetMetadataResp, TI32Column, TPrimitiveTypeEntry, TRow, TRowSet, TTableSchema, TTypeDesc, TTypeEntry, TTypeId}
+import org.apache.hive.service.rpc.thrift.{TColumn, TColumnDesc, TFetchResultsResp, TGetResultSetMetadataResp, TI32Column, TPrimitiveTypeEntry, TRow, TRowSet, TTableSchema, TTypeDesc, TTypeEntry, TTypeId}
 
 import org.apache.kyuubi.operation.FetchOrientation.FetchOrientation
 import org.apache.kyuubi.session.Session
@@ -29,7 +29,9 @@ import org.apache.kyuubi.session.Session
 class Select1Operation(session: Session) extends InterceptedOperation(session) {
   private var alreadyFetched: Boolean = false
 
-  override def getNextRowSet(order: FetchOrientation, rowSetSize: Int): TRowSet = {
+  override def getNextRowSetInternal(
+      order: FetchOrientation,
+      rowSetSize: Int): TFetchResultsResp = {
     val tRow = new TRowSet(0, new JArrayList[TRow](1))
     val tColumn = new TColumn()
     if (!alreadyFetched) {
@@ -41,7 +43,11 @@ class Select1Operation(session: Session) extends InterceptedOperation(session) {
         ByteBuffer.wrap(Array[Byte](0))));
     }
     tRow.addToColumns(tColumn)
-    tRow
+
+    val resp = new TFetchResultsResp(OK_STATUS)
+    resp.setResults(tRow)
+    resp.setHasMoreRows(false)
+    resp
   }
 
   override def getResultSetMetadata: TGetResultSetMetadataResp = {
