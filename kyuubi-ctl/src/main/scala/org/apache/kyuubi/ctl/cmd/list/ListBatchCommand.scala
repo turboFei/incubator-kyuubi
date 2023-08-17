@@ -46,6 +46,7 @@ class ListBatchCommand(cliConfig: CliConfig) extends Command[GetBatchesResponse]
         batchOpts.batchType,
         batchOpts.batchUser,
         batchOpts.batchState,
+        batchOpts.batchName,
         batchOpts.cluster,
         batchOpts.createTime,
         batchOpts.endTime,

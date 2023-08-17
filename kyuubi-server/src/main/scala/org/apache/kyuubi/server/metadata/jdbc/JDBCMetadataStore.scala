@@ -257,6 +257,10 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
       whereConditions += "state = ?"
       params += state.toUpperCase(Locale.ROOT)
     }
+    Option(filter.requestName).filter(_.nonEmpty).foreach { requestName =>
+      whereConditions += "request_name = ?"
+      params += requestName
+    }
     Option(filter.cluster).filter(_.nonEmpty).foreach { _ =>
       whereConditions += " cluster = ? "
       params += filter.cluster.toLowerCase(Locale.ROOT)
