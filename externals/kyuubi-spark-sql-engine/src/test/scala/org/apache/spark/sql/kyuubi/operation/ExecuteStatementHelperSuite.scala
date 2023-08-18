@@ -59,4 +59,15 @@ class ExecuteStatementHelperSuite extends WithSparkSQLEngine {
       }
     }
   }
+
+  test("HADP-50714: Truncate the comma at the tail of statement when using temp table collection") {
+    val statement = "select 1;"
+    val expectedStatement = "select 1"
+    assert(ExecuteStatementHelper.normalizeStatement(statement) == expectedStatement)
+    val badStatement = "select 1; select 2"
+    val e = intercept[Exception] {
+      ExecuteStatementHelper.normalizeStatement(badStatement)
+    }
+    assert(e.getMessage.contains("Only one statement expected"))
+  }
 }

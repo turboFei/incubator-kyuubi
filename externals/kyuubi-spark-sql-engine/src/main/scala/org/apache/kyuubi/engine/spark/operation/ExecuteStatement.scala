@@ -278,7 +278,7 @@ class ExecuteStatement(
       val insertTempTable =
         s"""
            |INSERT OVERWRITE TABLE $tempTableName PARTITION($partitionCol='$statementId')
-           |($statement)
+           |(${ExecuteStatementHelper.normalizeStatement(statement)})
            |""".stripMargin
       withStatement(tempTableDDL)(spark.sql(tempTableDDL))
       withStatement(insertTempTable)(spark.sql(insertTempTable))

@@ -17,11 +17,14 @@
 
 package org.apache.spark.sql.kyuubi.operation
 
+import scala.collection.JavaConverters._
+
 import org.apache.spark.sql.catalyst.parser.SqlBaseParser
 import org.apache.spark.sql.catalyst.parser.SqlBaseParser.{StatementContext, StatementDefaultContext}
 import org.apache.spark.sql.execution.{CollectLimitExec, SortExec, SparkPlan, SparkSqlParser, TakeOrderedAndProjectExec}
 import org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanExec
 import org.apache.spark.sql.execution.columnar.InMemoryTableScanExec
+import org.apache.spark.util.Utils
 
 import org.apache.kyuubi.Logging
 
@@ -79,5 +82,12 @@ object ExecuteStatementHelper extends Logging {
     case _: TakeOrderedAndProjectExec => true
     case AdaptiveSparkPlanExec(_: TakeOrderedAndProjectExec, _, _, _) => true
     case _ => false
+  }
+
+  // HADP-50714: Truncate the comma at the tail of statement when using temp table collection
+  def normalizeStatement(statement: String): String = {
+    val statementSeq = Utils.splitSemiColon(statement)
+    require(statementSeq.size == 1, s"Only one statement expected: $statementSeq")
+    statementSeq.asScala.head
   }
 }
