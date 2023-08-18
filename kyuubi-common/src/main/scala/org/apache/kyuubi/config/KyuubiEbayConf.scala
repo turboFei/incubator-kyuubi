@@ -862,7 +862,9 @@ object KyuubiEbayConf extends Logging {
   }
 
   def moveQueueEnabled(conf: KyuubiConf): Boolean = {
-    getSessionTag(conf) == Some(ZETA_TAG_KEY) && conf.get(SESSION_ENGINE_LAUNCH_MOVE_QUEUE_ENABLED)
+    getSessionTag(conf) == Some(ZETA_TAG_KEY) && conf.get(
+      SESSION_ENGINE_LAUNCH_MOVE_QUEUE_ENABLED) && !conf.get(
+      KyuubiEbayConf.ENGINE_SPARK_TESS_ENABLED)
   }
 
   final val KYUUBI_SESSION_ID_KEY = "kyuubi.session.id"
