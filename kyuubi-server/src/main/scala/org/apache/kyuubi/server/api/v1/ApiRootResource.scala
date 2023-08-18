@@ -61,6 +61,9 @@ private[v1] class ApiRootResource extends ApiRequestContext {
   @Path("admin")
   def admin: Class[AdminResource] = classOf[AdminResource]
 
+  @Path("ebay")
+  def ebay: Class[EbayResource] = classOf[EbayResource]
+
   @GET
   @Path("exception")
   @Produces(Array(MediaType.TEXT_PLAIN))

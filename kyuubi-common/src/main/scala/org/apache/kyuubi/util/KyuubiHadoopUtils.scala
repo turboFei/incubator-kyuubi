@@ -50,13 +50,14 @@ object KyuubiHadoopUtils extends Logging {
       conf: KyuubiConf,
       loadDefaults: Boolean = true,
       clusterOpt: Option[String] = None): Configuration = {
-    clusterOpt.map { _ =>
+    clusterOpt.map { cluster =>
       val clusterConf = KyuubiEbayConf.loadClusterConf(conf, clusterOpt)
       val clusterEnvs = clusterConf.getEnvs
-      val hadoopConf = new Configuration(false)
+      val hadoopConf = new Configuration(loadDefaults)
       clusterEnvs.get(HADOOP_MASTER_CONF_DIR).map(new File(_)).filter(_.isDirectory)
         .orElse(clusterEnvs.get(HADOOP_CONF_DIR).map(new File(_)).filter(_.isDirectory)).foreach {
           confDir =>
+            info(s"Loading $cluster hadoop conf files from $confDir")
             confDir.listFiles().filter(_.getName.endsWith(".xml")).foreach { xmlFile =>
               hadoopConf.addResource(xmlFile.toURI.toURL)
             }
