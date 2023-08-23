@@ -322,6 +322,7 @@ private[v1] class AdminResource extends ApiRequestContext with Logging {
           node.instance,
           node.namespace,
           node.attributes.asJava))
+        .toSeq
     }
   }
 
@@ -351,7 +352,7 @@ private[v1] class AdminResource extends ApiRequestContext with Logging {
         servers += ApiUtils.serverData(nodeInfo)
       })
     }
-    servers
+    servers.toSeq
   }
 
   private def getEngine(

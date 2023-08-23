@@ -258,7 +258,7 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
       batchRequest.getResource,
       batchRequest.getClassName,
       batchRequest.getConf.asScala.toMap,
-      batchRequest.getArgs.asScala,
+      batchRequest.getArgs.asScala.toSeq,
       None,
       shouldRunAsync)
     openBatchSession(batchSession)
@@ -283,7 +283,7 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
       className = batchRequest.getClassName,
       requestName = batchRequest.getName,
       requestConf = conf,
-      requestArgs = batchRequest.getArgs.asScala,
+      requestArgs = batchRequest.getArgs.asScala.toSeq,
       createTime = System.currentTimeMillis(),
       engineType = batchRequest.getBatchType)
 
