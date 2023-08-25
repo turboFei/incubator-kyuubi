@@ -27,10 +27,23 @@ import org.apache.kyuubi.client.api.v1.dto.{Batch, BatchRequest}
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiConf.{ENGINE_CHECK_INTERVAL, ENGINE_SPARK_MAX_LIFETIME}
 import org.apache.kyuubi.engine.spark.SparkProcessBuilder
+import org.apache.kyuubi.server.metadata.api.MetadataFilter
+import org.apache.kyuubi.server.metadata.jdbc.JDBCMetadataStore
 
 class BatchesResourceWithClusterModeSuite extends KyuubiFunSuite with RestFrontendTestHelper {
   override protected lazy val conf: KyuubiConf = {
     KyuubiConf().set(KyuubiEbayConf.SESSION_CLUSTER_MODE_ENABLED, true)
+  }
+
+  private lazy val jdbcMetadataStore = new JDBCMetadataStore(conf)
+
+  override def afterAll(): Unit = {
+    super.afterAll()
+    jdbcMetadataStore.getMetadataList(MetadataFilter(), 0, Int.MaxValue).foreach {
+      batch =>
+        jdbcMetadataStore.cleanupMetadataByIdentifier(batch.identifier)
+    }
+    jdbcMetadataStore.close()
   }
 
   test("open batch session") {

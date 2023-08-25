@@ -37,27 +37,19 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
     .set(s"$METADATA_STORE_JDBC_DATASOURCE_PREFIX.idleTimeout", "60000")
   private val jdbcMetadataStore = new JDBCMetadataStore(conf)
 
-  override protected def afterEach(): Unit = {
-    super.afterEach()
-    jdbcMetadataStore.getMetadataList(
-      MetadataFilter(),
-      0,
-      Int.MaxValue,
-      true).foreach {
+  override def afterAll(): Unit = {
+    super.afterAll()
+    jdbcMetadataStore.getMetadataList(MetadataFilter(), 0, Int.MaxValue).foreach {
       batch =>
         jdbcMetadataStore.cleanupMetadataByIdentifier(batch.identifier)
     }
-  }
-
-  override def afterAll(): Unit = {
-    super.afterAll()
     jdbcMetadataStore.close()
   }
 
   test("test jdbc datasource properties") {
-    assert(jdbcMetadataStore.getHikariDataSource.getConnectionTimeout == 3000)
-    assert(jdbcMetadataStore.getHikariDataSource.getMaximumPoolSize == 99)
-    assert(jdbcMetadataStore.getHikariDataSource.getIdleTimeout == 60000)
+    assert(jdbcMetadataStore.hikariDataSource.getConnectionTimeout == 3000)
+    assert(jdbcMetadataStore.hikariDataSource.getMaximumPoolSize == 99)
+    assert(jdbcMetadataStore.hikariDataSource.getIdleTimeout == 60000)
   }
 
   test("test get init schema stream") {
@@ -86,28 +78,18 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
       engineType = "spark",
       clusterManager = Some("local"))
 
-    var batchStateOnlyMetadata = batchMetadata.copy(
-      resource = null,
-      className = null,
-      requestConf = Map.empty,
-      requestArgs = Seq.empty)
-
     jdbcMetadataStore.insertMetadata(batchMetadata)
-    assert(jdbcMetadataStore.getMetadata(batchId, true) != batchStateOnlyMetadata)
-    assert(jdbcMetadataStore.getMetadata(batchId, false) != batchMetadata)
 
     // the engine type is formatted with UPPER
     batchMetadata = batchMetadata.copy(engineType = "SPARK")
-    batchStateOnlyMetadata = batchStateOnlyMetadata.copy(engineType = "SPARK")
-    assert(jdbcMetadataStore.getMetadata(batchId, true) == batchStateOnlyMetadata)
-    assert(jdbcMetadataStore.getMetadata(batchId, false) == batchMetadata)
+    assert(jdbcMetadataStore.getMetadata(batchId) == batchMetadata)
 
     jdbcMetadataStore.cleanupMetadataByIdentifier(batchId)
-    assert(jdbcMetadataStore.getMetadata(batchId, true) == null)
+    assert(jdbcMetadataStore.getMetadata(batchId) == null)
 
     jdbcMetadataStore.insertMetadata(batchMetadata)
 
-    val batchState2 = batchStateOnlyMetadata.copy(identifier = UUID.randomUUID().toString)
+    val batchState2 = batchMetadata.copy(identifier = UUID.randomUUID().toString)
     jdbcMetadataStore.insertMetadata(batchState2)
 
     var batches =
@@ -116,9 +98,8 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
           sessionType = SessionType.BATCH,
           engineType = "Spark"),
         0,
-        1,
-        true)
-    assert(batches == Seq(batchStateOnlyMetadata))
+        1)
+    assert(batches == Seq(batchMetadata))
 
     batches = jdbcMetadataStore.getMetadataList(
       MetadataFilter(
@@ -126,9 +107,8 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
         engineType = "Spark",
         username = "kyuubi"),
       0,
-      Int.MaxValue,
-      true)
-    assert(batches == Seq(batchStateOnlyMetadata, batchState2))
+      Int.MaxValue)
+    assert(batches == Seq(batchMetadata, batchState2))
 
     jdbcMetadataStore.cleanupMetadataByIdentifier(batchState2.identifier)
 
@@ -139,8 +119,7 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
         username = "kyuubi",
         state = "PENDING"),
       0,
-      Int.MaxValue,
-      true)
+      Int.MaxValue)
     assert(batches.isEmpty)
 
     batches = jdbcMetadataStore.getMetadataList(
@@ -150,9 +129,8 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
         username = "kyuubi",
         state = "PENDING"),
       0,
-      Int.MaxValue,
-      true)
-    assert(batches == Seq(batchStateOnlyMetadata))
+      Int.MaxValue)
+    assert(batches == Seq(batchMetadata))
 
     batches = jdbcMetadataStore.getMetadataList(
       MetadataFilter(
@@ -161,8 +139,7 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
         username = "kyuubi",
         state = "RUNNING"),
       0,
-      Int.MaxValue,
-      true)
+      Int.MaxValue)
     assert(batches.isEmpty)
 
     batches = jdbcMetadataStore.getMetadataList(
@@ -172,8 +149,7 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
         username = "no_kyuubi",
         state = "PENDING"),
       0,
-      Int.MaxValue,
-      true)
+      Int.MaxValue)
     assert(batches.isEmpty)
 
     batches = jdbcMetadataStore.getMetadataList(
@@ -182,31 +158,27 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
         engineType = "SPARK",
         state = "PENDING"),
       0,
-      Int.MaxValue,
-      true)
-    assert(batches == Seq(batchStateOnlyMetadata))
+      Int.MaxValue)
+    assert(batches == Seq(batchMetadata))
 
     batches = jdbcMetadataStore.getMetadataList(
       MetadataFilter(sessionType = SessionType.BATCH),
       0,
-      Int.MaxValue,
-      true)
-    assert(batches == Seq(batchStateOnlyMetadata))
+      Int.MaxValue)
+    assert(batches == Seq(batchMetadata))
 
     batches = jdbcMetadataStore.getMetadataList(
       MetadataFilter(
         sessionType = SessionType.BATCH,
         peerInstanceClosed = true),
       0,
-      Int.MaxValue,
-      true)
+      Int.MaxValue)
     assert(batches.isEmpty)
 
     jdbcMetadataStore.updateMetadata(Metadata(
-      identifier = batchStateOnlyMetadata.identifier,
+      identifier = batchMetadata.identifier,
       peerInstanceClosed = true))
 
-    batchStateOnlyMetadata = batchStateOnlyMetadata.copy(peerInstanceClosed = true)
     batchMetadata = batchMetadata.copy(peerInstanceClosed = true)
 
     batches = jdbcMetadataStore.getMetadataList(
@@ -214,9 +186,8 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
         sessionType = SessionType.BATCH,
         peerInstanceClosed = true),
       0,
-      Int.MaxValue,
-      true)
-    assert(batches === Seq(batchStateOnlyMetadata))
+      Int.MaxValue)
+    assert(batches === Seq(batchMetadata))
 
     batches = jdbcMetadataStore.getMetadataList(
       MetadataFilter(
@@ -224,9 +195,8 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
         cluster = "cluster",
         peerInstanceClosed = true),
       0,
-      Int.MaxValue,
-      true)
-    assert(batches === Seq(batchStateOnlyMetadata))
+      Int.MaxValue)
+    assert(batches === Seq(batchMetadata))
 
     batches = jdbcMetadataStore.getMetadataList(
       MetadataFilter(
@@ -234,8 +204,7 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
         cluster = "invalid-cluster",
         peerInstanceClosed = true),
       0,
-      Int.MaxValue,
-      true)
+      Int.MaxValue)
     assert(batches.isEmpty)
 
     var batchesToRecover = jdbcMetadataStore.getMetadataList(
@@ -244,8 +213,7 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
         state = "PENDING",
         kyuubiInstance = kyuubiInstance),
       0,
-      Int.MaxValue,
-      false)
+      Int.MaxValue)
     assert(batchesToRecover == Seq(batchMetadata))
 
     batchesToRecover = jdbcMetadataStore.getMetadataList(
@@ -254,11 +222,10 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
         state = "RUNNING",
         kyuubiInstance = kyuubiInstance),
       0,
-      Int.MaxValue,
-      false)
+      Int.MaxValue)
     assert(batchesToRecover.isEmpty)
 
-    var newBatchState = batchStateOnlyMetadata.copy(
+    var newBatchState = batchMetadata.copy(
       state = "RUNNING",
       engineId = "app_id",
       engineName = "app_name",
@@ -266,12 +233,12 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
       engineState = "RUNNING",
       engineError = None)
     jdbcMetadataStore.updateMetadata(newBatchState)
-    assert(jdbcMetadataStore.getMetadata(batchId, true) == newBatchState)
+    assert(jdbcMetadataStore.getMetadata(batchId) == newBatchState)
 
     newBatchState = newBatchState.copy(state = "FINISHED", endTime = System.currentTimeMillis())
     jdbcMetadataStore.updateMetadata(newBatchState)
 
-    assert(jdbcMetadataStore.getMetadata(batchId, true) == newBatchState)
+    assert(jdbcMetadataStore.getMetadata(batchId) == newBatchState)
 
     assert(jdbcMetadataStore.getMetadataList(
       MetadataFilter(
@@ -279,8 +246,7 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
         state = "PENDING",
         kyuubiInstance = kyuubiInstance),
       0,
-      Int.MaxValue,
-      false).isEmpty)
+      Int.MaxValue).isEmpty)
 
     assert(jdbcMetadataStore.getMetadataList(
       MetadataFilter(
@@ -288,12 +254,11 @@ class JDBCMetadataStoreSuite extends KyuubiFunSuite {
         state = "RUNNING",
         kyuubiInstance = kyuubiInstance),
       0,
-      Int.MaxValue,
-      false).isEmpty)
+      Int.MaxValue).isEmpty)
 
     eventually(Timeout(3.seconds)) {
       jdbcMetadataStore.cleanupMetadataByAge(1000)
-      assert(jdbcMetadataStore.getMetadata(batchId, true) == null)
+      assert(jdbcMetadataStore.getMetadata(batchId) == null)
     }
   }
 

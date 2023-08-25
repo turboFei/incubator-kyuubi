@@ -45,6 +45,8 @@ import org.apache.kyuubi.ebay.{ChainedSessionConfAdvisor, FakeApiKeyAuthenticati
 import org.apache.kyuubi.jdbc.hive.KyuubiConnection
 import org.apache.kyuubi.jdbc.hive.logs.KyuubiEngineLogListener
 import org.apache.kyuubi.server.http.authentication.AuthenticationHandler.AUTHORIZATION_HEADER
+import org.apache.kyuubi.server.metadata.api.MetadataFilter
+import org.apache.kyuubi.server.metadata.jdbc.JDBCMetadataStore
 import org.apache.kyuubi.service.authentication.{AuthTypes, KyuubiAuthenticationFactory}
 import org.apache.kyuubi.session.{KyuubiBatchSession, KyuubiSessionImpl, KyuubiSessionManager}
 
@@ -71,6 +73,7 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
         classOf[FakeApiKeyAuthenticationProviderImpl].getName)
       .set("kyuubi.server.redaction.regex", "(?i)secret|pass|token|access[.]key")
   }
+  private lazy val jdbcMetadataStore = new JDBCMetadataStore(conf)
 
   override def beforeAll(): Unit = {
     super.beforeAll()
@@ -86,6 +89,15 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
   override protected def afterEach(): Unit = {
     super.afterEach()
     FakeApiKeyAuthenticationProviderImpl.reset()
+  }
+
+  override def afterAll(): Unit = {
+    super.afterAll()
+    jdbcMetadataStore.getMetadataList(MetadataFilter(), 0, Int.MaxValue).foreach {
+      batch =>
+        jdbcMetadataStore.cleanupMetadataByIdentifier(batch.identifier)
+    }
+    jdbcMetadataStore.close()
   }
 
   test("open session with cluster selector") {
