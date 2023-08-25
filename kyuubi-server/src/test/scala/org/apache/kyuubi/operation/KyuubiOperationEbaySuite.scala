@@ -65,7 +65,7 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
       .set(KyuubiEbayConf.OPERATION_INTERCEPT_ENABLED, true)
       .set(KyuubiEbayConf.SESSION_CLUSTER_LIST, Seq("test", "cluster_limit"))
       .set(KyuubiConf.SESSION_CONF_ADVISOR, classOf[ChainedSessionConfAdvisor].getName)
-      .set(KyuubiConf.AUTHENTICATION_METHOD, Seq(AuthTypes.CUSTOM.toString))
+      .set(KyuubiConf.AUTHENTICATION_METHOD, Set(AuthTypes.CUSTOM.toString))
       .set(
         KyuubiConf.AUTHENTICATION_CUSTOM_CLASS,
         classOf[FakeApiKeyAuthenticationProviderImpl].getName)

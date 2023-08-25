@@ -135,7 +135,7 @@ abstract class TBinaryFrontendService(name: String)
       keyStorePassword: String,
       keyStoreType: Option[String],
       keyStoreAlgorithm: Option[String],
-      disallowedSslProtocols: Seq[String],
+      disallowedSslProtocols: Set[String],
       includeCipherSuites: Seq[String]): TServerSocket = {
     val params =
       if (includeCipherSuites.nonEmpty) {
