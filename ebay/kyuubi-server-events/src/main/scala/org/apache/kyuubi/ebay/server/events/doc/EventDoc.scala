@@ -90,7 +90,7 @@ object EventDoc {
           e.eventTime,
           e.startTime,
           e.sessionCluster,
-          e.queue,
+          e.sessionQueue,
           e.remoteSessionId,
           e.engineId,
           e.openedTime,
@@ -117,7 +117,8 @@ object EventDoc {
           e.metrics,
           e.eventType,
           e.sessionCluster,
-          e.sessionQueue)
+          e.sessionQueue,
+          e.clientIP)
       case _ => throw new RuntimeException(s"Unknown kyuubi event: $event")
     }
   }

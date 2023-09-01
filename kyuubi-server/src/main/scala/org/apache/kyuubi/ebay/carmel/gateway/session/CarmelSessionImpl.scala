@@ -132,7 +132,7 @@ class CarmelSessionImpl(
       sessionEvent.openedTime = System.currentTimeMillis()
       sessionEvent.remoteSessionId = _engineSessionHandle.identifier.toString
       sessionEvent.engineId = _sparkEndpoint.getId
-      sessionEvent.queue = _sparkEndpoint.getQueue.getName
+      sessionEvent.sessionQueue = _sparkEndpoint.getQueue.getName
       EventBus.post(sessionEvent)
     }
 

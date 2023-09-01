@@ -62,7 +62,8 @@ case class KyuubiOperationEvent private (
     kyuubiInstance: String,
     metrics: Map[String, String],
     sessionCluster: String = "",
-    sessionQueue: String = "") extends KyuubiEvent {
+    sessionQueue: String = "",
+    clientIP: String = "") extends KyuubiEvent {
 
   // operation events are partitioned by the date when the corresponding operations are
   // created.
@@ -95,6 +96,7 @@ object KyuubiOperationEvent {
       session.connectionUrl,
       operation.metrics,
       session.sessionCluster.getOrElse(""),
-      session.sessionQueue.getOrElse(""))
+      session.sessionQueue.getOrElse(""),
+      session.ipAddress)
   }
 }

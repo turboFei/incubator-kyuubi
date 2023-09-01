@@ -153,6 +153,9 @@
         "sessionUser": {
           "type": "keyword"
         },
+        "clientIP": {
+          "type": "ip"
+        },
         "sessionType": {
           "type": "keyword"
         },

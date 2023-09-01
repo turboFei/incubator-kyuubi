@@ -35,7 +35,8 @@ case class OperationEventDoc(
     metrics: Map[String, String],
     eventType: String,
     sessionCluster: String,
-    sessionQueue: String)
+    sessionQueue: String,
+    clientIP: String)
   extends EventDoc {
   override def docId: String = statementId
   override def indexPartitionTime: Option[Long] = Some(createTime)
