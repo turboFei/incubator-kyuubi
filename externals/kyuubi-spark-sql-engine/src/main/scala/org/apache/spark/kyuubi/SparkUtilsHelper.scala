@@ -46,6 +46,15 @@ object SparkUtilsHelper extends Logging {
     Utils.getLocalDir(conf)
   }
 
+  def classesArePresent(className: String): Boolean = {
+    try {
+      Utils.classForName(className)
+      true
+    } catch {
+      case _: ClassNotFoundException | _: NoClassDefFoundError => false
+    }
+  }
+
   def bytesToString(size: BigInt): String = Utils.bytesToString(size)
 
   def tryWithResource[R <: Closeable, T](createResource: => R)(f: R => T): T =
