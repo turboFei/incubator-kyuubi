@@ -112,8 +112,8 @@ abstract class SparkOperation(session: Session)
     if (!isTerminalState(state)) {
       setState(targetState)
       Option(getBackgroundHandle).foreach(_.cancel(true))
-      if (!spark.sparkContext.isStopped) spark.sparkContext.cancelJobGroup(statementId)
     }
+    if (!spark.sparkContext.isStopped) spark.sparkContext.cancelJobGroup(statementId)
   }
 
   protected val forceCancel =
