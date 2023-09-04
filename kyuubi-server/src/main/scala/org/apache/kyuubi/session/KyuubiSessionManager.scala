@@ -385,11 +385,13 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
         clusterConf.get(SERVER_LIMIT_CONNECTIONS_PER_USER_IPADDRESS).getOrElse(0)
       val userUnlimitedList =
         clusterConf.get(KyuubiConf.SERVER_LIMIT_CONNECTIONS_USER_UNLIMITED_LIST)
+      val userDenyList = clusterConf.get(SERVER_LIMIT_CONNECTIONS_USER_DENY_LIST).filter(_.nonEmpty)
       applySessionLimiter(
         userLimit,
         ipAddressLimit,
         userIpAddressLimit,
-        userUnlimitedList).foreach {
+        userUnlimitedList,
+        userDenyList).foreach {
         limiter =>
           limiters.put(clusterOpt, limiter)
       }
@@ -403,7 +405,8 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
         userBatchLimit,
         ipAddressBatchLimit,
         userIpAddressBatchLimit,
-        userUnlimitedList).foreach {
+        userUnlimitedList,
+        userDenyList).foreach {
         batchLimiter =>
           batchLimiters.put(clusterOpt, batchLimiter)
       }
@@ -421,13 +424,30 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
     batchLimiters.get(cluster).foreach(SessionLimiter.resetUnlimitedUsers(_, unlimitedUsers))
   }
 
+  private[kyuubi] def getDenyUsers(cluster: Option[String]): Set[String] = {
+    limiters.get(cluster).orElse(batchLimiters.get(cluster)).map(SessionLimiter.getDenyUsers)
+      .getOrElse(Set.empty)
+  }
+
+  private[kyuubi] def refreshDenyUsers(cluster: Option[String], conf: KyuubiConf): Unit = {
+    val denyUsers = conf.get(SERVER_LIMIT_CONNECTIONS_USER_DENY_LIST).filter(_.nonEmpty)
+    limiters.get(cluster).foreach(SessionLimiter.resetDenyUsers(_, denyUsers))
+    batchLimiters.get(cluster).foreach(SessionLimiter.resetDenyUsers(_, denyUsers))
+  }
+
   private def applySessionLimiter(
       userLimit: Int,
       ipAddressLimit: Int,
       userIpAddressLimit: Int,
-      userUnlimitedList: Set[String]): Option[SessionLimiter] = {
+      userUnlimitedList: Set[String],
+      userLimitedList: Set[String]): Option[SessionLimiter] = {
     Seq(userLimit, ipAddressLimit, userIpAddressLimit).find(_ > 0).map(_ =>
-      SessionLimiter(userLimit, ipAddressLimit, userIpAddressLimit, userUnlimitedList))
+      SessionLimiter(
+        userLimit,
+        ipAddressLimit,
+        userIpAddressLimit,
+        userUnlimitedList,
+        userLimitedList))
   }
 
   /**

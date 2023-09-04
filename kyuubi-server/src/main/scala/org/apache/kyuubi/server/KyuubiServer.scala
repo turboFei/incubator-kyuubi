@@ -175,6 +175,17 @@ object KyuubiServer extends Logging {
       info(s"Refreshed unlimited users from $existingUnlimitedUsers to $refreshedUnlimitedUsers")
     }
   }
+
+  private[kyuubi] def refreshDenyUsers(): Unit = synchronized {
+    val conf = KyuubiConf().loadFileDefaults()
+    val sessionMgr = kyuubiServer.backendService.sessionManager.asInstanceOf[KyuubiSessionManager]
+    KyuubiEbayConf.getClusterOptList(conf).foreach { clusterOpt =>
+      val existingDenyUsers = sessionMgr.getDenyUsers(clusterOpt)
+      sessionMgr.refreshDenyUsers(clusterOpt, KyuubiEbayConf.loadClusterConf(conf, clusterOpt))
+      val refreshedDenyUsers = sessionMgr.getDenyUsers(clusterOpt)
+      info(s"Refreshed deny users from $existingDenyUsers to $refreshedDenyUsers")
+    }
+  }
 }
 
 class KyuubiServer(name: String) extends Serverable(name) {
