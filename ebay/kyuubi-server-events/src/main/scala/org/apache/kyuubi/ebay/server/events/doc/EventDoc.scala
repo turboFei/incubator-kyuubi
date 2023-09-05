@@ -24,7 +24,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.apache.commons.lang3.time.FastDateFormat
 
-import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiReservedKeys}
 import org.apache.kyuubi.ebay.EbayUtils
 import org.apache.kyuubi.ebay.server.events.doc.EventDoc.{dateFormat, indexDelimiter}
 import org.apache.kyuubi.events.{KyuubiEvent, KyuubiOperationEvent, KyuubiServerInfoEvent, KyuubiSessionEvent}
@@ -84,7 +84,7 @@ object EventDoc {
           e.sessionType,
           e.sessionName,
           e.user,
-          e.clientIP,
+          e.conf.get(KyuubiReservedKeys.KYUUBI_CLIENT_IP_KEY).getOrElse(e.clientIP),
           e.serverIP,
           mapToRedactedString(conf, e.conf),
           e.eventTime,

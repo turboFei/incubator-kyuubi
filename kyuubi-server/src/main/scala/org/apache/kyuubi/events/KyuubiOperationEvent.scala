@@ -97,6 +97,7 @@ object KyuubiOperationEvent {
       operation.metrics,
       session.sessionCluster.getOrElse(""),
       session.sessionQueue.getOrElse(""),
-      session.ipAddress)
+      session.conf.get(org.apache.kyuubi.config.KyuubiReservedKeys.KYUUBI_CLIENT_IP_KEY).getOrElse(
+        session.ipAddress))
   }
 }
