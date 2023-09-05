@@ -41,10 +41,9 @@ class KyuubiBatchSession(
     batchName: Option[String],
     resource: String,
     className: String,
-    batchConf: Map[String, String],
     batchArgs: Seq[String],
-    recoveryMetadata: Option[Metadata] = None,
-    shouldRunAsync: Boolean)
+    metadata: Option[Metadata] = None,
+    fromRecovery: Boolean)
   extends KyuubiSession(
     TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V1,
     user,
@@ -55,14 +54,14 @@ class KyuubiBatchSession(
   override val sessionType: SessionType = SessionType.BATCH
 
   override val handle: SessionHandle = {
-    val batchId = recoveryMetadata.map(_.identifier).getOrElse(conf(KYUUBI_BATCH_ID_KEY))
+    val batchId = metadata.map(_.identifier).getOrElse(conf(KYUUBI_BATCH_ID_KEY))
     SessionHandle.fromUUID(batchId)
   }
 
-  override def createTime: Long = recoveryMetadata.map(_.createTime).getOrElse(super.createTime)
+  override def createTime: Long = metadata.map(_.createTime).getOrElse(super.createTime)
 
-  val sessionCluster = KyuubiEbayConf.getSessionCluster(sessionManager, batchConf)
-  val sessionTag = KyuubiEbayConf.getSessionTag(batchConf)
+  val sessionCluster = KyuubiEbayConf.getSessionCluster(sessionManager, conf)
+  val sessionTag = KyuubiEbayConf.getSessionTag(conf)
 
   override def getNoOperationTime: Long = {
     if (batchJobSubmissionOp != null && !OperationState.isTerminal(
@@ -76,12 +75,12 @@ class KyuubiBatchSession(
   override val sessionIdleTimeoutThreshold: Long =
     sessionManager.getConf.get(KyuubiConf.BATCH_SESSION_IDLE_TIMEOUT)
 
-  private[kyuubi] val reserveMetadata: Boolean = batchConf.getOrElse(
+  private[kyuubi] val reserveMetadata: Boolean = conf.getOrElse(
     KyuubiEbayConf.SESSION_METADATA_RESERVE.key,
     KyuubiEbayConf.SESSION_METADATA_RESERVE.defaultValStr).toBoolean
 
   override val normalizedConf: Map[String, String] =
-    sessionConf.getBatchConf(batchType) ++ sessionManager.validateBatchConf(batchConf) ++
+    sessionConf.getBatchConf(batchType) ++ sessionManager.validateBatchConf(conf) ++
       Map(KyuubiEbayConf.KYUUBI_SESSION_TYPE_KEY -> sessionType.toString)
 
   val optimizedConf: Map[String, String] = {
@@ -103,7 +102,7 @@ class KyuubiBatchSession(
 
   // whether the resource file is from uploading
   private[kyuubi] val isResourceUploaded: Boolean =
-    batchConf.getOrElse(KyuubiReservedKeys.KYUUBI_BATCH_RESOURCE_UPLOADED_KEY, "false").toBoolean
+    conf.getOrElse(KyuubiReservedKeys.KYUUBI_BATCH_RESOURCE_UPLOADED_KEY, "false").toBoolean
 
   private[kyuubi] lazy val batchJobSubmissionOp = sessionManager.operationManager
     .newBatchJobSubmissionOperation(
@@ -114,8 +113,7 @@ class KyuubiBatchSession(
       className,
       optimizedConf,
       batchArgs,
-      recoveryMetadata,
-      shouldRunAsync)
+      metadata)
 
   private def waitMetadataRequestsRetryCompletion(): Unit = {
     val batchId = batchJobSubmissionOp.batchId
@@ -130,7 +128,9 @@ class KyuubiBatchSession(
   }
 
   private val sessionEvent = KyuubiSessionEvent(this)
-  recoveryMetadata.foreach(metadata => sessionEvent.engineId = metadata.engineId)
+  if (fromRecovery) {
+    metadata.foreach { m => sessionEvent.engineId = m.engineId }
+  }
   EventBus.post(sessionEvent)
 
   override def getSessionEvent: Option[KyuubiSessionEvent] = {
@@ -150,41 +150,62 @@ class KyuubiBatchSession(
   override def open(): Unit = handleSessionException {
     traceMetricsOnOpen()
 
-    if (recoveryMetadata.isEmpty) {
+    lazy val kubernetesInfo: Map[String, String] = {
       val appMgrInfo = batchJobSubmissionOp.builder.appMgrInfo()
-      val kubernetesInfo = appMgrInfo.kubernetesInfo.context.map { context =>
+      appMgrInfo.kubernetesInfo.context.map { context =>
         Map(KyuubiConf.KUBERNETES_CONTEXT.key -> context)
       }.getOrElse(Map.empty) ++ appMgrInfo.kubernetesInfo.namespace.map { namespace =>
         Map(KyuubiConf.KUBERNETES_NAMESPACE.key -> namespace)
       }.getOrElse(Map.empty) ++ sessionCluster.map { cluster =>
         Map(KyuubiEbayConf.SESSION_CLUSTER.key -> cluster)
       }.getOrElse(Map.empty)
-      var metaData = Metadata(
-        identifier = handle.identifier.toString,
-        sessionType = sessionType,
-        realUser = realUser,
-        username = user,
-        ipAddress = ipAddress,
-        kyuubiInstance = connectionUrl,
-        state = OperationState.PENDING.toString,
-        resource = resource,
-        className = className,
-        requestName = name.orNull,
-        requestConf = optimizedConf ++ kubernetesInfo, // save the kubernetes info into request conf
-        requestArgs = batchArgs,
-        createTime = createTime,
-        engineType = batchType,
-        clusterManager = batchJobSubmissionOp.builder.clusterManager())
+    }
 
-      if (!reserveMetadata) {
-        metaData = metaData.copy(
-          requestConf =
-            Map(KyuubiEbayConf.SESSION_METADATA_RESERVE.key -> "false") ++ kubernetesInfo,
-          requestArgs = Seq.empty)
-      }
+    (metadata, fromRecovery) match {
+      case (Some(initialMetadata), false) =>
+        // new batch job created using batch impl v2
+        var metadataToUpdate = Metadata(
+          identifier = initialMetadata.identifier,
+          kyuubiInstance = connectionUrl,
+          requestName = name.orNull,
+          requestConf = optimizedConf ++ kubernetesInfo, // save the kubernetes info
+          clusterManager = batchJobSubmissionOp.builder.clusterManager())
+        if (!reserveMetadata) {
+          metadataToUpdate = metadataToUpdate.copy(
+            requestConf =
+              Map(KyuubiEbayConf.SESSION_METADATA_RESERVE.key -> "false") ++ kubernetesInfo,
+            requestArgs = Seq.empty)
+        }
+        sessionManager.updateMetadata(metadataToUpdate)
+      case (None, _) =>
+        // new batch job created using batch impl v1
+        var newMetadata = Metadata(
+          identifier = handle.identifier.toString,
+          sessionType = sessionType,
+          realUser = realUser,
+          username = user,
+          ipAddress = ipAddress,
+          kyuubiInstance = connectionUrl,
+          state = OperationState.PENDING.toString,
+          resource = resource,
+          className = className,
+          requestName = name.orNull,
+          requestConf = optimizedConf ++ kubernetesInfo, // save the kubernetes info
+          requestArgs = batchArgs,
+          createTime = createTime,
+          engineType = batchType,
+          clusterManager = batchJobSubmissionOp.builder.clusterManager())
 
-      // there is a chance that operation failed w/ duplicated key error
-      sessionManager.insertMetadata(metaData)
+        if (!reserveMetadata) {
+          newMetadata = newMetadata.copy(
+            requestConf =
+              Map(KyuubiEbayConf.SESSION_METADATA_RESERVE.key -> "false") ++ kubernetesInfo,
+            requestArgs = Seq.empty)
+        }
+
+        // there is a chance that operation failed w/ duplicated key error
+        sessionManager.insertMetadata(newMetadata)
+      case _ =>
     }
 
     checkSessionAccessPathURIs()

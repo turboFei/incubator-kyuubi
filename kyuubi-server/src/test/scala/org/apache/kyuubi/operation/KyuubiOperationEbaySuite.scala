@@ -610,7 +610,6 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
           "user",
           "password",
           "127.0.0.1",
-          batchConf,
           batchRequest)
       }
       assert(sessionMgr.allSessions().filter(_.isInstanceOf[KyuubiBatchSession])
@@ -743,7 +742,6 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
       "user",
       "password",
       "127.0.0.1",
-      batchConf,
       batchRequest)
     val batchSession = sessionMgr.getBatchSession(sessionHandle).get
     val conf = batchSession.optimizedConf

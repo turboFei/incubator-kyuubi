@@ -312,12 +312,12 @@ class BatchCliSuite extends RestClientTestHelper with TestPrematureExit with Bat
       "kyuubi",
       "kyuubi",
       InetAddress.getLocalHost.getCanonicalHostName,
-      Map(KYUUBI_BATCH_ID_KEY -> UUID.randomUUID().toString),
       newBatchRequest(
         "spark",
         "",
         "",
-        ""))
+        "",
+        Map(KYUUBI_BATCH_ID_KEY -> UUID.randomUUID().toString)))
     sessionManager.openSession(
       TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V11,
       "",
@@ -334,22 +334,22 @@ class BatchCliSuite extends RestClientTestHelper with TestPrematureExit with Bat
       "kyuubi",
       "kyuubi",
       InetAddress.getLocalHost.getCanonicalHostName,
-      Map(KYUUBI_BATCH_ID_KEY -> UUID.randomUUID().toString),
       newBatchRequest(
         "spark",
         "",
         "",
-        ""))
+        "",
+        Map(KYUUBI_BATCH_ID_KEY -> UUID.randomUUID().toString)))
     sessionManager.openBatchSession(
       "kyuubi",
       "kyuubi",
       InetAddress.getLocalHost.getCanonicalHostName,
-      Map(KYUUBI_BATCH_ID_KEY -> UUID.randomUUID().toString),
       newBatchRequest(
         "spark",
         "",
         "",
-        ""))
+        "",
+        Map(KYUUBI_BATCH_ID_KEY -> UUID.randomUUID().toString)))
 
     val listArgs = Array(
       "list",

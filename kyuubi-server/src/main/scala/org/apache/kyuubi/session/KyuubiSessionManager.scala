@@ -173,10 +173,9 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
       batchName: Option[String],
       resource: String,
       className: String,
-      batchConf: Map[String, String],
       batchArgs: Seq[String],
-      recoveryMetadata: Option[Metadata] = None,
-      shouldRunAsync: Boolean): KyuubiBatchSession = {
+      metadata: Option[Metadata] = None,
+      fromRecovery: Boolean): KyuubiBatchSession = {
     // scalastyle:on
     val username = Option(user).filter(_.nonEmpty).getOrElse("anonymous")
     val clusterConf = getClusterConf(conf)
@@ -200,10 +199,9 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
       batchName,
       resource,
       className,
-      batchConf,
       batchArgs,
-      recoveryMetadata,
-      shouldRunAsync)
+      metadata,
+      fromRecovery)
   }
 
   private[kyuubi] def openBatchSession(batchSession: KyuubiBatchSession): SessionHandle = {
@@ -242,25 +240,24 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
       user: String,
       password: String,
       ipAddress: String,
-      conf: Map[String, String],
-      batchRequest: BatchRequest,
-      shouldRunAsync: Boolean = true): SessionHandle = {
-    if (KyuubiEbayConf.isCarmelCluster(getConf, getSessionCluster(conf))) {
+      batchRequest: BatchRequest): SessionHandle = {
+    if (KyuubiEbayConf.isCarmelCluster(
+        getConf,
+        getSessionCluster(batchRequest.getConf.asScala.toMap))) {
       throw new KyuubiException(s"Batch function is disallowed for carmel cluster.")
     }
     val batchSession = createBatchSession(
       user,
       password,
       ipAddress,
-      conf,
+      batchRequest.getConf.asScala.toMap,
       batchRequest.getBatchType,
       Option(batchRequest.getName),
       batchRequest.getResource,
       batchRequest.getClassName,
-      batchRequest.getConf.asScala.toMap,
       batchRequest.getArgs.asScala.toSeq,
       None,
-      shouldRunAsync)
+      fromRecovery = false)
     openBatchSession(batchSession)
   }
 
@@ -356,10 +353,9 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
           Option(metadata.requestName),
           metadata.resource,
           metadata.className,
-          metadata.requestConf,
           metadata.requestArgs,
           Some(metadata),
-          shouldRunAsync = true)
+          fromRecovery = true)
       }).getOrElse(Seq.empty)
     }
   }
