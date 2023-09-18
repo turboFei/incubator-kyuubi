@@ -434,6 +434,13 @@ private[v1] class BatchesResource extends ApiRequestContext with Logging {
                 throw e
               }
           }
+        } else if (batchV2Enabled(metadata.requestConf) &&
+          // in batch v2 impl, the operation state is changed from PENDING to RUNNING
+          // before being added to SessionManager.
+          (metadata.state == "PENDING" || metadata.state == "RUNNING")) {
+          info(s"Batch $batchId is waiting for submitting")
+          val dummyLogs = List(s"Batch $batchId is waiting for submitting").asJava
+          new OperationLog(dummyLogs, dummyLogs.size)
         } else {
           getAggOperationLog(metadata.createTime, batchId).getOrElse(
             throw new NotFoundException(s"No local log found for batch: $batchId"))
