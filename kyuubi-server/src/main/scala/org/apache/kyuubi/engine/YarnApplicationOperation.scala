@@ -22,12 +22,14 @@ import java.util.concurrent.ConcurrentHashMap
 
 import scala.collection.JavaConverters._
 
+import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.yarn.api.records.{FinalApplicationStatus, YarnApplicationState}
 import org.apache.hadoop.yarn.client.api.YarnClient
 
-import org.apache.kyuubi.Logging
-import org.apache.kyuubi.config.KyuubiConf
-import org.apache.kyuubi.config.KyuubiEbayConf
+import org.apache.kyuubi.{Logging, Utils}
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
+import org.apache.kyuubi.config.KyuubiConf.YarnUserStrategy
+import org.apache.kyuubi.config.KyuubiConf.YarnUserStrategy._
 import org.apache.kyuubi.engine.ApplicationOperation._
 import org.apache.kyuubi.engine.ApplicationState.ApplicationState
 import org.apache.kyuubi.engine.YarnApplicationOperation.toApplicationState
@@ -35,8 +37,9 @@ import org.apache.kyuubi.util.KyuubiHadoopUtils
 
 class YarnApplicationOperation extends ApplicationOperation with Logging {
 
-  private val yarnClients = new ConcurrentHashMap[Option[String], YarnClient]()
+  private val adminYarnClients = new ConcurrentHashMap[Option[String], Option[YarnClient]]()
   private var submitTimeout: Long = _
+  private def adminYarnClient(c: Option[String]): Option[YarnClient] = adminYarnClients.get(c)
 
   override def initialize(conf: KyuubiConf): Unit = {
     submitTimeout = conf.get(KyuubiConf.ENGINE_YARN_SUBMIT_TIMEOUT)
@@ -45,26 +48,72 @@ class YarnApplicationOperation extends ApplicationOperation with Logging {
 
     clusterOptList.foreach { clusterOpt =>
       val yarnConf = KyuubiHadoopUtils.newYarnConfiguration(conf, clusterOpt = clusterOpt)
-      // YarnClient is thread-safe
-      val c = YarnClient.createYarnClient()
-      c.init(yarnConf)
-      c.start()
-      yarnClients.put(clusterOpt, c)
-      info(s"Successfully initialized yarn client: ${c.getServiceState} for" +
-        s" cluster: ${clusterOpt.getOrElse("")}")
+
+      def createYarnClientWithCurrentUser(): Unit = {
+        val c = createYarnClient(yarnConf)
+        info(s"Creating admin YARN client with current user: ${Utils.currentUser}.")
+        adminYarnClients.put(clusterOpt, Some(c))
+      }
+
+      def createYarnClientWithProxyUser(proxyUser: String): Unit = Utils.doAs(proxyUser) { () =>
+        val c = createYarnClient(yarnConf)
+        info(s"Creating admin YARN client with proxy user: $proxyUser.")
+        adminYarnClients.put(clusterOpt, Some(c))
+      }
+
+      YarnUserStrategy.withName(conf.get(KyuubiConf.YARN_USER_STRATEGY)) match {
+        case NONE =>
+          createYarnClientWithCurrentUser()
+        case ADMIN if conf.get(KyuubiConf.YARN_USER_ADMIN) == Utils.currentUser =>
+          createYarnClientWithCurrentUser()
+        case ADMIN =>
+          createYarnClientWithProxyUser(conf.get(KyuubiConf.YARN_USER_ADMIN))
+        case OWNER =>
+          info("Skip initializing admin YARN client")
+      }
     }
   }
 
-  override def isSupported(appMgrInfo: ApplicationManagerInfo): Boolean = {
-    yarnClients.get(appMgrInfo.clusterOpt) != null && appMgrInfo.resourceManager.exists(
-      _.toLowerCase(Locale.ROOT).startsWith("yarn"))
+  private def createYarnClient(_yarnConf: Configuration): YarnClient = {
+    // YarnClient is thread-safe
+    val yarnClient = YarnClient.createYarnClient()
+    yarnClient.init(_yarnConf)
+    yarnClient.start()
+    yarnClient
   }
+
+  private def withYarnClient[T](
+      appMgrInfo: ApplicationManagerInfo,
+      proxyUser: Option[String])(action: YarnClient => T): T = {
+    (adminYarnClient(appMgrInfo.clusterOpt), proxyUser) match {
+      case (Some(yarnClient), _) =>
+        action(yarnClient)
+      case (None, Some(user)) =>
+        Utils.doAs(user) { () =>
+          var yarnClient: YarnClient = null
+          try {
+            yarnClient =
+              createYarnClient(KyuubiHadoopUtils.newYarnConfiguration(
+                new KyuubiConf(),
+                clusterOpt = appMgrInfo.clusterOpt))
+            action(yarnClient)
+          } finally {
+            Utils.tryLogNonFatalError(yarnClient.close())
+          }
+        }
+      case (None, None) =>
+        throw new IllegalStateException("Methods initialize and isSupported must be called ahead")
+    }
+  }
+
+  override def isSupported(appMgrInfo: ApplicationManagerInfo): Boolean =
+    appMgrInfo.resourceManager.exists(_.toLowerCase(Locale.ROOT).startsWith("yarn"))
 
   override def killApplicationByTag(
       appMgrInfo: ApplicationManagerInfo,
-      tag: String): KillResponse = {
-    val yarnClient = yarnClients.get(appMgrInfo.clusterOpt)
-    if (yarnClient != null) {
+      tag: String,
+      proxyUser: Option[String] = None): KillResponse =
+    withYarnClient(appMgrInfo, proxyUser) { yarnClient =>
       try {
         val reports = yarnClient.getApplications(null, null, Set(tag).asJava)
         if (reports.isEmpty) {
@@ -83,20 +132,16 @@ class YarnApplicationOperation extends ApplicationOperation with Logging {
         case e: Exception =>
           (
             false,
-            s"Failed to get while terminating application with tag $tag," +
-              s" due to ${e.getMessage}")
+            s"Failed to get while terminating application with tag $tag, due to ${e.getMessage}")
       }
-    } else {
-      throw new IllegalStateException("Methods initialize and isSupported must be called ahead")
     }
-  }
 
   override def getApplicationInfoByTag(
       appMgrInfo: ApplicationManagerInfo,
       tag: String,
-      submitTime: Option[Long]): ApplicationInfo = {
-    val yarnClient = yarnClients.get(appMgrInfo.clusterOpt)
-    if (yarnClient != null) {
+      proxyUser: Option[String] = None,
+      submitTime: Option[Long] = None): ApplicationInfo =
+    withYarnClient(appMgrInfo, proxyUser) { yarnClient =>
       debug(s"Getting application info from Yarn cluster by $tag tag")
       val reports = yarnClient.getApplications(null, null, Set(tag).asJava)
       if (reports.isEmpty) {
@@ -129,21 +174,10 @@ class YarnApplicationOperation extends ApplicationOperation with Logging {
         debug(s"Successfully got application info by $tag: $info")
         info
       }
-    } else {
-      throw new IllegalStateException("Methods initialize and isSupported must be called ahead")
     }
-  }
 
-  override def stop(): Unit = {
-    if (!yarnClients.isEmpty) {
-      yarnClients.asScala.values.foreach { yarnClient =>
-        try {
-          yarnClient.stop()
-        } catch {
-          case e: Exception => error(e.getMessage)
-        }
-      }
-    }
+  override def stop(): Unit = adminYarnClients.values().asScala.flatten.foreach { yarnClient =>
+    Utils.tryLogNonFatalError(yarnClient.stop())
   }
 }
 
