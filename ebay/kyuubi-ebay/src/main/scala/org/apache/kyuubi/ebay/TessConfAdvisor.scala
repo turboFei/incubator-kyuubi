@@ -75,9 +75,11 @@ class TessConfAdvisor extends SessionConfAdvisor with Logging {
         DRIVER_ANNOTATION_APPLICATION_NAME -> appName,
         DRIVER_LABEL_APPLICATION_INSTANCE -> appInstance,
         DRIVER_ANNOTATION_SHERLOCK_LOGS -> appName,
+        DRIVER_ANNOTATION_SHERLOCK_METRICS -> appName,
         EXECUTOR_ANNOTATION_APPLICATION_NAME -> appName,
         EXECUTOR_LABEL_APPLICATION_INSTANCE -> appInstance,
         EXECUTOR_ANNOTATION_SHERLOCK_LOGS -> appName,
+        EXECUTOR_ANNOTATION_SHERLOCK_METRICS -> appName,
         CONTAINER_IMAGE -> appImage).filter(_._2.nonEmpty)
 
       val tessCoresConf = getTessCores(tempSessionConf)
@@ -164,6 +166,7 @@ object TessConfAdvisor {
   final private val APPLICATION_NAME = "application.tess.io/name"
   final private val APPLICATION_INSTANCE = "applicationinstance.tess.io/name"
   final private val SHERLOCK_LOGS = "io.sherlock.logs/namespace"
+  final private val SHERLOCK_METRICS = "io.sherlock.metrics/namespace"
 
   final val DRIVER_ANNOTATION_APPLICATION_NAME = DRIVER_ANNOTATION_PREFIX + APPLICATION_NAME
   final val EXECUTOR_ANNOTATION_APPLICATION_NAME = EXECUTOR_ANNOTATION_PREFIX + APPLICATION_NAME
@@ -171,6 +174,8 @@ object TessConfAdvisor {
   final val EXECUTOR_LABEL_APPLICATION_INSTANCE = EXECUTOR_LABEL_PREFIX + APPLICATION_INSTANCE
   final val DRIVER_ANNOTATION_SHERLOCK_LOGS = DRIVER_ANNOTATION_PREFIX + SHERLOCK_LOGS
   final val EXECUTOR_ANNOTATION_SHERLOCK_LOGS = EXECUTOR_ANNOTATION_PREFIX + SHERLOCK_LOGS
+  final val DRIVER_ANNOTATION_SHERLOCK_METRICS = DRIVER_ANNOTATION_PREFIX + SHERLOCK_METRICS
+  final val EXECUTOR_ANNOTATION_SHERLOCK_METRICS = EXECUTOR_ANNOTATION_PREFIX + SHERLOCK_METRICS
 
   final val CONTAINER_IMAGE = "spark.kubernetes.container.image"
 
