@@ -307,16 +307,17 @@ private[v1] class AdminResource extends ApiRequestContext with Logging {
       clusterOptList.foreach { clusterOpt =>
         val clusterConf = getClusterConf(clusterOpt)
         val engineSpace = clusterConf.get(HA_NAMESPACE)
-        val shareLevel = clusterConf.get(ENGINE_SHARE_LEVEL)
-        val engineType = clusterConf.get(ENGINE_TYPE)
+        val finalShareLevel = Option(shareLevel).getOrElse(clusterConf.get(ENGINE_SHARE_LEVEL))
+        val finalEngineType = Option(engineType).getOrElse(clusterConf.get(ENGINE_TYPE))
 
         withDiscoveryClient(clusterConf) { discoveryClient =>
-          val commonParent = s"/${engineSpace}_${KYUUBI_VERSION}_${shareLevel}_$engineType"
+          val commonParent =
+            s"/${engineSpace}_${KYUUBI_VERSION}_${finalShareLevel}_$finalEngineType"
           info(s"Listing engine nodes for $commonParent")
           try {
             discoveryClient.getChildren(commonParent).map {
               user =>
-                val engine = getEngine(user, engineType, shareLevel, "", "", clusterConf)
+                val engine = getEngine(user, finalEngineType, finalShareLevel, "", "", clusterConf)
                 val engineSpace = getEngineSpace(engine, clusterConf)
                 discoveryClient.getChildren(engineSpace).map { child =>
                   info(s"Listing engine nodes for $engineSpace/$child")
@@ -335,9 +336,12 @@ private[v1] class AdminResource extends ApiRequestContext with Logging {
             }
           } catch {
             case nne: NoNodeException =>
-              error(s"No such engine for engine type: $engineType, share level: $shareLevel", nne)
+              error(
+                s"No such engine for engine type: $finalEngineType," +
+                  s" share level: $finalShareLevel",
+                nne)
               throw new NotFoundException(
-                s"No such engine for engine type: $engineType, share level: $shareLevel")
+                s"No such engine for engine type: $finalEngineType, share level: $finalShareLevel")
           }
         }
       }
