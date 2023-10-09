@@ -62,8 +62,8 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
     case CUSTOM => new GenericDatabaseDialect
   }
 
-  private val metadataTable = conf.get(KyuubiEbayConf.METADATA_STORE_JDBC_TABLE)
-    .getOrElse(METADATA_TABLE)
+  private val METADATA_TABLE = conf.get(KyuubiEbayConf.METADATA_STORE_JDBC_TABLE)
+    .getOrElse(_METADATA_TABLE)
 
   @VisibleForTesting
   implicit private[kyuubi] var hikariDataSource: HikariDataSource = dbType match {
@@ -171,7 +171,7 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
   override def insertMetadata(metadata: Metadata): Unit = {
     val query =
       s"""
-         |INSERT INTO $metadataTable(
+         |INSERT INTO $METADATA_TABLE(
          |identifier,
          |session_type,
          |real_user,
@@ -344,7 +344,7 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
     val queryBuilder = new StringBuilder
     val params = ListBuffer[Any]()
 
-    queryBuilder.append(s"UPDATE $metadataTable")
+    queryBuilder.append(s"UPDATE $METADATA_TABLE")
     val setClauses = ListBuffer[String]()
     Option(metadata.kyuubiInstance).foreach { _ =>
       setClauses += "kyuubi_instance = ?"
@@ -413,7 +413,7 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
   }
 
   override def cleanupMetadataByIdentifier(identifier: String): Unit = {
-    val query = s"DELETE FROM $metadataTable WHERE identifier = ?"
+    val query = s"DELETE FROM $METADATA_TABLE WHERE identifier = ?"
     JdbcUtils.withConnection { connection =>
       execute(connection, query, identifier)
     }
@@ -421,7 +421,7 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
 
   override def cleanupMetadataByAge(maxAge: Long): Unit = {
     val minEndTime = System.currentTimeMillis() - maxAge
-    val query = s"DELETE FROM $metadataTable WHERE state IN ($terminalStates) AND end_time < ?"
+    val query = s"DELETE FROM $METADATA_TABLE WHERE state IN ($terminalStates) AND end_time < ?"
     JdbcUtils.withConnection { connection =>
       execute(connection, query, minEndTime)
     }
@@ -591,7 +591,7 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
 
 object JDBCMetadataStore {
   private val SCHEMA_URL_PATTERN = """^metadata-store-schema-(\d+)\.(\d+)\.(\d+)\.(.*)\.sql$""".r
-  private val METADATA_TABLE = "metadata"
+  private val _METADATA_TABLE = "metadata"
   private val METADATA_COLUMNS = Seq(
     "identifier",
     "session_type",
