@@ -172,7 +172,7 @@ object SparkCatalogUtils extends Logging {
         }
 
         databases.flatMap { db =>
-          val identifiers = catalog.listTables(db, tablePattern, includeTempViewsAndTables = false)
+          val identifiers = catalog.listTables(db, tablePattern, false)
           catalog.getTablesByName(identifiers)
             .filter(t => isMatchedTableType(tableTypes, t.tableType.name)).map { t =>
               val typ = if (t.tableType.name == VIEW) VIEW else TABLE
@@ -236,7 +236,7 @@ object SparkCatalogUtils extends Logging {
         val catalog = spark.sessionState.catalog
         val databases = catalog.listDatabases(schemaPattern)
         databases.flatMap { db =>
-          val identifiers = catalog.listTables(db, tablePattern, includeTempViewsAndTables = true)
+          val identifiers = catalog.listTables(db, tablePattern, true)
           catalog.getTablesByName(identifiers).flatMap { t =>
             t.schema.zipWithIndex.filter(f => columnPattern.matcher(f._1.name).matches())
               .map { case (f, i) =>

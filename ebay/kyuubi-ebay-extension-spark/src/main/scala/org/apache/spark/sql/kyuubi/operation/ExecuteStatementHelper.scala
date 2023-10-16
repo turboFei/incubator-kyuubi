@@ -21,10 +21,10 @@ import scala.collection.JavaConverters._
 
 import org.apache.spark.sql.catalyst.parser.SqlBaseParser
 import org.apache.spark.sql.catalyst.parser.SqlBaseParser.{StatementContext, StatementDefaultContext}
-import org.apache.spark.sql.execution.{CollectLimitExec, SortExec, SparkPlan, SparkSqlParser, TakeOrderedAndProjectExec}
+import org.apache.spark.sql.execution.{CollectLimitExec, SparkPlan, SparkSqlParser, TakeOrderedAndProjectExec}
 import org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanExec
 import org.apache.spark.sql.execution.columnar.InMemoryTableScanExec
-import org.apache.spark.util.Utils
+import org.apache.spark.sql.kyuubi.SparkEbayUtils
 
 import org.apache.kyuubi.Logging
 
@@ -62,31 +62,28 @@ object ExecuteStatementHelper extends Logging {
    * Sortable for select query, noly
    */
   def sortable(sparkPlan: SparkPlan): Boolean = sparkPlan match {
-    case CollectLimitExec(_, child) => sortable(child)
+    case c: CollectLimitExec => sortable(c.child)
     case InMemoryTableScanExec(_, _, relation) => relation.outputOrdering.nonEmpty
-    case AdaptiveSparkPlanExec(CollectLimitExec(_, child), _, _, _) => sortable(child)
-    case AdaptiveSparkPlanExec(InMemoryTableScanExec(_, _, relation), _, _, _) =>
-      relation.outputOrdering.nonEmpty
+    case ap: AdaptiveSparkPlanExec => sortable(ap.inputPlan)
     case plan => DownloadDataHelper.sortableForWriteData(plan)
   }
 
   def existingLimit(sparkPlan: SparkPlan): Option[Int] = sparkPlan match {
-    case TakeOrderedAndProjectExec(limit, _, _, _) => Option(limit)
-    case CollectLimitExec(limit, _: SortExec) => Option(limit)
-    case AdaptiveSparkPlanExec(TakeOrderedAndProjectExec(limit, _, _, _), _, _, _) => Option(limit)
-    case AdaptiveSparkPlanExec(CollectLimitExec(limit, _: SortExec), _, _, _) => Option(limit)
+    case tp: TakeOrderedAndProjectExec => Option(tp.limit)
+    case c: CollectLimitExec => Option(c.limit)
+    case ap: AdaptiveSparkPlanExec => existingLimit(ap.inputPlan)
     case _ => None
   }
 
   def isTopKSort(sparkPlan: SparkPlan): Boolean = sparkPlan match {
     case _: TakeOrderedAndProjectExec => true
-    case AdaptiveSparkPlanExec(_: TakeOrderedAndProjectExec, _, _, _) => true
+    case ap: AdaptiveSparkPlanExec => isTopKSort(ap.inputPlan)
     case _ => false
   }
 
   // HADP-50714: Truncate the comma at the tail of statement when using temp table collection
   def normalizeStatement(statement: String): String = {
-    val statementSeq = Utils.splitSemiColon(statement)
+    val statementSeq = SparkEbayUtils.splitSemiColon(statement)
     require(statementSeq.size == 1, s"Only one statement expected: $statementSeq")
     statementSeq.asScala.head
   }

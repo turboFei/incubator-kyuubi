@@ -33,13 +33,12 @@ import org.apache.spark.sql.execution.command.{CommandUtils, RunnableCommand}
 import org.apache.spark.sql.execution.datasources.CreateTempViewUsing
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.internal.SQLConf.StoreAssignmentPolicy
+import org.apache.spark.sql.kyuubi.SparkEbayUtils
 import org.apache.spark.sql.types.{MetadataBuilder, NumericType, StringType}
 
 import org.apache.kyuubi.KyuubiSQLException
 import org.apache.kyuubi.config.{KyuubiEbayConf, KyuubiReservedKeys}
 import org.apache.kyuubi.config.KyuubiEbayConf._
-import org.apache.kyuubi.engine.spark.SparkSQLEngine
-import org.apache.kyuubi.engine.spark.session.SparkSessionImpl
 
 case class UploadDataCommand(
     table: TableIdentifier,
@@ -47,7 +46,7 @@ case class UploadDataCommand(
     isOverwrite: Boolean,
     partitionSpec: Option[TablePartitionSpec],
     optionSpec: Option[Map[String, String]]) extends RunnableCommand {
-  private lazy val kyuubiConf = SparkSQLEngine.currentEngine.get.getConf
+  private lazy val kyuubiConf = SparkEbayUtils.kyuubiConf
 
   override val output: Seq[Attribute] = Seq(
     AttributeReference(
@@ -70,7 +69,7 @@ case class UploadDataCommand(
       throw KyuubiSQLException("Target table in UPLOAD DATA " +
         s"cannot be a view: $tableIdentwithDB")
     }
-    if (targetTable.tableType == CatalogTableType.TEMPORARY) {
+    if (targetTable.tableType.name.toLowerCase(Locale.ROOT) == "TEMPORARY") {
       throw KyuubiSQLException("Target table in UPLOAD DATA cannot be a temporary table: " +
         s"$tableIdentwithDB")
     }
@@ -121,7 +120,8 @@ case class UploadDataCommand(
       sparkSession.sparkContext.getLocalProperty(KyuubiEbayConf.KYUUBI_SESSION_ID_KEY)
     val sessionUser =
       sparkSession.sparkContext.getLocalProperty(KyuubiReservedKeys.KYUUBI_SESSION_USER_KEY)
-    val sessionScratch = SparkSessionImpl.getSessionScratchDir(sparkSession, sessionUser, sessionId)
+    val sessionScratch =
+      SparkEbayUtils.getSessionScratchDir(sparkSession, sessionUser, sessionId)
     val fileSystem = sessionScratch.getFileSystem(hadoopConf)
 
     val srcPath = new Path(sessionScratch + Path.SEPARATOR + path)

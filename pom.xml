@@ -87,6 +87,7 @@
         <module>ebay/kyuubi-hive-jdbc-standalone</module>
         <module>ebay/kyuubi-server-events</module>
         <module>ebay/kyuubi-elasticsearch-spark</module>
+        <module>ebay/kyuubi-ebay-extension-spark</module>
     </modules>
 
     <scm>

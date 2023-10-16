@@ -31,7 +31,7 @@ import org.apache.spark.kyuubi.{SparkContextHelper, SparkSQLEngineEventListener,
 import org.apache.spark.kyuubi.SparkUtilsHelper.getLocalDir
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.internal.StaticSQLConf
-import org.apache.spark.sql.kyuubi.KyuubiSparkSQLExtension
+import org.apache.spark.sql.kyuubi.{KyuubiEbaySparkSQLExtension, SparkEbayUtils}
 
 import org.apache.kyuubi.{KyuubiException, Logging, Utils}
 import org.apache.kyuubi.Utils._
@@ -285,9 +285,9 @@ object SparkSQLEngine extends Logging {
     // inject upload data command extensions
     val sessionExtensions = _sparkConf.getOption(StaticSQLConf.SPARK_SESSION_EXTENSIONS.key) match {
       case Some(extensions) =>
-        s"$extensions,${classOf[KyuubiSparkSQLExtension].getName}"
+        s"$extensions,${classOf[KyuubiEbaySparkSQLExtension].getName}"
 
-      case None => classOf[KyuubiSparkSQLExtension].getName
+      case None => classOf[KyuubiEbaySparkSQLExtension].getName
     }
     _sparkConf.set(StaticSQLConf.SPARK_SESSION_EXTENSIONS.key, sessionExtensions)
 
@@ -393,7 +393,7 @@ object SparkSQLEngine extends Logging {
         case t: Throwable => error(s"Failed to instantiate SparkSession: ${t.getMessage}", t)
       } finally {
         if (spark != null) {
-          spark.sqlContext.clearTempTables()
+          SparkEbayUtils.clearTempTables(spark)
           spark.stop()
         }
       }

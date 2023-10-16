@@ -27,11 +27,11 @@ import scala.math.BigDecimal.RoundingMode
 import org.apache.commons.lang3.StringUtils
 import org.apache.hadoop.fs.{Path, PathFilter}
 import org.apache.hive.service.rpc.thrift.TGetResultSetMetadataResp
-import org.apache.spark.kyuubi.SparkUtilsHelper
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.catalog.HiveTableRelation
 import org.apache.spark.sql.execution.QueryExecution
 import org.apache.spark.sql.execution.datasources.LogicalRelation
+import org.apache.spark.sql.kyuubi.SparkEbayUtils
 import org.apache.spark.sql.kyuubi.operation.DownloadDataHelper.{writeData, writeDataKeepDataType}
 import org.apache.spark.sql.types.StructType
 
@@ -178,7 +178,7 @@ class DownloadDataOperation(
           case Some(path) =>
             if (dataSize >= 0) {
               val buffer = new Array[Byte](dataSize.toInt)
-              SparkUtilsHelper.tryWithResource(fs.open(path)) { is =>
+              SparkEbayUtils.tryWithResource(fs.open(path)) { is =>
                 is.seek(dataBlock.offset.get)
                 is.readFully(buffer)
               }
@@ -304,21 +304,6 @@ object DownloadDataOperation {
     "minFileSize" -> (DEFAULT_BLOCK_SIZE - 1 * 1024 * 1024).toString,
     // clsfd need to keep origin data type to upload data to AWS
     "keepDataType" -> "false")
-
-  def downloadDataSizeExceeded(dataSize: Long, maxSize: Long): KyuubiSQLException = {
-    KyuubiSQLException(
-      s"Too much download data requested: " +
-        s"${SparkUtilsHelper.bytesToString(dataSize)}, " +
-        s"which exceeds ${SparkUtilsHelper.bytesToString(maxSize)}",
-      vendorCode = 500001)
-  }
-
-  def downloadSingleDataSizeExceeded(num: Int, dataSize: Long): KyuubiSQLException = {
-    KyuubiSQLException(
-      s"The numFiles($num) too small, please try to increase the " +
-        s"number of downloaded files for ${dataSize / (9L * 1024 * 1024 * 1024)}.",
-      vendorCode = 500002)
-  }
 }
 
 private[kyuubi] case class DownloadDataBlock(

@@ -24,12 +24,26 @@ import org.apache.spark.sql.{Column, DataFrame, SaveMode, SparkSession}
 import org.apache.spark.sql.execution.{CollectLimitExec, LimitExec, ProjectExec, SortExec, SparkPlan, TakeOrderedAndProjectExec}
 import org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanExec
 import org.apache.spark.sql.execution.exchange.ShuffleExchangeExec
+import org.apache.spark.sql.kyuubi.SparkEbayUtils
 import org.apache.spark.sql.types.{ArrayType, BinaryType, BooleanType, ByteType, CalendarIntervalType, DoubleType, FloatType, IntegerType, LongType, MapType, NullType, ShortType, StringType, StructType}
 
 import org.apache.kyuubi.{KyuubiSQLException, Logging}
-import org.apache.kyuubi.engine.spark.operation.DownloadDataOperation.{downloadDataSizeExceeded, downloadSingleDataSizeExceeded}
 
 object DownloadDataHelper extends Logging {
+  private def needToRepartition(sparkPlan: SparkPlan): Boolean = {
+    sparkPlan match {
+      case _: SortExec => false
+      case _: TakeOrderedAndProjectExec => false
+      case ProjectExec(_, _: SortExec) => false
+      case _: ShuffleExchangeExec => false
+      case ProjectExec(_, _: ShuffleExchangeExec) => false
+      case _: CollectLimitExec => false
+      case _: LimitExec => false
+      case ap: AdaptiveSparkPlanExec => needToRepartition(ap.inputPlan)
+      case _ => true
+    }
+  }
+
   def writeDataKeepDataType(
       spark: SparkSession,
       fs: FileSystem,
@@ -52,19 +66,8 @@ object DownloadDataHelper extends Logging {
     }
 
     val schemaStr = result.schema.map(_.name).mkString(writeOptions("delimiter"))
-    val needRepartition = result.queryExecution.sparkPlan match {
-      case _: SortExec => false
-      case _: TakeOrderedAndProjectExec => false
-      case ProjectExec(_, _: SortExec) => false
-      case AdaptiveSparkPlanExec(_: SortExec, _, _, _) => false
-      case AdaptiveSparkPlanExec(_: TakeOrderedAndProjectExec, _, _, _) => false
-      case AdaptiveSparkPlanExec(ProjectExec(_, _: SortExec), _, _, _) => false
-      case _: ShuffleExchangeExec => false
-      case ProjectExec(_, _: ShuffleExchangeExec) => false
-      case _: CollectLimitExec => false
-      case _: LimitExec => false
-      case _ => true
-    }
+    needToRepartition(result.queryExecution.sparkPlan)
+    val needRepartition = needToRepartition(result.queryExecution.sparkPlan)
     // Background: according to the official Hadoop FileSystem API spec,
     // rename op's destination path must have a parent that exists,
     // otherwise we may get unexpected result on the rename API.
@@ -245,9 +248,22 @@ object DownloadDataHelper extends Logging {
     case _: SortExec => true
     case _: TakeOrderedAndProjectExec => true
     case ProjectExec(_, _: SortExec) => true
-    case AdaptiveSparkPlanExec(_: SortExec, _, _, _) => true
-    case AdaptiveSparkPlanExec(_: TakeOrderedAndProjectExec, _, _, _) => true
-    case AdaptiveSparkPlanExec(ProjectExec(_, _: SortExec), _, _, _) => true
+    case ap: AdaptiveSparkPlanExec => sortableForWriteData(ap.inputPlan)
     case _ => false
+  }
+
+  def downloadDataSizeExceeded(dataSize: Long, maxSize: Long): KyuubiSQLException = {
+    KyuubiSQLException(
+      s"Too much download data requested: " +
+        s"${SparkEbayUtils.bytesToString(dataSize)}, " +
+        s"which exceeds ${SparkEbayUtils.bytesToString(maxSize)}",
+      vendorCode = 500001)
+  }
+
+  def downloadSingleDataSizeExceeded(num: Int, dataSize: Long): KyuubiSQLException = {
+    KyuubiSQLException(
+      s"The numFiles($num) too small, please try to increase the " +
+        s"number of downloaded files for ${dataSize / (9L * 1024 * 1024 * 1024)}.",
+      vendorCode = 500002)
   }
 }

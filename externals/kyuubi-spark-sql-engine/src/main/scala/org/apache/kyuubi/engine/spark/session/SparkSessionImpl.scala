@@ -21,7 +21,7 @@ import org.apache.commons.lang3.StringUtils
 import org.apache.hadoop.fs.Path
 import org.apache.hive.service.rpc.thrift.{TGetInfoType, TGetInfoValue, TProtocolVersion}
 import org.apache.spark.sql.{AnalysisException, SparkSession}
-import org.apache.spark.sql.internal.StaticSQLConf
+import org.apache.spark.sql.kyuubi.SparkEbayUtils
 
 import org.apache.kyuubi.KyuubiSQLException
 import org.apache.kyuubi.config.KyuubiConf
@@ -43,7 +43,6 @@ class SparkSessionImpl(
     sessionManager: SessionManager,
     val spark: SparkSession)
   extends AbstractSession(protocol, user, password, ipAddress, conf, sessionManager) {
-  import SparkSessionImpl._
 
   override val handle: SessionHandle =
     conf.get(KYUUBI_SESSION_HANDLE_KEY).map(SessionHandle.fromUUID).getOrElse(SessionHandle())
@@ -126,7 +125,7 @@ class SparkSessionImpl(
   }
 
   private[kyuubi] val sessionScratchDir: Path = {
-    getSessionScratchDir(spark, user, handle.identifier.toString)
+    SparkEbayUtils.getSessionScratchDir(spark, user, handle.identifier.toString)
   }
 
   private def cleanupSessionScratch(): Unit = {
@@ -136,7 +135,7 @@ class SparkSessionImpl(
     }
     if (!sessionManager.getConf.get(KyuubiConf.ENGINE_SINGLE_SPARK_SESSION)) {
       // clear the temp tables
-      spark.sqlContext.clearTempTables()
+      SparkEbayUtils.clearTempTables(spark)
     }
   }
 
@@ -151,16 +150,5 @@ class SparkSessionImpl(
     } catch {
       case e: Throwable => warn("Error initializing elasticsearch spark", e)
     }
-  }
-}
-
-object SparkSessionImpl {
-  def getSessionScratchDir(
-      spark: SparkSession,
-      user: String,
-      sessionId: String): Path = {
-    val scratchPath = new Path(spark.sessionState.conf.getConf(StaticSQLConf.SPARK_SCRATCH_DIR))
-    val fileSystem = scratchPath.getFileSystem(spark.sparkContext.hadoopConfiguration)
-    fileSystem.makeQualified(new Path(scratchPath, Seq(user, sessionId).mkString(Path.SEPARATOR)))
   }
 }

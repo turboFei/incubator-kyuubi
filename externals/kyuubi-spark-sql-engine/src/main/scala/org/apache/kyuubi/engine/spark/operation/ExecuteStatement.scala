@@ -25,13 +25,9 @@ import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.kyuubi.SparkUtilsHelper.redact
 import org.apache.spark.sql.{DataFrame, SaveMode}
 import org.apache.spark.sql.execution.QueryExecution
-import org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanExec
-import org.apache.spark.sql.execution.command.{DataWritingCommandExec, ExecutedCommandExec}
-import org.apache.spark.sql.execution.datasources.InsertIntoDataSourceCommand
-import org.apache.spark.sql.execution.datasources.v2.{AppendDataExecV1, OverwriteByExpressionExecV1, V2TableWriteExec}
-import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.kyuubi.SparkDatasetHelper._
+import org.apache.spark.sql.kyuubi.SparkEbayUtils
 import org.apache.spark.sql.kyuubi.operation.ExecuteStatementHelper
 import org.apache.spark.sql.types._
 
@@ -76,41 +72,17 @@ class ExecuteStatement(
     OperationLog.removeCurrentOperationLog()
   }
 
-  def setNumOutputRows(metrics: Map[String, SQLMetric], key: String): Unit = {
-    if (metrics != null) {
-      val modifiedRowCount = metrics.get(key).map(_.value).getOrElse(0L)
-      info(s"$modifiedRowCount rows inserted/updated/deleted/merged by $statementId")
-      numModifiedRows = modifiedRowCount
-    }
+  private def withMetrics(qe: QueryExecution): Unit = {
+    SparkEbayUtils.withMetrics(
+      qe,
+      (metrics, key) => {
+        if (metrics != null) {
+          val modifiedRowCount = metrics.get(key).map(_.value).getOrElse(0L)
+          info(s"$modifiedRowCount rows inserted/updated/deleted/merged by $statementId")
+          numModifiedRows = modifiedRowCount
+        }
+      })
   }
-
-  private def withMetrics(qe: QueryExecution): Unit =
-    try {
-      val checkedSparkPlan = qe.executedPlan match {
-        case a: AdaptiveSparkPlanExec =>
-          a.executedPlan
-        case plan => plan
-      }
-      checkedSparkPlan match {
-        case DataWritingCommandExec(cmd, _) =>
-          setNumOutputRows(cmd.metrics, "numOutputRows")
-        case ExecutedCommandExec(cmd) =>
-          cmd match {
-            case c: InsertIntoDataSourceCommand =>
-              setNumOutputRows(c.metrics, "numOutputRows")
-            case _ => // TODO: Support delta Update(WithJoin)Command/Delete(WithJoin)Command
-          }
-        case a: AppendDataExecV1 =>
-          setNumOutputRows(a.metrics, "numOutputRows")
-        case a: OverwriteByExpressionExecV1 =>
-          setNumOutputRows(a.metrics, "numOutputRows")
-        case a: V2TableWriteExec =>
-          setNumOutputRows(a.metrics, "numOutputRows")
-        case _ =>
-      }
-    } catch {
-      case e: Throwable => error("Error updating query metrics", e)
-    }
 
   // temp table collect
   private val tempTableDb =

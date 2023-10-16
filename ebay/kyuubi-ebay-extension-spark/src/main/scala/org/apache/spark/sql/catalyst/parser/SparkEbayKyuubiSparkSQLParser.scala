@@ -25,11 +25,11 @@ import org.apache.spark.sql.catalyst.{FunctionIdentifier, TableIdentifier}
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.trees.Origin
-import org.apache.spark.sql.kyuubi.{KyuubiSparkSQLLexer, KyuubiSparkSQLParser}
+import org.apache.spark.sql.kyuubi.{KyuubiEbaySparkSQLLexer, KyuubiEbaySparkSQLParser}
 import org.apache.spark.sql.types.{DataType, StructType}
 
-class SparkKyuubiSparkSQLParser(delegate: ParserInterface) extends ParserInterface {
-  private val astBuilder = new KyuubiSparkSQLAstBuilder
+class SparkEbayKyuubiSparkSQLParser(delegate: ParserInterface) extends ParserInterface {
+  private val astBuilder = new KyuubiEbaySparkSQLAstBuilder
 
   override def parsePlan(sqlText: String): LogicalPlan = parse(sqlText) { parser =>
     astBuilder.visit(parser.singleStatement()) match {
@@ -38,14 +38,14 @@ class SparkKyuubiSparkSQLParser(delegate: ParserInterface) extends ParserInterfa
     }
   }
 
-  protected def parse[T](command: String)(toResult: KyuubiSparkSQLParser => T): T = {
-    val lexer = new KyuubiSparkSQLLexer(
+  protected def parse[T](command: String)(toResult: KyuubiEbaySparkSQLParser => T): T = {
+    val lexer = new KyuubiEbaySparkSQLLexer(
       new UpperCaseCharStream(CharStreams.fromString(command)))
     lexer.removeErrorListeners()
     lexer.addErrorListener(ParseErrorListener)
 
     val tokenStream = new CommonTokenStream(lexer)
-    val parser = new KyuubiSparkSQLParser(tokenStream)
+    val parser = new KyuubiEbaySparkSQLParser(tokenStream)
     parser.addParseListener(PostProcessor)
     parser.removeErrorListeners()
     parser.addErrorListener(ParseErrorListener)

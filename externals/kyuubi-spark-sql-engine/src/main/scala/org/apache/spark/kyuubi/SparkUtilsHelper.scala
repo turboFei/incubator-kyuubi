@@ -17,8 +17,6 @@
 
 package org.apache.spark.kyuubi
 
-import java.io.Closeable
-
 import scala.util.matching.Regex
 
 import org.apache.spark.SparkConf
@@ -54,9 +52,4 @@ object SparkUtilsHelper extends Logging {
       case _: ClassNotFoundException | _: NoClassDefFoundError => false
     }
   }
-
-  def bytesToString(size: BigInt): String = Utils.bytesToString(size)
-
-  def tryWithResource[R <: Closeable, T](createResource: => R)(f: R => T): T =
-    Utils.tryWithResource(createResource)(f)
 }

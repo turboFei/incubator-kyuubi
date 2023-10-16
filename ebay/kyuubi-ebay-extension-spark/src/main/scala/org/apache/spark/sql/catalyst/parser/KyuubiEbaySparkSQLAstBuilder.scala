@@ -28,7 +28,7 @@ import org.antlr.v4.runtime.tree.{ParseTree, TerminalNode}
 import org.apache.commons.codec.binary.Hex
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
-import org.apache.spark.sql.catalyst.data.{KyuubiDescribePathCommand, MoveDataCommand, UploadDataStatement}
+import org.apache.spark.sql.catalyst.data.{KyuubiDescribePathCommand, MoveDataCommand, UploadDataCommand}
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.parser.ParserUtils.{checkDuplicateKeys, string, stringWithoutUnescape, withOrigin}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
@@ -36,15 +36,14 @@ import org.apache.spark.sql.catalyst.util.DateTimeUtils.{getZoneId, localDateToD
 import org.apache.spark.sql.catalyst.util.IntervalUtils
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits._
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.kyuubi.{KyuubiSparkSQLBaseVisitor, KyuubiSparkSQLParser}
-import org.apache.spark.sql.kyuubi.KyuubiSparkSQLParser._
+import org.apache.spark.sql.kyuubi.{KyuubiEbaySparkSQLBaseVisitor, KyuubiEbaySparkSQLParser, SparkEbayUtils}
+import org.apache.spark.sql.kyuubi.KyuubiEbaySparkSQLParser._
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 
 import org.apache.kyuubi.config.KyuubiEbayConf
-import org.apache.kyuubi.engine.spark.SparkSQLEngine
 
-class KyuubiSparkSQLAstBuilder extends KyuubiSparkSQLBaseVisitor[AnyRef] {
+class KyuubiEbaySparkSQLAstBuilder extends KyuubiEbaySparkSQLBaseVisitor[AnyRef] {
 
   /**
    * Create an expression from the given context. This method just passes the context on to the
@@ -65,19 +64,19 @@ class KyuubiSparkSQLAstBuilder extends KyuubiSparkSQLBaseVisitor[AnyRef] {
     val right = expression(ctx.constant())
     val operator = ctx.comparisonOperator().getChild(0).asInstanceOf[TerminalNode]
     operator.getSymbol.getType match {
-      case KyuubiSparkSQLParser.EQ =>
+      case KyuubiEbaySparkSQLParser.EQ =>
         EqualTo(left, right)
-      case KyuubiSparkSQLParser.NSEQ =>
+      case KyuubiEbaySparkSQLParser.NSEQ =>
         EqualNullSafe(left, right)
-      case KyuubiSparkSQLParser.NEQ | KyuubiSparkSQLParser.NEQJ =>
+      case KyuubiEbaySparkSQLParser.NEQ | KyuubiEbaySparkSQLParser.NEQJ =>
         Not(EqualTo(left, right))
-      case KyuubiSparkSQLParser.LT =>
+      case KyuubiEbaySparkSQLParser.LT =>
         LessThan(left, right)
-      case KyuubiSparkSQLParser.LTE =>
+      case KyuubiEbaySparkSQLParser.LTE =>
         LessThanOrEqual(left, right)
-      case KyuubiSparkSQLParser.GT =>
+      case KyuubiEbaySparkSQLParser.GT =>
         GreaterThan(left, right)
-      case KyuubiSparkSQLParser.GTE =>
+      case KyuubiEbaySparkSQLParser.GTE =>
         GreaterThanOrEqual(left, right)
     }
   }
@@ -335,7 +334,7 @@ class KyuubiSparkSQLAstBuilder extends KyuubiSparkSQLBaseVisitor[AnyRef] {
   }
 
   /**
-   * Create a [[UploadDataStatement]].
+   * Create a [[UploadDataCommand]].
    *
    * For example:
    * {{{
@@ -344,10 +343,10 @@ class KyuubiSparkSQLAstBuilder extends KyuubiSparkSQLBaseVisitor[AnyRef] {
    * }}}
    */
   override def visitUploadData(ctx: UploadDataContext): LogicalPlan = withOrigin(ctx) {
-    if (!SparkSQLEngine.currentEngine.get.getConf.get(KyuubiEbayConf.DATA_UPLOAD_ENABLED)) {
+    if (!SparkEbayUtils.kyuubiConf.get(KyuubiEbayConf.DATA_UPLOAD_ENABLED)) {
       throw new ParseException("UPLOAD DATA is not supported", ctx)
     }
-    UploadDataStatement(
+    UploadDataCommand(
       visitMultipartIdentifier(ctx.multipartIdentifier).asTableIdentifier,
       path = string(ctx.path),
       isOverwrite = ctx.OVERWRITE() != null,

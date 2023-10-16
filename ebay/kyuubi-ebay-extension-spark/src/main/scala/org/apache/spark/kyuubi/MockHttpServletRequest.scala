@@ -20,8 +20,8 @@ import java.io.BufferedReader
 import java.security.Principal
 import java.util
 import java.util.Locale
-import javax.servlet.{AsyncContext, DispatcherType, RequestDispatcher, ServletContext, ServletInputStream, ServletRequest, ServletResponse}
-import javax.servlet.http.{Cookie, HttpServletRequest, HttpServletResponse, HttpSession, HttpUpgradeHandler, Part}
+import javax.servlet._
+import javax.servlet.http._
 
 /**
  * A mock HttpServletRequest used for render the execution page.

@@ -21,11 +21,11 @@ import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
 import org.apache.spark.sql.execution.command.RunnableCommand
+import org.apache.spark.sql.kyuubi.SparkEbayUtils
 import org.apache.spark.sql.types.{MetadataBuilder, StringType}
 
 import org.apache.kyuubi.KyuubiSQLException
 import org.apache.kyuubi.config.{KyuubiEbayConf, KyuubiReservedKeys}
-import org.apache.kyuubi.engine.spark.session.SparkSessionImpl
 
 /**
  * A MOVE DATA INTO PATH statement, as parsed from SQL
@@ -55,7 +55,8 @@ case class MoveDataCommand(
       sparkSession.sparkContext.getLocalProperty(KyuubiEbayConf.KYUUBI_SESSION_ID_KEY)
     val sessionUser =
       sparkSession.sparkContext.getLocalProperty(KyuubiReservedKeys.KYUUBI_SESSION_USER_KEY)
-    val sessionScratch = SparkSessionImpl.getSessionScratchDir(sparkSession, sessionUser, sessionId)
+    val sessionScratch =
+      SparkEbayUtils.getSessionScratchDir(sparkSession, sessionUser, sessionId)
     val fileSystem = sessionScratch.getFileSystem(hadoopConf)
 
     val srcPath = new Path(sessionScratch + Path.SEPARATOR + fromPath)

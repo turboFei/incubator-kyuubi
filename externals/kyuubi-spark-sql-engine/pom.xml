@@ -56,6 +56,12 @@
         </dependency>
 
         <dependency>
+            <groupId>org.apache.kyuubi</groupId>
+            <artifactId>kyuubi-ebay-extension-spark_${scala.binary.version}</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-core</artifactId>
         </dependency>
@@ -207,6 +213,7 @@
                         <configuration>
                             <sources>
                                 <source>src/main/scala-${scala.binary.version}</source>
+                                <source>src/main/spark-${spark.binary.version}</source>
                             </sources>
                         </configuration>
                     </execution>

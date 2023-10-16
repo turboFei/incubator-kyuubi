@@ -24,10 +24,10 @@ import scala.collection.mutable.ArrayBuffer
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.sql.execution.command.{DDLUtils, DescribeCommandBase}
 import org.apache.spark.sql.execution.datasources.{DataSource, FileFormat, LogicalRelation}
+import org.apache.spark.sql.kyuubi.SparkEbayUtils
 
 import org.apache.kyuubi.{KyuubiSQLException, Logging}
 import org.apache.kyuubi.config.KyuubiEbayConf
-import org.apache.kyuubi.engine.spark.SparkSQLEngine
 
 /**
  * A KYUUBI DESCRIBE PATH command, as parsed from SQL
@@ -35,7 +35,7 @@ import org.apache.kyuubi.engine.spark.SparkSQLEngine
 case class KyuubiDescribePathCommand(identifier: String, isExtended: Boolean)
   extends DescribeCommandBase with Logging {
   private val datasourceProviderList =
-    SparkSQLEngine.kyuubiConf.get(KyuubiEbayConf.KYUUBI_DESCRIBE_PATH_DATA_SOURCES)
+    SparkEbayUtils.kyuubiConf.get(KyuubiEbayConf.KYUUBI_DESCRIBE_PATH_DATA_SOURCES)
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val result = new ArrayBuffer[Row]()

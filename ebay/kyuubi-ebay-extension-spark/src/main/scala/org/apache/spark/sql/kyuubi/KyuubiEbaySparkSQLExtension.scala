@@ -15,15 +15,13 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.catalyst.data
+package org.apache.spark.sql.kyuubi
 
-import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.apache.spark.sql.catalyst.rules.Rule
+import org.apache.spark.sql.SparkSessionExtensions
+import org.apache.spark.sql.catalyst.parser.SparkEbayKyuubiSparkSQLParser
 
-case class UploadDataResolver(spark: SparkSession) extends Rule[LogicalPlan] {
-  override def apply(plan: LogicalPlan): LogicalPlan = plan.resolveOperatorsUp {
-    case UploadDataStatement(table, path, isOverwrite, partitionSpec, optionSpec) =>
-      UploadDataCommand(table, path, isOverwrite, partitionSpec, optionSpec)
+class KyuubiEbaySparkSQLExtension extends (SparkSessionExtensions => Unit) {
+  override def apply(extensions: SparkSessionExtensions): Unit = {
+    extensions.injectParser { case (_, parser) => new SparkEbayKyuubiSparkSQLParser(parser) }
   }
 }
