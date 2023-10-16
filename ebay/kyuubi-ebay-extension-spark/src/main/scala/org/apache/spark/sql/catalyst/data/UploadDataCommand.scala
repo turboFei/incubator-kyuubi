@@ -28,6 +28,7 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType}
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.QueryExecution
 import org.apache.spark.sql.execution.command.{CommandUtils, RunnableCommand}
 import org.apache.spark.sql.execution.datasources.CreateTempViewUsing
@@ -46,6 +47,7 @@ case class UploadDataCommand(
     isOverwrite: Boolean,
     partitionSpec: Option[TablePartitionSpec],
     optionSpec: Option[Map[String, String]]) extends RunnableCommand {
+  protected def withNewChildrenInternal(newChildren: IndexedSeq[LogicalPlan]): LogicalPlan = this
   private lazy val kyuubiConf = SparkEbayUtils.kyuubiConf
 
   override val output: Seq[Attribute] = Seq(

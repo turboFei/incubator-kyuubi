@@ -1978,6 +1978,7 @@
                                 <include>src/test/scala/**/*.scala</include>
                                 <include>src/test/scala-*/**/*.scala</include>
                                 <include>src/test/gen/scala/**/*.scala</include>
+                                <incluse>src/main/spark-*/**/*.scala</incluse>
                             </includes>
                             <scalafmt>
                                 <version>${spotless.scala.scalafmt.version}</version>

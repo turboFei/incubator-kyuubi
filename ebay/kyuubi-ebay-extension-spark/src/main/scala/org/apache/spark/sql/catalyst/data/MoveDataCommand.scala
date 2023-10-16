@@ -20,6 +20,7 @@ package org.apache.spark.sql.catalyst.data
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.command.RunnableCommand
 import org.apache.spark.sql.kyuubi.SparkEbayUtils
 import org.apache.spark.sql.types.{MetadataBuilder, StringType}
@@ -35,6 +36,7 @@ case class MoveDataCommand(
     toDir: String,
     toFileName: Option[String],
     isOverwrite: Boolean) extends RunnableCommand {
+  protected def withNewChildrenInternal(newChildren: IndexedSeq[LogicalPlan]): LogicalPlan = this
   override val output: Seq[Attribute] = Seq(
     AttributeReference(
       "from",

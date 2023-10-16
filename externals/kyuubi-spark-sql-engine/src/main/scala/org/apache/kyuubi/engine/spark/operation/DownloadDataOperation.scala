@@ -239,9 +239,9 @@ class DownloadDataOperation(
               }
             qe.optimizedPlan.foreach {
               case LogicalRelation(_, _, Some(table), _) =>
-                qe.sparkSession.sessionState.refreshTable(table.identifier.toString)
+                qe.sparkSession.sessionState.catalog.refreshTable(table.identifier)
               case HiveTableRelation(tableMeta, _, _, _, _) =>
-                qe.sparkSession.sessionState.refreshTable(tableMeta.identifier.toString)
+                qe.sparkSession.sessionState.catalog.refreshTable(tableMeta.identifier)
               case _ =>
             }
             return true

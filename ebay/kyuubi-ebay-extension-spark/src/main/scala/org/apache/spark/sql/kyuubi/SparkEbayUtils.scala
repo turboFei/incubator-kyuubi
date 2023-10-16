@@ -22,12 +22,14 @@ import java.util.{ArrayList => JArrayList, List => JList}
 
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.execution.QueryExecution
 import org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanExec
 import org.apache.spark.sql.execution.command.{DataWritingCommandExec, ExecutedCommandExec}
 import org.apache.spark.sql.execution.datasources.InsertIntoDataSourceCommand
 import org.apache.spark.sql.execution.datasources.v2.{AppendDataExecV1, OverwriteByExpressionExecV1, V2TableWriteExec}
 import org.apache.spark.sql.execution.metric.SQLMetric
+import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.util.Utils
 
 import org.apache.kyuubi.Logging
@@ -181,4 +183,7 @@ object SparkEbayUtils extends Logging {
       case e: Throwable => error("Error updating query metrics", e)
     }
   }
+
+  def fromAttributes(attributes: Seq[Attribute]): StructType =
+    StructType(attributes.map(a => StructField(a.name, a.dataType, a.nullable, a.metadata)))
 }

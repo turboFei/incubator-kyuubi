@@ -129,6 +129,7 @@
                         <configuration>
                             <sources>
                                 <source>src/main/scala-${scala.binary.version}</source>
+                                <source>src/main/spark-${spark.binary.version}</source>
                             </sources>
                         </configuration>
                     </execution>

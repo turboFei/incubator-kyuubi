@@ -43,9 +43,10 @@ class ExecuteStatementHelperSuite extends WithSparkSQLEngine {
   test("is sortable") {
     Seq(true, false).foreach { aqe =>
       spark.sessionState.conf.setConf(SQLConf.ADAPTIVE_EXECUTION_ENABLED, aqe)
-      Seq(10, 1000).foreach { topKThreshold =>
+      Seq(3, 6).foreach { topKThreshold =>
         spark.sessionState.conf.setConf(SQLConf.TOP_K_SORT_FALLBACK_THRESHOLD, topKThreshold)
-        spark.sql("create or replace temporary view tv AS select * from values(1),(2),(3) as t(id)")
+        spark.sql("create or replace temporary view tv AS" +
+          " select * from values(1),(2),(3),(4),(5),(6),(7),(8) as t(id)")
         val topKStatement = s"select * from tv order by id limit ${topKThreshold - 1}"
         var sparkPlan = spark.sql(topKStatement).queryExecution.sparkPlan
         assert(ExecuteStatementHelper.isTopKSort(sparkPlan))

@@ -22,6 +22,8 @@ import java.util.Locale
 import scala.collection.mutable.ArrayBuffer
 
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
+import org.apache.spark.sql.catalyst.expressions.AttributeReference
+import org.apache.spark.sql.catalyst.plans.DescribeCommandSchema
 import org.apache.spark.sql.execution.command.{DDLUtils, DescribeCommandBase}
 import org.apache.spark.sql.execution.datasources.{DataSource, FileFormat, LogicalRelation}
 import org.apache.spark.sql.kyuubi.SparkEbayUtils
@@ -36,6 +38,8 @@ case class KyuubiDescribePathCommand(identifier: String, isExtended: Boolean)
   extends DescribeCommandBase with Logging {
   private val datasourceProviderList =
     SparkEbayUtils.kyuubiConf.get(KyuubiEbayConf.KYUUBI_DESCRIBE_PATH_DATA_SOURCES)
+
+  override val output: Seq[AttributeReference] = DescribeCommandSchema.describeTableAttributes()
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val result = new ArrayBuffer[Row]()
@@ -53,7 +57,7 @@ case class KyuubiDescribePathCommand(identifier: String, isExtended: Boolean)
     if (isExtended) {
       describeFormattedPathInfo(result, relationProvider)
     }
-    result
+    result.toSeq
   }
 
   private def describeFormattedPathInfo(buffer: ArrayBuffer[Row], provider: String): Unit = {

@@ -170,7 +170,7 @@ object DownloadDataHelper extends Logging {
         }
         (
           output,
-          StructType(StructType.fromAttributes(renameDuplicateNames)
+          StructType(SparkEbayUtils.fromAttributes(renameDuplicateNames)
             .map(_.copy(dataType = StringType))))
       } else if (outputFormat.equalsIgnoreCase("parquet")) {
         val output = result.logicalPlan.output.map { col =>
