@@ -32,7 +32,7 @@ import org.apache.kyuubi.client.util.BatchUtils.KYUUBI_BATCH_ID_KEY
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiConf._
 import org.apache.kyuubi.config.KyuubiEbayConf._
-import org.apache.kyuubi.config.KyuubiReservedKeys.KYUUBI_SESSION_REAL_USER_KEY
+import org.apache.kyuubi.config.KyuubiReservedKeys.{KYUUBI_BATCH_PRIORITY, KYUUBI_SESSION_REAL_USER_KEY}
 import org.apache.kyuubi.credentials.HadoopCredentialsManager
 import org.apache.kyuubi.ebay.{BatchLogAggManager, BdpAccessManager}
 import org.apache.kyuubi.ebay.carmel.gateway.session.{CarmelEndpointManager, CarmelSessionImpl}
@@ -282,7 +282,8 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
       requestConf = conf,
       requestArgs = batchRequest.getArgs.asScala.toSeq,
       createTime = System.currentTimeMillis(),
-      engineType = batchRequest.getBatchType)
+      engineType = batchRequest.getBatchType,
+      priority = conf.get(KYUUBI_BATCH_PRIORITY).map(_.toInt).getOrElse(10))
 
     // there is a chance that operation failed w/ duplicated key error
     metadataManager.foreach(_.insertMetadata(metadata, asyncRetryOnError = false))

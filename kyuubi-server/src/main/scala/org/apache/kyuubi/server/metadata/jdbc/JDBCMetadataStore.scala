@@ -62,6 +62,7 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
     case CUSTOM => new GenericDatabaseDialect
   }
 
+  private val priorityEnabled = conf.get(METADATA_STORE_JDBC_PRIORITY_ENABLED)
   private val METADATA_TABLE = conf.get(KyuubiEbayConf.METADATA_STORE_JDBC_TABLE)
     .getOrElse(_METADATA_TABLE)
 
@@ -187,9 +188,10 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
          |create_time,
          |engine_type,
          |cluster,
-         |cluster_manager
+         |cluster_manager,
+         |priority
          |)
-         |VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         |VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          |""".stripMargin
 
     JdbcUtils.withConnection { connection =>
@@ -211,7 +213,8 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
         metadata.createTime,
         Option(metadata.engineType).map(_.toUpperCase(Locale.ROOT)).orNull,
         metadata.cluster.map(_.toLowerCase(Locale.ROOT)).orNull,
-        metadata.clusterManager.orNull)
+        metadata.clusterManager.orNull,
+        metadata.priority)
     }
   }
 
@@ -219,7 +222,7 @@ class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
     JdbcUtils.executeQueryWithRowMapper(
       s"""SELECT identifier FROM $METADATA_TABLE
          |WHERE state=?
-         |ORDER BY create_time ASC LIMIT 1
+         |ORDER BY ${if (priorityEnabled) "priority DESC, " else ""}create_time ASC LIMIT 1
          |""".stripMargin) { stmt =>
       stmt.setString(1, OperationState.INITIALIZED.toString)
     } { resultSet =>

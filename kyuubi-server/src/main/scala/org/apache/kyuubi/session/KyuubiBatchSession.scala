@@ -23,6 +23,7 @@ import org.apache.hive.service.rpc.thrift.TProtocolVersion
 
 import org.apache.kyuubi.client.util.BatchUtils._
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf, KyuubiReservedKeys}
+import org.apache.kyuubi.config.KyuubiReservedKeys.KYUUBI_BATCH_PRIORITY
 import org.apache.kyuubi.engine.KyuubiApplicationManager
 import org.apache.kyuubi.engine.spark.SparkProcessBuilder
 import org.apache.kyuubi.events.{EventBus, KyuubiSessionEvent}
@@ -197,7 +198,8 @@ class KyuubiBatchSession(
           requestArgs = batchArgs,
           createTime = createTime,
           engineType = batchType,
-          clusterManager = batchJobSubmissionOp.builder.clusterManager())
+          clusterManager = batchJobSubmissionOp.builder.clusterManager(),
+          priority = conf.get(KYUUBI_BATCH_PRIORITY).map(_.toInt).getOrElse(10))
 
         if (!reserveMetadata) {
           newMetadata = newMetadata.copy(
