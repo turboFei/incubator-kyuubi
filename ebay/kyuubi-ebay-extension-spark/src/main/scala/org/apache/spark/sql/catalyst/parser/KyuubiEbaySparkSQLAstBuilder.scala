@@ -28,9 +28,9 @@ import org.antlr.v4.runtime.tree.{ParseTree, TerminalNode}
 import org.apache.commons.codec.binary.Hex
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
-import org.apache.spark.sql.catalyst.data.{KyuubiDescribePathCommand, MoveDataCommand, UploadDataCommand}
 import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.catalyst.parser.ParserUtils.{checkDuplicateKeys, string, stringWithoutUnescape, withOrigin}
+import org.apache.spark.sql.catalyst.logical.{KyuubiDescribePathCommand, MoveDataCommand, UploadDataCommand}
+import org.apache.spark.sql.catalyst.parser.ParserUtils.{checkDuplicateKeys, string, withOrigin}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.util.DateTimeUtils.{getZoneId, localDateToDays, stringToTimestamp}
 import org.apache.spark.sql.catalyst.util.IntervalUtils
@@ -38,6 +38,7 @@ import org.apache.spark.sql.connector.catalog.CatalogV2Implicits._
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.kyuubi.{KyuubiEbaySparkSQLBaseVisitor, KyuubiEbaySparkSQLParser, SparkEbayUtils}
 import org.apache.spark.sql.kyuubi.KyuubiEbaySparkSQLParser._
+import org.apache.spark.sql.kyuubi.SparkEbayUtils.stringWithoutUnescape
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 

@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.catalyst.data
+package org.apache.spark.sql.catalyst.logical
 
 import java.util.Locale
 
@@ -24,6 +24,7 @@ import scala.collection.mutable.ArrayBuffer
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.sql.catalyst.expressions.AttributeReference
 import org.apache.spark.sql.catalyst.plans.DescribeCommandSchema
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.command.{DDLUtils, DescribeCommandBase}
 import org.apache.spark.sql.execution.datasources.{DataSource, FileFormat, LogicalRelation}
 import org.apache.spark.sql.kyuubi.SparkEbayUtils
@@ -35,7 +36,9 @@ import org.apache.kyuubi.config.KyuubiEbayConf
  * A KYUUBI DESCRIBE PATH command, as parsed from SQL
  */
 case class KyuubiDescribePathCommand(identifier: String, isExtended: Boolean)
-  extends DescribeCommandBase with Logging {
+  extends DescribeCommandBase with WithInternalChild with WithInternalChildren with Logging {
+  override def withNewChildrenInternal(newChildren: IndexedSeq[LogicalPlan]): LogicalPlan = this
+  override def withNewChildInternal(newChild: LogicalPlan): LogicalPlan = this
   private val datasourceProviderList =
     SparkEbayUtils.kyuubiConf.get(KyuubiEbayConf.KYUUBI_DESCRIBE_PATH_DATA_SOURCES)
 

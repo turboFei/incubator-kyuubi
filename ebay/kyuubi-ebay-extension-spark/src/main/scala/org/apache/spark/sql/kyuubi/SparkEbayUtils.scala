@@ -20,6 +20,8 @@ package org.apache.spark.sql.kyuubi
 import java.io.Closeable
 import java.util.{ArrayList => JArrayList, List => JList}
 
+import org.antlr.v4.runtime.Token
+import org.antlr.v4.runtime.tree.TerminalNode
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.Attribute
@@ -186,4 +188,14 @@ object SparkEbayUtils extends Logging {
 
   def fromAttributes(attributes: Seq[Attribute]): StructType =
     StructType(attributes.map(a => StructField(a.name, a.dataType, a.nullable, a.metadata)))
+
+  /** Convert a string node into a string without unescaping. */
+  def stringWithoutUnescape(node: AnyRef): String = {
+    // STRING parser rule forces that the input always has quotes at the starting and ending.
+    node match {
+      case n: Token => n.getText.slice(1, n.getText.size - 1)
+      case n: TerminalNode => n.getText.slice(1, n.getText.size - 1)
+      case n => throw new UnsupportedOperationException(n.getClass.getName)
+    }
+  }
 }

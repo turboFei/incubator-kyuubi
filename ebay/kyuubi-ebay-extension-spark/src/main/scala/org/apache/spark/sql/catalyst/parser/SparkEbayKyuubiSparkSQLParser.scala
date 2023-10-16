@@ -38,6 +38,11 @@ class SparkEbayKyuubiSparkSQLParser(delegate: ParserInterface) extends ParserInt
     }
   }
 
+  def parseQuery(sqlText: String): LogicalPlan = {
+    val parseQueryMethod = delegate.getClass.getMethod("parseQuery", classOf[String])
+    parseQueryMethod.invoke(delegate, sqlText).asInstanceOf[LogicalPlan]
+  }
+
   protected def parse[T](command: String)(toResult: KyuubiEbaySparkSQLParser => T): T = {
     val lexer = new KyuubiEbaySparkSQLLexer(
       new UpperCaseCharStream(CharStreams.fromString(command)))

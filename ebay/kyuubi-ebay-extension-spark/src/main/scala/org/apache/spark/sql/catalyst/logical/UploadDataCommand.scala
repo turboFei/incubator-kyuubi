@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.spark.sql.catalyst.data
+package org.apache.spark.sql.catalyst.logical
 
 import java.io.FileInputStream
 import java.util.Locale
@@ -46,8 +46,10 @@ case class UploadDataCommand(
     path: String,
     isOverwrite: Boolean,
     partitionSpec: Option[TablePartitionSpec],
-    optionSpec: Option[Map[String, String]]) extends RunnableCommand {
-  protected def withNewChildrenInternal(newChildren: IndexedSeq[LogicalPlan]): LogicalPlan = this
+    optionSpec: Option[Map[String, String]]) extends RunnableCommand with WithInternalChild
+  with WithInternalChildren {
+  override def withNewChildrenInternal(newChildren: IndexedSeq[LogicalPlan]): LogicalPlan = this
+  override def withNewChildInternal(newChild: LogicalPlan): LogicalPlan = this
   private lazy val kyuubiConf = SparkEbayUtils.kyuubiConf
 
   override val output: Seq[Attribute] = Seq(

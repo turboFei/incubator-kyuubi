@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.catalyst.data
+package org.apache.spark.sql.catalyst.logical
 
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.{Row, SparkSession}
@@ -35,8 +35,9 @@ case class MoveDataCommand(
     fromPath: String,
     toDir: String,
     toFileName: Option[String],
-    isOverwrite: Boolean) extends RunnableCommand {
-  protected def withNewChildrenInternal(newChildren: IndexedSeq[LogicalPlan]): LogicalPlan = this
+    isOverwrite: Boolean) extends RunnableCommand with WithInternalChild with WithInternalChildren {
+  override def withNewChildrenInternal(newChildren: IndexedSeq[LogicalPlan]): LogicalPlan = this
+  override def withNewChildInternal(newChild: LogicalPlan): LogicalPlan = this
   override val output: Seq[Attribute] = Seq(
     AttributeReference(
       "from",
