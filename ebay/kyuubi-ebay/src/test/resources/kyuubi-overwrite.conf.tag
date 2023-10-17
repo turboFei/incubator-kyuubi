@@ -21,4 +21,4 @@ ___big_result___.kyuubi.operation.incremental.collect=true
 ___big_result___.kyuubi.operation.temp.table.collect=true
 ___kyuubi_default___.kyuubi.session.tag=kyuubi_default
 ___kyuubi_overwrite___.kyuubi.session.engine.launch.moveQueue.enabled=false
-___3.4___.spark.majorVersion.overwrite=true
+___spark3_4___.spark.majorVersion.overwrite=true

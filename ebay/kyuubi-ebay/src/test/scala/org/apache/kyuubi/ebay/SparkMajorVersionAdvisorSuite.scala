@@ -24,10 +24,10 @@ import org.apache.kyuubi.ebay.SparkMajorVersionAdvisorSuite.{OVERLAY_CONF_DEMO, 
 
 class SparkMajorVersionAdvisorSuite extends KyuubiFunSuite {
   test("test major minor version") {
-    assert(SparkMajorVersionAdvisor.majorMinorVersion("3.4") == None)
-    assert(SparkMajorVersionAdvisor.majorMinorVersion("3.4.1") == Some("3.4"))
-    assert(SparkMajorVersionAdvisor.majorMinorVersion("3.4.11") == Some("3.4"))
-    assert(SparkMajorVersionAdvisor.majorMinorVersion("3.4.1.1") == None)
+    assert(SparkMajorVersionAdvisor.majorMinorVersionTag("3.4") == None)
+    assert(SparkMajorVersionAdvisor.majorMinorVersionTag("3.4.1") == Some("spark3_4"))
+    assert(SparkMajorVersionAdvisor.majorMinorVersionTag("3.4.11") == Some("spark3_4"))
+    assert(SparkMajorVersionAdvisor.majorMinorVersionTag("3.4.1.1") == None)
   }
 
   test("test spark major version conf advisor") {

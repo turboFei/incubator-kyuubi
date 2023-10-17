@@ -32,10 +32,10 @@ class SparkMajorVersionAdvisor extends TagBasedSessionConfAdvisor {
   override def getConfOverlay(
       user: String,
       sessionConf: JMap[String, String]): JMap[String, String] = {
-    majorMinorVersion(sessionConf.get(SPARK_MAJOR_VERSION)).map { version =>
+    majorMinorVersionTag(sessionConf.get(SPARK_MAJOR_VERSION)).map { tag =>
       super.getConfOverlay(
         user,
-        (sessionConf.asScala ++ Map(SESSION_TAG.key -> version)).asJava)
+        (sessionConf.asScala ++ Map(SESSION_TAG.key -> tag)).asJava)
     }.getOrElse(Collections.emptyMap())
   }
 }
@@ -45,13 +45,13 @@ object SparkMajorVersionAdvisor extends Logging {
   private val majorVersionRegex = """^(\d+)\.(\d+)\.(\d+)$""".r
 
   /**
-   * Given a Spark version string, return the short version string.
-   * E.g., for 3.4.1, return '3.4'.
+   * Given a Spark version string, return the short version tag string.
+   * E.g., for 3.4.1, return 'spark3_4'.
    */
-  def majorMinorVersion(version: String): Option[String] = {
+  def majorMinorVersionTag(version: String): Option[String] = {
     if (StringUtils.isBlank(version)) return None
     majorVersionRegex.findFirstMatchIn(version) match {
-      case Some(m) => Some(s"${m.group(1)}.${m.group(2)}")
+      case Some(m) => Some(s"spark${m.group(1)}_${m.group(2)}")
       case None =>
         warn(s"Tried to parse '$version' as $SPARK_MAJOR_VERSION," +
           s" but it could not find the major/minor version numbers.")
