@@ -24,10 +24,12 @@ import org.apache.kyuubi.KyuubiFunSuite
 class ChainedSessionConfAdvisorSuite extends KyuubiFunSuite {
   test("test chained session conf advisor") {
     val advisor = new ChainedSessionConfAdvisor()
-    val sessionConf = TagBasedSessionConfAdvisorSuite.SESSION_CONF_DEMO ++
+    val sessionConf = SparkMajorVersionAdvisorSuite.SESSION_CONF_DEMO ++
+      TagBasedSessionConfAdvisorSuite.SESSION_CONF_DEMO ++
       TessConfAdvisorSuite.SESSION_CONF_DEMO
 
-    val overlayConf = TagBasedSessionConfAdvisorSuite.OVERLAY_CONF_DEMO ++
+    val overlayConf = SparkMajorVersionAdvisorSuite.OVERLAY_CONF_DEMO ++
+      TagBasedSessionConfAdvisorSuite.OVERLAY_CONF_DEMO ++
       TessConfAdvisorSuite.OVERLAY_CONF_DEMO ++
       Map("kyuubi.kubernetes.context" -> "28")
 

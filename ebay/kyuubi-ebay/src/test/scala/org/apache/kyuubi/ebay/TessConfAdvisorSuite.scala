@@ -57,6 +57,8 @@ object TessConfAdvisorSuite {
     "spark.kubernetes.driver.limit.cores" -> "2",
     "spark.kubernetes.driver.annotation.io.sherlock.logs/namespace" -> "adlc",
     "spark.kubernetes.executor.annotation.io.sherlock.logs/namespace" -> "adlc",
+    "spark.kubernetes.driver.annotation.io.sherlock.metrics/namespace" -> "adlc",
+    "spark.kubernetes.executor.annotation.io.sherlock.metrics/namespace" -> "adlc",
     "spark.kubernetes.driver.label.applicationinstance.tess.io/name" -> "adlc-ai",
     "spark.tess.overwrite" -> "true",
     "kyuubi.kubernetes.context" -> "28")
