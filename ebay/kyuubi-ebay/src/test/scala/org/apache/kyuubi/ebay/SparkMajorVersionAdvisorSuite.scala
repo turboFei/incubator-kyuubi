@@ -17,6 +17,8 @@
 
 package org.apache.kyuubi.ebay
 
+import java.util.Collections
+
 import scala.collection.JavaConverters._
 
 import org.apache.kyuubi.KyuubiFunSuite
@@ -34,6 +36,10 @@ class SparkMajorVersionAdvisorSuite extends KyuubiFunSuite {
     val sessionConfAdvisor = new SparkMajorVersionAdvisor()
     assert(sessionConfAdvisor.getConfOverlay("b_stf", SESSION_CONF_DEMO.asJava)
       == OVERLAY_CONF_DEMO.asJava)
+    assert(sessionConfAdvisor.getConfOverlay("b_stf", Collections.emptyMap()) ==
+      Map(
+        "spark.version" -> "3.1.1",
+        "kyuubi.session.engine.launch.moveQueue.enabled" -> "false").asJava)
   }
 }
 

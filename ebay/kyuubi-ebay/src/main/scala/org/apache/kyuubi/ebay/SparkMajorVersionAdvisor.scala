@@ -28,11 +28,14 @@ import org.apache.kyuubi.config.KyuubiEbayConf.SESSION_TAG
 
 class SparkMajorVersionAdvisor extends TagBasedSessionConfAdvisor {
   import SparkMajorVersionAdvisor._
+  import TagBasedSessionConfAdvisor._
 
   override def getConfOverlay(
       user: String,
       sessionConf: JMap[String, String]): JMap[String, String] = {
-    majorMinorVersionTag(sessionConf.get(SPARK_MAJOR_VERSION)).map { tag =>
+    val majorVersion = Option(sessionConf.get(SPARK_MAJOR_VERSION))
+      .getOrElse(getSessionClusterConf(sessionConf).get(SPARK_MAJOR_VERSION))
+    majorMinorVersionTag(majorVersion).map { tag =>
       super.getConfOverlay(
         user,
         (sessionConf.asScala ++ Map(SESSION_TAG.key -> tag)).asJava)

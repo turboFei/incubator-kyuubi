@@ -113,6 +113,12 @@ object TagBasedSessionConfAdvisor extends Logging {
     cluster.map(c => s"$defaultConfFile.$c")
   }
 
+  def getSessionClusterConf(sessionConf: JMap[String, String]): JMap[String, String] = {
+    val sessionCluster = sessionConf.asScala.get(SESSION_CLUSTER.key)
+    fileConfCache.get(
+      clusterDefaultConfFile(sessionCluster).getOrElse(defaultConfFile)).getAll.asJava
+  }
+
   def getSessionTagDefaultConf(
       sessionConf: JMap[String, String],
       sessionTag: String,
