@@ -22,6 +22,7 @@ import java.util.Collections
 import scala.collection.JavaConverters._
 
 import org.apache.kyuubi.KyuubiFunSuite
+import org.apache.kyuubi.config.KyuubiEbayConf
 import org.apache.kyuubi.ebay.SparkMajorVersionAdvisorSuite.{OVERLAY_CONF_DEMO, SESSION_CONF_DEMO}
 
 class SparkMajorVersionAdvisorSuite extends KyuubiFunSuite {
@@ -37,6 +38,12 @@ class SparkMajorVersionAdvisorSuite extends KyuubiFunSuite {
     assert(sessionConfAdvisor.getConfOverlay("b_stf", SESSION_CONF_DEMO.asJava)
       == OVERLAY_CONF_DEMO.asJava)
     assert(sessionConfAdvisor.getConfOverlay("b_stf", Collections.emptyMap()) ==
+      Map(
+        "spark.version" -> "3.1.1",
+        "kyuubi.session.engine.launch.moveQueue.enabled" -> "false").asJava)
+    assert(sessionConfAdvisor.getConfOverlay(
+      "b_stf",
+      Map(KyuubiEbayConf.SESSION_CLUSTER.key -> "test").asJava) ==
       Map(
         "spark.version" -> "3.1.1",
         "kyuubi.session.engine.launch.moveQueue.enabled" -> "false").asJava)
