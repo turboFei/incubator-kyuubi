@@ -41,16 +41,23 @@ import org.apache.kyuubi.server.metadata.jdbc.JDBCMetadataStoreConf._
 import org.apache.kyuubi.server.metadata.jdbc.fount.FountService
 import org.apache.kyuubi.session.SessionType
 import org.apache.kyuubi.util.JdbcUtils
+import org.apache.kyuubi.util.reflect.ReflectUtils
 
 class JDBCMetadataStore(conf: KyuubiConf) extends MetadataStore with Logging {
   import JDBCMetadataStore._
 
   private val dbType = DatabaseType.withName(conf.get(METADATA_STORE_JDBC_DATABASE_TYPE))
   private val driverClassOpt = conf.get(METADATA_STORE_JDBC_DRIVER)
+  private lazy val mysqlDriverClass =
+    if (ReflectUtils.isClassLoadable("com.mysql.cj.jdbc.Driver")) {
+      "com.mysql.cj.jdbc.Driver"
+    } else {
+      "com.mysql.jdbc.Driver"
+    }
   private val driverClass = dbType match {
     case SQLITE => driverClassOpt.getOrElse("org.sqlite.JDBC")
     case DERBY => driverClassOpt.getOrElse("org.apache.derby.jdbc.AutoloadedDriver")
-    case MYSQL | FOUNT => driverClassOpt.getOrElse("com.mysql.jdbc.Driver")
+    case MYSQL | FOUNT => driverClassOpt.getOrElse(mysqlDriverClass)
     case CUSTOM => driverClassOpt.getOrElse(
         throw new IllegalArgumentException("No jdbc driver defined"))
   }
