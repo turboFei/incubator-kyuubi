@@ -458,7 +458,8 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
       .expireAfterWrite(conf.get(SESSION_CLUSTER_CONF_REFRESH_INTERVAL), TimeUnit.MILLISECONDS)
       .build(new CacheLoader[String, KyuubiConf] {
         override def load(cluster: String): KyuubiConf = {
-          KyuubiEbayConf.loadClusterConf(conf, Option(cluster))
+          // reload the default kyuubi conf
+          KyuubiEbayConf.loadClusterConf(KyuubiConf(), Option(cluster))
         }
       })
 
