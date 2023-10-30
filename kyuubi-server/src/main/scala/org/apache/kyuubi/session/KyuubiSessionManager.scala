@@ -64,7 +64,7 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
   private val limiters = new ConcurrentHashMap[Option[String], SessionLimiter]().asScala
   private val batchLimiters = new ConcurrentHashMap[Option[String], SessionLimiter]().asScala
   // lazy is required for plugins since the conf is null when this class initialization
-  lazy val sessionConfAdvisor: SessionConfAdvisor = PluginLoader.loadSessionConfAdvisor(conf)
+  lazy val sessionConfAdvisor: Seq[SessionConfAdvisor] = PluginLoader.loadSessionConfAdvisor(conf)
   lazy val groupProvider: GroupProvider = PluginLoader.loadGroupProvider(conf)
 
   lazy val (signingPrivateKey, signingPublicKey) = SignUtils.generateKeyPair()
