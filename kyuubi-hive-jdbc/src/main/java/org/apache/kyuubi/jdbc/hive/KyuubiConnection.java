@@ -802,6 +802,18 @@ public class KyuubiConnection implements SQLConnection, KyuubiLoggable {
     if (sessVars.containsKey(KYUUBI_PROXY_BATCH_ACCOUNT)) {
       openConf.put(KYUUBI_PROXY_BATCH_ACCOUNT, sessVars.get(KYUUBI_PROXY_BATCH_ACCOUNT));
     }
+    String clientProtocolStr =
+        sessVars.getOrDefault(
+            CLIENT_PROTOCOL_VERSION, openReq.getClient_protocol().getValue() + "");
+    TProtocolVersion clientProtocol =
+        TProtocolVersion.findByValue(Integer.parseInt(clientProtocolStr));
+    if (clientProtocol == null) {
+      throw new IllegalArgumentException(
+          String.format(
+              "Unsupported Hive2 protocol version %s specified by session conf key %s",
+              clientProtocolStr, CLIENT_PROTOCOL_VERSION));
+    }
+    openReq.setClient_protocol(clientProtocol);
     try {
       openConf.put("kyuubi.client.ipAddress", InetAddress.getLocalHost().getHostAddress());
     } catch (UnknownHostException e) {
