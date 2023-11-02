@@ -22,7 +22,7 @@ import java.util.Base64
 import javax.ws.rs.core.GenericType
 
 import org.apache.kyuubi.{KyuubiFunSuite, RestFrontendTestHelper, Utils}
-import org.apache.kyuubi.server.http.authentication.AuthenticationHandler.AUTHORIZATION_HEADER
+import org.apache.kyuubi.server.http.util.HttpAuthUtils.AUTHORIZATION_HEADER
 
 class EbayResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper {
   private val encodeAuthorization: String = {

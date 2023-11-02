@@ -44,7 +44,7 @@ import org.apache.kyuubi.config.KyuubiConf.FrontendProtocols.FrontendProtocol
 import org.apache.kyuubi.ebay.{ChainedSessionConfAdvisor, FakeApiKeyAuthenticationProviderImpl}
 import org.apache.kyuubi.jdbc.hive.KyuubiConnection
 import org.apache.kyuubi.jdbc.hive.logs.KyuubiEngineLogListener
-import org.apache.kyuubi.server.http.authentication.AuthenticationHandler.AUTHORIZATION_HEADER
+import org.apache.kyuubi.server.http.util.HttpAuthUtils.AUTHORIZATION_HEADER
 import org.apache.kyuubi.server.metadata.api.MetadataFilter
 import org.apache.kyuubi.server.metadata.jdbc.JDBCMetadataStore
 import org.apache.kyuubi.service.authentication.{AuthTypes, KyuubiAuthenticationFactory}
