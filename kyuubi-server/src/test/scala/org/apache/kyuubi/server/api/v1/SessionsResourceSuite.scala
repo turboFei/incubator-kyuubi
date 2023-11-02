@@ -34,7 +34,7 @@ import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.engine.ShareLevel
 import org.apache.kyuubi.metrics.{MetricsConstants, MetricsSystem}
 import org.apache.kyuubi.operation.OperationHandle
-import org.apache.kyuubi.server.http.authentication.AuthenticationHandler.AUTHORIZATION_HEADER
+import org.apache.kyuubi.server.http.util.HttpAuthUtils.{basicAuthorizationHeader, AUTHORIZATION_HEADER}
 import org.apache.kyuubi.session.SessionType
 
 class SessionsResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper {
@@ -109,9 +109,7 @@ class SessionsResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper {
 
     val sessionOpenResp = webTarget.path("api/v1/sessions")
       .request(MediaType.APPLICATION_JSON_TYPE)
-      .header(
-        AUTHORIZATION_HEADER,
-        s"Basic ${new String(Base64.getEncoder().encode(user), StandardCharsets.UTF_8)}")
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("kyuubi"))
       .post(Entity.entity(sessionOpenRequest, MediaType.APPLICATION_JSON_TYPE))
 
     val sessionHandle = sessionOpenResp.readEntity(classOf[SessionHandle]).getIdentifier

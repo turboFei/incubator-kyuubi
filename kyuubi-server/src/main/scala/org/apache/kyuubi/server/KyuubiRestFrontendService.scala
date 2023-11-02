@@ -35,6 +35,8 @@ import org.apache.kyuubi.server.api.v1.ApiRootResource
 import org.apache.kyuubi.server.http.authentication.{AuthenticationFilter, KyuubiHttpAuthenticationFactory}
 import org.apache.kyuubi.server.ui.{JettyServer, JettyUtils}
 import org.apache.kyuubi.service.{AbstractFrontendService, Serverable, Service, ServiceUtils}
+import org.apache.kyuubi.service.authentication.AuthTypes
+import org.apache.kyuubi.service.authentication.AuthTypes.NONE
 import org.apache.kyuubi.service.authentication.KyuubiAuthenticationFactory
 import org.apache.kyuubi.session.{KyuubiSession, KyuubiSessionManager, SessionHandle}
 import org.apache.kyuubi.util.ThreadUtils
@@ -76,6 +78,17 @@ class KyuubiRestFrontendService(override val serverable: Serverable)
     }
 
   private lazy val port: Int = conf.get(FRONTEND_REST_BIND_PORT)
+
+  private lazy val securityEnabled = {
+    val authTypes = conf.get(AUTHENTICATION_METHOD).map(AuthTypes.withName)
+    KyuubiAuthenticationFactory.getValidPasswordAuthMethod(authTypes) != NONE
+  }
+
+  private lazy val administrators: Set[String] =
+    conf.get(KyuubiConf.SERVER_ADMINISTRATORS) + Utils.currentUser
+
+  def isAdministrator(userName: String): Boolean =
+    if (securityEnabled) administrators.contains(userName) else true
 
   override def initialize(conf: KyuubiConf): Unit = synchronized {
     this.conf = conf
@@ -275,7 +288,7 @@ class KyuubiRestFrontendService(override val serverable: Serverable)
       realUser
     } else {
       sessionConf.get(KyuubiAuthenticationFactory.HS2_PROXY_USER).map { proxyUser =>
-        if (!getConf.get(KyuubiConf.SERVER_ADMINISTRATORS).contains(realUser)) {
+        if (!isAdministrator(realUser)) {
           try {
             KyuubiAuthenticationFactory.verifyProxyAccess(
               realUser,
