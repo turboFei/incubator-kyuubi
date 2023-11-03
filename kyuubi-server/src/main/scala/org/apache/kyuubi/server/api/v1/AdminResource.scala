@@ -40,7 +40,6 @@ import org.apache.kyuubi.operation.{KyuubiOperation, OperationHandle}
 import org.apache.kyuubi.server.KyuubiServer
 import org.apache.kyuubi.server.api.{ApiRequestContext, ApiUtils}
 import org.apache.kyuubi.session.{KyuubiSession, KyuubiSessionManager, SessionHandle}
-import org.apache.kyuubi.shaded.zookeeper.KeeperException.NoNodeException
 
 @Tag(name = "Admin")
 @Produces(Array(MediaType.APPLICATION_JSON))
@@ -254,8 +253,9 @@ private[v1] class AdminResource extends ApiRequestContext with Logging {
       fe.getSessionUser(hs2ProxyUser)
     }
     val clusterConf = getClusterConf(Option(cluster))
-    val engine = getEngine(userName, engineType, shareLevel, subdomain, "default", clusterConf)
-    val engineSpace = getEngineSpace(engine, clusterConf)
+    val engine =
+      normalizeEngineInfo(userName, engineType, shareLevel, subdomain, "default", clusterConf)
+    val engineSpace = calculateEngineSpace(engine, clusterConf)
 
     withDiscoveryClient(clusterConf) { discoveryClient =>
       val engineNodes = discoveryClient.getChildren(engineSpace)
@@ -299,47 +299,36 @@ private[v1] class AdminResource extends ApiRequestContext with Logging {
 
     clusterOptList.flatMap { clusterOpt =>
       val clusterConf = getClusterConf(clusterOpt)
-      val engine = getEngine(userName, engineType, shareLevel, subdomain, "", clusterConf)
-      val engineSpace = getEngineSpace(engine, clusterConf)
+      val engine = normalizeEngineInfo(userName, engineType, shareLevel, subdomain, "", clusterConf)
+      val engineSpace = calculateEngineSpace(engine, clusterConf)
 
       val engineNodes = ListBuffer[ServiceNodeInfo]()
-      Option(subdomain).filter(_.nonEmpty) match {
-        case Some(_) =>
-          withDiscoveryClient(clusterConf) { discoveryClient =>
-            info(s"Listing engine nodes for $engineSpace")
+      withDiscoveryClient(clusterConf) { discoveryClient =>
+        Option(subdomain).filter(_.nonEmpty) match {
+          case Some(_) =>
+            info(s"Listing engine nodes under $engineSpace")
             engineNodes ++= discoveryClient.getServiceNodesInfo(engineSpace)
-          }
-        case None =>
-          withDiscoveryClient(clusterConf) { discoveryClient =>
-            if (discoveryClient.pathExists(engineSpace)) {
-              try {
-                discoveryClient.getChildren(engineSpace).map { child =>
-                  info(s"Listing engine nodes for $engineSpace/$child")
-                  engineNodes ++= discoveryClient.getServiceNodesInfo(s"$engineSpace/$child")
-                }
-              } catch {
-                case nne: NoNodeException =>
-                  error(
-                    s"No such engine for user: $userName, " +
-                      s"engine type: $engineType, share level: $shareLevel, subdomain: $subdomain",
-                    nne)
-                  throw new NotFoundException(s"No such engine for user: $userName, " +
-                    s"engine type: $engineType, share level: $shareLevel, subdomain: $subdomain")
-              }
+          case None if discoveryClient.pathNonExists(engineSpace) =>
+            warn(s"Path $engineSpace does not exist. user: $userName, engine type: $engineType, " +
+              s"share level: $shareLevel, subdomain: $subdomain")
+          case None =>
+            discoveryClient.getChildren(engineSpace).map { child =>
+              info(s"Listing engine nodes under $engineSpace/$child")
+              engineNodes ++= discoveryClient.getServiceNodesInfo(s"$engineSpace/$child")
             }
-          }
+        }
+        engineNodes.map(node =>
+          new Engine(
+            engine.getVersion,
+            engine.getUser,
+            engine.getEngineType,
+            engine.getSharelevel,
+            node.namespace.split("/").last,
+            node.instance,
+            node.namespace,
+            node.attributes.asJava))
+          .toSeq
       }
-      engineNodes.map(node =>
-        new Engine(
-          engine.getVersion,
-          engine.getUser,
-          engine.getEngineType,
-          engine.getSharelevel,
-          node.namespace.split("/").last,
-          node.instance,
-          node.namespace,
-          node.attributes.asJava))
-        .toSeq
     }
   }
 
@@ -372,7 +361,7 @@ private[v1] class AdminResource extends ApiRequestContext with Logging {
     servers.toSeq
   }
 
-  private def getEngine(
+  private def normalizeEngineInfo(
       userName: String,
       engineType: String,
       shareLevel: String,
@@ -386,6 +375,7 @@ private[v1] class AdminResource extends ApiRequestContext with Logging {
       .foreach(_ => clonedConf.set(ENGINE_SHARE_LEVEL_SUBDOMAIN, Option(subdomain)))
     Option(shareLevel).filter(_.nonEmpty).foreach(clonedConf.set(ENGINE_SHARE_LEVEL, _))
 
+    val serverSpace = clonedConf.get(HA_NAMESPACE)
     val normalizedEngineType = clonedConf.get(ENGINE_TYPE)
     val engineSubdomain = clonedConf.get(ENGINE_SHARE_LEVEL_SUBDOMAIN).getOrElse(subdomainDefault)
     val engineShareLevel = clonedConf.get(ENGINE_SHARE_LEVEL)
@@ -397,22 +387,20 @@ private[v1] class AdminResource extends ApiRequestContext with Logging {
       engineShareLevel,
       engineSubdomain,
       null,
-      null,
+      serverSpace,
       Collections.emptyMap())
   }
 
-  private def getEngineSpace(engine: Engine, conf: KyuubiConf): String = {
-    val serverSpace = conf.get(HA_NAMESPACE)
-    val appUser = engine.getSharelevel match {
+  private def calculateEngineSpace(engine: Engine, conf: KyuubiConf): String = {
+    val userOrGroup = engine.getSharelevel match {
       case "GROUP" =>
-        fe.sessionManager.groupProvider.primaryGroup(engine.getUser, fe.getConf.getAll.asJava)
+        fe.sessionManager.groupProvider.primaryGroup(engine.getUser, conf.getAll.asJava)
       case _ => engine.getUser
     }
 
-    DiscoveryPaths.makePath(
-      s"${serverSpace}_${engine.getVersion}_${engine.getSharelevel}_${engine.getEngineType}",
-      appUser,
-      engine.getSubdomain)
+    val engineSpace =
+      s"${engine.getNamespace}_${engine.getVersion}_${engine.getSharelevel}_${engine.getEngineType}"
+    DiscoveryPaths.makePath(engineSpace, userOrGroup, engine.getSubdomain)
   }
 
   @ApiResponse(
