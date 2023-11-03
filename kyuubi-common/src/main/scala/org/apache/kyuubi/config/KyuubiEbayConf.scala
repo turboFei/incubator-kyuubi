@@ -867,6 +867,8 @@ object KyuubiEbayConf extends Logging {
       KyuubiEbayConf.ENGINE_SPARK_TESS_ENABLED)
   }
 
+  private[kyuubi] lazy val _kyuubiConf = KyuubiConf().loadFileDefaults()
+
   final val KYUUBI_SESSION_ID_KEY = "kyuubi.session.id"
   final val KYUUBI_SESSION_TYPE_KEY = "kyuubi.session.type"
   final val ZETA_TAG_KEY = "zeta"

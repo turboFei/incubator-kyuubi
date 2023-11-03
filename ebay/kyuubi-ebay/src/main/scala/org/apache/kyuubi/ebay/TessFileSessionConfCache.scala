@@ -25,11 +25,12 @@ import scala.collection.JavaConverters._
 import com.google.common.cache.{CacheBuilder, CacheLoader, LoadingCache}
 
 import org.apache.kyuubi.{Logging, Utils}
-import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 
 /** Copied from org.apache.kyuubi.session.FileSessionConfAdvisor */
 object TessFileSessionConfCache extends Logging {
-  private val reloadInterval: Long = KyuubiConf().get(KyuubiConf.SESSION_CONF_FILE_RELOAD_INTERVAL)
+  private val reloadInterval: Long =
+    KyuubiEbayConf._kyuubiConf.get(KyuubiConf.SESSION_CONF_FILE_RELOAD_INTERVAL)
   private lazy val sessionTessContextConfCache: LoadingCache[String, JMap[String, String]] =
     CacheBuilder.newBuilder()
       .expireAfterWrite(

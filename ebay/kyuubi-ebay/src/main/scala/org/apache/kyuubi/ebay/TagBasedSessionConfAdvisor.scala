@@ -32,7 +32,7 @@ import org.apache.kyuubi.plugin.SessionConfAdvisor
 class TagBasedSessionConfAdvisor extends SessionConfAdvisor with Logging {
   import TagBasedSessionConfAdvisor._
 
-  private val overlayConfFile = KyuubiConf().get(SESSION_TAG_CONF_FILE)
+  private val overlayConfFile = kyuubiConf.get(SESSION_TAG_CONF_FILE)
   private def clusterOverlayConfFile(cluster: Option[String]): Option[String] = {
     cluster.map(c => s"$overlayConfFile.$c")
   }
@@ -77,7 +77,8 @@ class TagBasedSessionConfAdvisor extends SessionConfAdvisor with Logging {
 }
 
 object TagBasedSessionConfAdvisor extends Logging {
-  private val reloadInterval: Long = KyuubiConf().get(KyuubiConf.SESSION_CONF_FILE_RELOAD_INTERVAL)
+  private val kyuubiConf = KyuubiEbayConf._kyuubiConf
+  private val reloadInterval: Long = kyuubiConf.get(KyuubiConf.SESSION_CONF_FILE_RELOAD_INTERVAL)
 
   // for kyuubi service side conf
   val KYUUBI_DEFAULT_TAG = "kyuubi_default"

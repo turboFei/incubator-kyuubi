@@ -44,7 +44,7 @@ import org.apache.kyuubi.elasticsearch.shade.org.apache.http.HttpHost
 object ElasticsearchUtils extends Logging {
   @volatile private var CLIENT: RestHighLevelClient = _
   private var _conf: KyuubiConf = _
-  private def conf: KyuubiConf = Option(_conf).getOrElse(KyuubiConf())
+  private def conf: KyuubiConf = Option(_conf).getOrElse(KyuubiEbayConf._kyuubiConf)
   private lazy val requestMaxAttempts =
     conf.get(KyuubiEbayConf.ELASTIC_SEARCH_REQUEST_MAX_ATTEMPTS)
   private lazy val requestRetryWait =

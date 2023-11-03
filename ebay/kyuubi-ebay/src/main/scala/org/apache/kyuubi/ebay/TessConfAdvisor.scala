@@ -31,7 +31,7 @@ class TessConfAdvisor extends SessionConfAdvisor with Logging {
   import TagBasedSessionConfAdvisor.fileConfCache
   import TessConfAdvisor._
 
-  private val kyuubiConf = KyuubiConf()
+  private val kyuubiConf = KyuubiEbayConf._kyuubiConf
 
   private val tessConfOverlayFile = kyuubiConf.get(SESSION_TESS_CONF_FILE)
   private val tessConfTag = kyuubiConf.get(ENGINE_SPARK_TESS_CONFIG_TAG)

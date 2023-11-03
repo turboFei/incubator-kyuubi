@@ -459,7 +459,7 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
       .build(new CacheLoader[String, KyuubiConf] {
         override def load(cluster: String): KyuubiConf = {
           // reload the default kyuubi conf
-          KyuubiEbayConf.loadClusterConf(KyuubiConf(), Option(cluster))
+          KyuubiEbayConf.loadClusterConf(KyuubiConf().loadFileDefaults(), Option(cluster))
         }
       })
 
