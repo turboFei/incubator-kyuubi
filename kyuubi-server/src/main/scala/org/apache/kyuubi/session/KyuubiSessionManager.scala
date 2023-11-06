@@ -459,7 +459,14 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
       .build(new CacheLoader[String, KyuubiConf] {
         override def load(cluster: String): KyuubiConf = {
           // reload the default kyuubi conf
-          KyuubiEbayConf.loadClusterConf(KyuubiConf().loadFileDefaults(), Option(cluster))
+          val basedConf = conf.clone
+          KyuubiConf().loadFileDefaults().getAll.foreach { case (key, value) =>
+            if (!basedConf.getOption(key).exists(_ == value)) {
+              warn(s"Reload the default kyuubi conf: [$key=$value]")
+              basedConf.set(key, value)
+            }
+          }
+          KyuubiEbayConf.loadClusterConf(basedConf, Option(cluster))
         }
       })
 
