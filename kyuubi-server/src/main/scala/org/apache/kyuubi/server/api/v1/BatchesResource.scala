@@ -470,6 +470,7 @@ private[v1] class BatchesResource extends ApiRequestContext with Logging {
   @Path("{batchId}")
   def closeBatchSession(
       @PathParam("batchId") batchId: String,
+      @QueryParam("proxyUser") kyuubiProxyUser: String,
       @QueryParam("hive.server2.proxy.user") hs2ProxyUser: String,
       @deprecated("using hive.server2.proxy.user instead", "1.7.0")
       @QueryParam("kyuubi.proxy.batchAccount") proxyBatchAccount: String): CloseBatchResponse = {
@@ -493,9 +494,10 @@ private[v1] class BatchesResource extends ApiRequestContext with Logging {
       (killed, message)
     }
 
-    val sessionHandle = formatSessionHandle(batchId)
-    val userName = fe.getSessionUser(Option(hs2ProxyUser).getOrElse(proxyBatchAccount))
+    val activeProxyUser = Option(kyuubiProxyUser).getOrElse(hs2ProxyUser)
+    val userName = fe.getSessionUser(Option(activeProxyUser).getOrElse(proxyBatchAccount))
 
+    val sessionHandle = formatSessionHandle(batchId)
     sessionManager.getBatchSession(sessionHandle).map { batchSession =>
       checkPermission(userName, batchSession.user)
       sessionManager.closeSession(batchSession.handle)
@@ -514,7 +516,7 @@ private[v1] class BatchesResource extends ApiRequestContext with Logging {
         } else if (batchV2Enabled(metadata.requestConf) && metadata.kyuubiInstance == null) {
           // code goes here indicates metadata is outdated, recursively calls itself to refresh
           // the metadata
-          closeBatchSession(batchId, hs2ProxyUser, hs2ProxyUser)
+          closeBatchSession(batchId, kyuubiProxyUser, hs2ProxyUser, hs2ProxyUser)
         } else if (metadata.kyuubiInstance != fe.connectionUrl) {
           info(s"Redirecting delete batch[$batchId] to ${metadata.kyuubiInstance}")
           val internalRestClient = getInternalRestClient(metadata.kyuubiInstance)

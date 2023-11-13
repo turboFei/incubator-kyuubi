@@ -254,9 +254,10 @@ class KyuubiRestFrontendService(override val serverable: Serverable)
       Option(AuthenticationFilter.getUserName).filter(_.nonEmpty).getOrElse("anonymous"))
   }
 
-  def getSessionUser(hs2ProxyUser: String): String = {
-    val sessionConf = Option(hs2ProxyUser).filter(_.nonEmpty).map(proxyUser =>
-      Map(KyuubiAuthenticationFactory.HS2_PROXY_USER -> proxyUser)).getOrElse(Map())
+  def getSessionUser(proxyUser: String): String = {
+    // Internally, we use kyuubi.session.proxy.user to unify the key as proxyUser
+    val sessionConf = Option(proxyUser).filter(_.nonEmpty).map(proxyUser =>
+      Map(PROXY_USER.key -> proxyUser)).getOrElse(Map())
     getSessionUser(sessionConf)
   }
 
@@ -285,34 +286,28 @@ class KyuubiRestFrontendService(override val serverable: Serverable)
     if (sessionConf == null) {
       realUser
     } else {
-      sessionConf.get(KyuubiAuthenticationFactory.HS2_PROXY_USER).map { proxyUser =>
-        if (!isAdministrator(realUser)) {
-          try {
-            KyuubiAuthenticationFactory.verifyProxyAccess(
-              realUser,
-              proxyUser,
-              ipAddress,
-              hadoopConf(sessionConf))
-          } catch {
-            case e: Throwable =>
-              try {
-                KyuubiAuthenticationFactory.verifyBatchAccountAccess(realUser, proxyUser, conf)
-              } catch {
-                case be: Throwable =>
-                  error("Error fallback to verify batch account access", be)
-                  throw e
-              }
-          }
+      val proxyUser = sessionConf.getOrElse(
+        PROXY_USER.key,
+        sessionConf.getOrElse(KyuubiAuthenticationFactory.HS2_PROXY_USER, realUser))
+      if (!proxyUser.equals(realUser) && !isAdministrator(realUser)) {
+        try {
+          KyuubiAuthenticationFactory.verifyProxyAccess(
+            realUser,
+            proxyUser,
+            ipAddress,
+            hadoopConf(sessionConf))
+        } catch {
+          case e: Throwable =>
+            try {
+              KyuubiAuthenticationFactory.verifyBatchAccountAccess(realUser, proxyUser, conf)
+            } catch {
+              case be: Throwable =>
+                error("Error fallback to verify batch account access", be)
+                throw e
+            }
         }
-        proxyUser
-      }.orElse {
-        sessionConf.get(KyuubiAuthenticationFactory.KYUUBI_PROXY_BATCH_ACCOUNT).map { batchUser =>
-          if (!getConf.get(KyuubiConf.SERVER_ADMINISTRATORS).contains(realUser)) {
-            KyuubiAuthenticationFactory.verifyBatchAccountAccess(realUser, batchUser, conf)
-          }
-          batchUser
-        }
-      }.getOrElse(realUser)
+      }
+      proxyUser
     }
   }
 

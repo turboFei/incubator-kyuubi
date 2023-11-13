@@ -245,12 +245,14 @@ private[v1] class AdminResource extends ApiRequestContext with Logging {
       @QueryParam("type") engineType: String,
       @QueryParam("sharelevel") shareLevel: String,
       @QueryParam("subdomain") subdomain: String,
+      @QueryParam("proxyUser") kyuubiProxyUser: String,
       @QueryParam("hive.server2.proxy.user") hs2ProxyUser: String,
       @QueryParam("cluster") cluster: String): Response = {
+    val activeProxyUser = Option(kyuubiProxyUser).getOrElse(hs2ProxyUser)
     val userName = if (fe.isAdministrator(fe.getRealUser())) {
-      Option(hs2ProxyUser).getOrElse(fe.getRealUser())
+      Option(activeProxyUser).getOrElse(fe.getRealUser())
     } else {
-      fe.getSessionUser(hs2ProxyUser)
+      fe.getSessionUser(activeProxyUser)
     }
     val clusterConf = getClusterConf(Option(cluster))
     val engine =
@@ -286,12 +288,14 @@ private[v1] class AdminResource extends ApiRequestContext with Logging {
       @QueryParam("type") engineType: String,
       @QueryParam("sharelevel") shareLevel: String,
       @QueryParam("subdomain") subdomain: String,
+      @QueryParam("proxyUser") kyuubiProxyUser: String,
       @QueryParam("hive.server2.proxy.user") hs2ProxyUser: String,
       @QueryParam("cluster") cluster: String): Seq[Engine] = {
+    val activeProxyUser = Option(kyuubiProxyUser).getOrElse(hs2ProxyUser)
     val userName = if (fe.isAdministrator(fe.getRealUser())) {
-      Option(hs2ProxyUser).getOrElse(fe.getRealUser())
+      Option(activeProxyUser).getOrElse(fe.getRealUser())
     } else {
-      fe.getSessionUser(hs2ProxyUser)
+      fe.getSessionUser(activeProxyUser)
     }
     val clusterOptList = Option(cluster).map(c => Seq(Option(c))).getOrElse {
       KyuubiEbayConf.getNonCarmelClusterOptList(fe.getConf)
