@@ -32,6 +32,7 @@ object ApiUtils extends Logging {
     val sessionEvent = session.getSessionEvent
     new SessionData(
       session.handle.identifier.toString,
+      sessionEvent.map(_.remoteSessionId).getOrElse(""),
       session.user,
       session.ipAddress,
       org.apache.kyuubi.ebay.EbayUtils.redact(session.sessionManager.getConf, session.conf).asJava,
@@ -50,6 +51,7 @@ object ApiUtils extends Logging {
     val opEvent = KyuubiOperationEvent(operation)
     new OperationData(
       opEvent.statementId,
+      opEvent.remoteId,
       opEvent.statement,
       opEvent.state,
       opEvent.createTime,

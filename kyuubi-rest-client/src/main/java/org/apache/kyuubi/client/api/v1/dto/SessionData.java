@@ -25,6 +25,7 @@ import org.apache.commons.lang3.builder.ToStringStyle;
 
 public class SessionData {
   private String identifier;
+  private String remoteId;
   private String user;
   private String ipAddr;
   private Map<String, String> conf;
@@ -42,6 +43,7 @@ public class SessionData {
 
   public SessionData(
       String identifier,
+      String remoteId,
       String user,
       String ipAddr,
       Map<String, String> conf,
@@ -55,6 +57,7 @@ public class SessionData {
       String sessionCluster,
       String sessionQueue) {
     this.identifier = identifier;
+    this.remoteId = remoteId;
     this.user = user;
     this.ipAddr = ipAddr;
     this.conf = conf;
@@ -75,6 +78,14 @@ public class SessionData {
 
   public void setIdentifier(String identifier) {
     this.identifier = identifier;
+  }
+
+  public String getRemoteId() {
+    return remoteId;
+  }
+
+  public void setRemoteId(String remoteId) {
+    this.remoteId = remoteId;
   }
 
   public String getUser() {
