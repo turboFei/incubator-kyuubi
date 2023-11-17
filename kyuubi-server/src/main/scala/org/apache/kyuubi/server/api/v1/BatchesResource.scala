@@ -481,13 +481,13 @@ private[v1] class BatchesResource extends ApiRequestContext with Logging {
 
     val sessionHandle = formatSessionHandle(batchId)
     sessionManager.getBatchSession(sessionHandle).map { batchSession =>
-      fe.getSessionUser(batchSession.user)
+      fe.getSessionUser(batchSession.user, batchSession.sessionCluster)
       sessionManager.closeSession(batchSession.handle)
       val (killed, msg) = batchSession.batchJobSubmissionOp.getKillMessage
       new CloseBatchResponse(killed, msg)
     }.getOrElse {
       sessionManager.getBatchMetadata(batchId).map { metadata =>
-        fe.getSessionUser(metadata.username)
+        fe.getSessionUser(metadata.username, metadata.cluster)
         if (OperationState.isTerminal(OperationState.withName(metadata.state))) {
           new CloseBatchResponse(false, s"The batch[$metadata] has been terminated.")
         } else if (batchV2Enabled(metadata.requestConf) && metadata.state == "INITIALIZED" &&

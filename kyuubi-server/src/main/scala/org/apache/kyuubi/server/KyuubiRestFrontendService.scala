@@ -254,19 +254,25 @@ class KyuubiRestFrontendService(override val serverable: Serverable)
       Option(AuthenticationFilter.getUserName).filter(_.nonEmpty).getOrElse("anonymous"))
   }
 
-  def getSessionUser(proxyUser: String): String = {
+  def getSessionUser(proxyUser: String, sessionCluster: Option[String]): String = {
     // Internally, we use kyuubi.session.proxy.user to unify the key as proxyUser
     val sessionConf = Option(proxyUser).filter(_.nonEmpty).map(proxyUser =>
       Map(PROXY_USER.key -> proxyUser)).getOrElse(Map())
-    getSessionUser(sessionConf)
+    getSessionUser(sessionConf, sessionCluster)
   }
 
-  def getSessionUser(sessionConf: Map[String, String] = Map.empty): String = {
+  def getSessionUser(
+      sessionConf: Map[String, String] = Map.empty,
+      sessionCluster: Option[String] = None): String = {
     // using the remote ip address instead of that in proxy http header for authentication
     val ipAddress = AuthenticationFilter.getUserIpAddress
     val realUser: String = getRealUser()
     try {
-      getProxyUser(sessionConf, ipAddress, realUser)
+      getProxyUser(
+        sessionConf ++ sessionCluster.map(c =>
+          Map(KyuubiEbayConf.SESSION_CLUSTER.key -> c)).getOrElse(Map.empty),
+        ipAddress,
+        realUser)
     } catch {
       case t: Throwable => throw new WebApplicationException(
           t.getMessage,

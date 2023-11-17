@@ -788,8 +788,9 @@ object KyuubiEbayConf extends Logging {
     if (conf.get(SESSION_CLUSTER_MODE_ENABLED)) {
       if (clusterOpt.isEmpty || !getClusterList(conf).contains(clusterOpt.get)) {
         throw new KyuubiException(
-          s"Please specify the cluster to access with session conf[${SESSION_CLUSTER.key}]," +
-            s" which should be one of ${getClusterList(conf).mkString("[", ",", "]")}," +
+          s"Please specify the cluster to access with session conf[${SESSION_CLUSTER.key}]" +
+            s" or restful request cluster param, which should be one of" +
+            s" ${getClusterList(conf).mkString("[", ",", "]")}," +
             s" current value is $clusterOpt")
       }
     }
