@@ -91,8 +91,13 @@ class TessConfAdvisor extends SessionConfAdvisor with Logging {
       val temporarySessionConf = sessionConf.asScala ++ allConf
       val kubernetesContext = temporarySessionConf.get(SPARK_KUBERNETES_CONTEXT)
         .orElse(temporarySessionConf.get(KyuubiConf.KUBERNETES_CONTEXT.key))
+      val kubernetesNamespace = temporarySessionConf.get(SPARK_KUBERNETES_NAMESPACE)
+        .orElse(temporarySessionConf.get(KyuubiConf.KUBERNETES_NAMESPACE.key))
+        .orNull
       kubernetesContext.foreach { context =>
-        allConf = allConf ++ TessFileSessionConfCache.getTessContextSessionConf(context)
+        allConf = allConf ++ TessFileSessionConfCache.getTessContextSessionConf(
+          context,
+          kubernetesNamespace)
       }
 
       KyuubiEbayConf.confOverlayForSessionType(sessionConf.asScala.toMap, allConf).asJava
@@ -182,4 +187,5 @@ object TessConfAdvisor {
   final val KUBERNETES_FILE_UPLOAD_PATH = "spark.kubernetes.file.upload.path"
 
   final val SPARK_KUBERNETES_CONTEXT = "spark.kubernetes.context"
+  final val SPARK_KUBERNETES_NAMESPACE = "spark.kubernetes.namespace"
 }

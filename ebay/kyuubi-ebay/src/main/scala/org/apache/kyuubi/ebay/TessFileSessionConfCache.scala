@@ -17,10 +17,7 @@
 
 package org.apache.kyuubi.ebay
 
-import java.util.{Collections, Map => JMap}
 import java.util.concurrent.TimeUnit
-
-import scala.collection.JavaConverters._
 
 import com.google.common.cache.{CacheBuilder, CacheLoader, LoadingCache}
 
@@ -31,25 +28,29 @@ import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 object TessFileSessionConfCache extends Logging {
   private val reloadInterval: Long =
     KyuubiEbayConf._kyuubiConf.get(KyuubiConf.SESSION_CONF_FILE_RELOAD_INTERVAL)
-  private lazy val sessionTessContextConfCache: LoadingCache[String, JMap[String, String]] =
+  private lazy val sessionTessContextConfCache: LoadingCache[String, KyuubiConf] =
     CacheBuilder.newBuilder()
       .expireAfterWrite(
         reloadInterval,
         TimeUnit.MILLISECONDS)
-      .build(new CacheLoader[String, JMap[String, String]] {
-        override def load(context: String): JMap[String, String] = {
+      .build(new CacheLoader[String, KyuubiConf] {
+        override def load(context: String): KyuubiConf = {
           val propsFile = Utils.getPropertiesFile(s"kyuubi-session-tess-$context.conf")
           propsFile match {
             case None =>
               error("File not found: $KYUUBI_CONF_DIR/" + s"kyuubi-session-tess-$context.conf")
-              Collections.emptyMap()
+              KyuubiConf(false)
             case Some(_) =>
-              Utils.getPropertiesFromFile(propsFile).asJava
+              val conf = KyuubiConf(false)
+              Utils.getPropertiesFromFile(propsFile).foreach { case (k, v) =>
+                conf.set(k, v)
+              }
+              conf
           }
         }
       })
 
-  def getTessContextSessionConf(context: String): Map[String, String] = {
-    sessionTessContextConfCache.get(context).asScala.toMap
+  def getTessContextSessionConf(context: String, namespace: String = null): Map[String, String] = {
+    sessionTessContextConfCache.get(context).getUserDefaults(namespace).getAll
   }
 }
