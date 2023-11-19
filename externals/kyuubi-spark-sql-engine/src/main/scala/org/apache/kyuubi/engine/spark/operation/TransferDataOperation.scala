@@ -68,7 +68,7 @@ class TransferDataOperation(
       fileSystem: FileSystem,
       hadoopConf: Configuration,
       targetPath: Path): Unit = this.synchronized {
-    val length = values.limit - values.position
+    val length = values.limit() - values.position()
     val maxTempFileSize = session.sessionManager.getConf.get(DATA_UPLOAD_TEMPORARY_FILE_MAX_SIZE)
 
     val uri = targetPath.toUri
