@@ -117,6 +117,17 @@ abstract class KyuubiOperation(session: Session) extends AbstractOperation(sessi
       }
   }
 
+  override def run(): Unit = {
+    beforeRun()
+    try {
+      session.asInstanceOf[KyuubiSession].handleSessionException {
+        runInternal()
+      }
+    } finally {
+      afterRun()
+    }
+  }
+
   override protected def beforeRun(): Unit = {
     setHasResultSet(true)
     setState(OperationState.RUNNING)
