@@ -191,7 +191,8 @@ class BatchLogAggManager extends AbstractService("BatchLogAggManager") {
     Option(cleaner).foreach { _ =>
       val cleanInterval = conf.get(KyuubiEbayConf.LOG_AGG_CLEANER_INTERVAL)
       val logMaxAge = conf.get(KyuubiEbayConf.LOG_AGG_CLEANER_MAX_LOG_AGE)
-      cleaner.scheduleWithFixedDelay(
+      ThreadUtils.scheduleTolerableRunnableWithFixedDelay(
+        cleaner,
         () =>
           try {
             val currentTime = System.currentTimeMillis()

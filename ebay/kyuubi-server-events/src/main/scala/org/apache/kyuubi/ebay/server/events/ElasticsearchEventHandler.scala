@@ -157,8 +157,9 @@ class ElasticsearchEventHandler(conf: KyuubiConf) extends EventHandler[KyuubiEve
         }
       }
       val interval = Duration.ofDays(1).toMillis
-      ThreadUtils.newDaemonSingleThreadScheduledExecutor(
-        "elasticsearch-events-purger").scheduleWithFixedDelay(
+      ThreadUtils.scheduleTolerableRunnableWithFixedDelay(
+        ThreadUtils.newDaemonSingleThreadScheduledExecutor(
+          "elasticsearch-events-purger"),
         task,
         interval,
         interval,
@@ -223,8 +224,9 @@ class ElasticsearchEventHandler(conf: KyuubiConf) extends EventHandler[KyuubiEve
         }
       }
 
-      ThreadUtils.newDaemonSingleThreadScheduledExecutor(
-        "elasticsearch-events-aggregator").scheduleWithFixedDelay(
+      ThreadUtils.scheduleTolerableRunnableWithFixedDelay(
+        ThreadUtils.newDaemonSingleThreadScheduledExecutor(
+          "elasticsearch-events-aggregator"),
         task,
         0,
         aggInterval,

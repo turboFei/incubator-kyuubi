@@ -114,7 +114,8 @@ public class BdpAccessManager implements AccessManager {
     allUserQueuesCacheScheduler =
         ThreadUtils.newDaemonSingleThreadScheduledExecutor(
             "BdpAccessManagerAllUserQueuesCache-%d", true);
-    allUserQueuesCacheScheduler.scheduleWithFixedDelay(
+    ThreadUtils.scheduleTolerableRunnableWithFixedDelay(
+        allUserQueuesCacheScheduler,
         new Runnable() {
           @Override
           public void run() {

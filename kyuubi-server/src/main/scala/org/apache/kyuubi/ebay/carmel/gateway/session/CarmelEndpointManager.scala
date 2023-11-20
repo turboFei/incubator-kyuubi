@@ -61,7 +61,8 @@ class CarmelEndpointManager(sessionMgr: SessionManager)
   }
 
   private def startCarmelSessionChecker(): Unit = {
-    carmelSessionChecker.scheduleWithFixedDelay(
+    ThreadUtils.scheduleTolerableRunnableWithFixedDelay(
+      carmelSessionChecker,
       new CarmelSessionStateChecker(sessionMgr),
       60,
       60,

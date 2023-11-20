@@ -142,7 +142,8 @@ class BdpAccessManager(name: String) extends AbstractService(name) {
       }
     }
 
-    bdpBatchMappingLoader.scheduleWithFixedDelay(
+    ThreadUtils.scheduleTolerableRunnableWithFixedDelay(
+      bdpBatchMappingLoader,
       loadTask,
       0,
       batchMappingLoadInterval,
