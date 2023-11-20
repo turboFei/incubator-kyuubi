@@ -356,12 +356,6 @@ class BatchJobSubmission(
 
   override def close(): Unit = withLockRequired {
     if (!isClosedOrCanceled) {
-      try {
-        getOperationLog.foreach(_.close())
-      } catch {
-        case e: IOException => error(e.getMessage, e)
-      }
-
       MetricsSystem.tracing(_.decCount(MetricRegistry.name(OPERATION_OPEN, opType)))
 
       // fast fail
@@ -396,6 +390,12 @@ class BatchJobSubmission(
           }
         }
       }
+    }
+
+    try {
+      getOperationLog.foreach(_.close())
+    } catch {
+      case e: IOException => error(e.getMessage, e)
     }
   }
 
