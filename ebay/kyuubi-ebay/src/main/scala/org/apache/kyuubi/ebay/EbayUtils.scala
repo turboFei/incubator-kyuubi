@@ -24,6 +24,7 @@ import scala.util.matching.Regex
 import org.apache.kyuubi.Utils
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiConf.SERVER_SECRET_REDACTION_PATTERN
+import org.apache.kyuubi.util.command.CommandLineUtils
 
 object EbayUtils {
   def redact(conf: KyuubiConf, map: Map[String, String]): Map[String, String] = {
@@ -47,7 +48,7 @@ object EbayUtils {
       }
     } else {
       map.map { case (key, _) =>
-        key -> Utils.REDACTION_REPLACEMENT_TEXT
+        key -> CommandLineUtils.REDACTION_REPLACEMENT_TEXT
       } ++ Map(KyuubiEbayConf.SESSION_METADATA_RESERVE.key -> "false")
     }
   }

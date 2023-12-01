@@ -22,7 +22,6 @@ import java.nio.file.Paths
 import java.util.Locale
 
 import scala.collection.mutable
-import scala.collection.mutable.ArrayBuffer
 
 import com.google.common.annotations.VisibleForTesting
 import org.apache.commons.lang3.StringUtils
@@ -39,6 +38,7 @@ import org.apache.kyuubi.ha.HighAvailabilityConf
 import org.apache.kyuubi.ha.client.AuthTypes
 import org.apache.kyuubi.operation.log.OperationLog
 import org.apache.kyuubi.util.{KubernetesUtils, Validator}
+import org.apache.kyuubi.util.command.CommandLineUtils._
 
 class SparkProcessBuilder(
     override val proxyUser: String,
@@ -128,7 +128,7 @@ class SparkProcessBuilder(
     completeMasterUrl(conf)
 
     KyuubiApplicationManager.tagApplication(engineRefId, shortName, clusterManager(), conf)
-    val buffer = new ArrayBuffer[String]()
+    val buffer = new mutable.ListBuffer[String]()
     buffer += executable
     buffer += CLASS
     buffer += mainClass
@@ -144,8 +144,7 @@ class SparkProcessBuilder(
     allConf = allConf ++ mergeKyuubiFiles(allConf) ++ mergeKyuubiJars(allConf)
     // pass spark engine log path to spark conf
     (allConf ++ engineLogPathConf ++ appendPodNameConf(allConf)).foreach { case (k, v) =>
-      buffer += CONF
-      buffer += s"${convertConfigKey(k)}=$v"
+      buffer ++= confKeyValue(convertConfigKey(k), v)
     }
 
     setUpMoveQueue(allConf, buffer)
@@ -159,7 +158,7 @@ class SparkProcessBuilder(
 
   override protected def module: String = "kyuubi-spark-sql-engine"
 
-  private def setUpMoveQueue(allConf: Map[String, String], buffer: ArrayBuffer[String]): Unit = {
+  private def setUpMoveQueue(allConf: Map[String, String], buffer: mutable.Buffer[String]): Unit = {
     if (KyuubiEbayConf.moveQueueEnabled(conf)) {
       // only use init queue if the spark.yarn.queue is specified
       if (allConf.get(YARN_QUEUE).isDefined) {
@@ -171,7 +170,7 @@ class SparkProcessBuilder(
     }
   }
 
-  protected def setupKerberos(buffer: ArrayBuffer[String]): Unit = {
+  protected def setupKerberos(buffer: mutable.Buffer[String]): Unit = {
     // if the keytab is specified, PROXY_USER is not supported
     tryKeytab() match {
       case None =>
@@ -344,13 +343,11 @@ class SparkProcessBuilder(
   override def validateConf: Unit = Validator.validateConf(conf)
 
   // For spark on kubernetes, spark pod using env SPARK_USER_NAME as current user
-  def setSparkUserName(userName: String, buffer: ArrayBuffer[String]): Unit = {
+  def setSparkUserName(userName: String, buffer: mutable.Buffer[String]): Unit = {
     clusterManager().foreach { cm =>
       if (cm.toUpperCase.startsWith("K8S")) {
-        buffer += CONF
-        buffer += s"spark.kubernetes.driverEnv.SPARK_USER_NAME=$userName"
-        buffer += CONF
-        buffer += s"spark.executorEnv.SPARK_USER_NAME=$userName"
+        buffer ++= confKeyValue("spark.kubernetes.driverEnv.SPARK_USER_NAME", userName)
+        buffer ++= confKeyValue("spark.executorEnv.SPARK_USER_NAME", userName)
       }
     }
   }
@@ -393,13 +390,13 @@ object SparkProcessBuilder {
     "spark.kubernetes.kerberos.krb5.path",
     "spark.kubernetes.file.upload.path")
 
-  final val CONF = "--conf"
-  final val CLASS = "--class"
-  final val PROXY_USER = "--proxy-user"
-  final val SPARK_FILES = "spark.files"
-  final val SPARK_JARS = "spark.jars"
-  final private val PRINCIPAL = "spark.kerberos.principal"
-  final private val KEYTAB = "spark.kerberos.keytab"
+  final private[spark] val CLASS = "--class"
+  final private[spark] val PROXY_USER = "--proxy-user"
+  final private[spark] val SPARK_FILES = "spark.files"
+  final private[spark] val PRINCIPAL = "spark.kerberos.principal"
+  final private[spark] val KEYTAB = "spark.kerberos.keytab"
+
+  final private[spark] val SPARK_JARS = "spark.jars"
   final val YARN_QUEUE = "spark.yarn.queue"
   // Get the appropriate spark-submit file
   final val SPARK_SUBMIT_FILE = if (Utils.isWindows) "spark-submit.cmd" else "spark-submit"

@@ -22,13 +22,14 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.util.Base64
 
-import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable
 
 import org.apache.kyuubi.{KyuubiException, Utils}
 import org.apache.kyuubi.client.util.BatchUtils
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.engine.KyuubiApplicationManager
 import org.apache.kyuubi.operation.log.OperationLog
+import org.apache.kyuubi.util.command.CommandLineUtils._
 
 class SparkBatchProcessBuilder(
     override val proxyUser: String,
@@ -46,7 +47,7 @@ class SparkBatchProcessBuilder(
   private var batchSqlFileDir: File = _
 
   override protected lazy val commands: Iterable[String] = {
-    val buffer = new ArrayBuffer[String]()
+    val buffer = new mutable.ListBuffer[String]()
     buffer += executable
     Option(mainClass).foreach { cla =>
       buffer += CLASS
@@ -85,15 +86,13 @@ class SparkBatchProcessBuilder(
     // tag batch application
     KyuubiApplicationManager.tagApplication(batchId, "spark", clusterManager(), batchKyuubiConf)
 
-    (batchKyuubiConf.getAll ++
+    val allConfigs = batchKyuubiConf.getAll ++
       sparkAppNameConf() ++
       engineLogPathConf() ++
       appendPodNameConf(batchConf) ++
       mergeKyuubiFiles(batchConf) ++
-      mergeKyuubiJars(batchConf)).foreach { case (k, v) =>
-      buffer += CONF
-      buffer += s"${convertConfigKey(k)}=$v"
-    }
+      mergeKyuubiJars(batchConf)
+    buffer ++= confKeyValues(allConfigs)
 
     setupKerberos(buffer)
 

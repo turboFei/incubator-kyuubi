@@ -49,6 +49,7 @@ import org.apache.kyuubi.server.metadata.api.MetadataFilter
 import org.apache.kyuubi.server.metadata.jdbc.JDBCMetadataStore
 import org.apache.kyuubi.service.authentication.{AuthTypes, KyuubiAuthenticationFactory}
 import org.apache.kyuubi.session.{KyuubiBatchSession, KyuubiSessionImpl, KyuubiSessionManager}
+import org.apache.kyuubi.util.command.CommandLineUtils
 
 class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
   with BatchTestHelper with RestFrontendTestHelper {
@@ -659,8 +660,8 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
     assert(200 == response2.getStatus)
     val sessions = response2.readEntity(new GenericType[Seq[SessionData]]() {})
     val session = sessions.find(_.getIdentifier === sessionHandle).get
-    assert(session.getConf.get("kyuubi.token") === Utils.REDACTION_REPLACEMENT_TEXT)
-    assert(session.getConf.get("kyuubi.ebay") === Utils.REDACTION_REPLACEMENT_TEXT)
+    assert(session.getConf.get("kyuubi.token") === CommandLineUtils.REDACTION_REPLACEMENT_TEXT)
+    assert(session.getConf.get("kyuubi.ebay") === CommandLineUtils.REDACTION_REPLACEMENT_TEXT)
 
     // close an opened session
     response = webTarget.path(s"api/v1/admin/sessions/$sessionHandle").request()
