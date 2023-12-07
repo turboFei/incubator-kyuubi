@@ -21,10 +21,10 @@ import java.nio.ByteBuffer
 import java.util.{ArrayList => JArrayList, Collections}
 
 import com.google.common.primitives.Ints
-import org.apache.hive.service.rpc.thrift.{TColumn, TColumnDesc, TFetchResultsResp, TGetResultSetMetadataResp, TI32Column, TPrimitiveTypeEntry, TRow, TRowSet, TTableSchema, TTypeDesc, TTypeEntry, TTypeId}
 
 import org.apache.kyuubi.operation.FetchOrientation.FetchOrientation
 import org.apache.kyuubi.session.Session
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift.{TColumn, TColumnDesc, TFetchResultsResp, TGetResultSetMetadataResp, TI32Column, TPrimitiveTypeEntry, TRow, TRowSet, TTableSchema, TTypeDesc, TTypeEntry, TTypeId}
 
 class Select1Operation(session: Session) extends InterceptedOperation(session) {
   private var alreadyFetched: Boolean = false

@@ -17,11 +17,10 @@
 
 package org.apache.kyuubi.operation
 
-import org.apache.hive.service.rpc.thrift.TGetInfoType
-
 import org.apache.kyuubi.KyuubiSQLException
 import org.apache.kyuubi.ebay.carmel.gateway.session.{CarmelSessionImpl, CarmelSessionStatus}
 import org.apache.kyuubi.session.Session
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift.TGetInfoType
 
 abstract class InterceptedOperation(session: Session) extends KyuubiOperation(session) {
   override protected def runInternal(): Unit = {

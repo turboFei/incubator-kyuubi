@@ -19,7 +19,6 @@ package org.apache.kyuubi.engine.spark.session
 
 import org.apache.commons.lang3.StringUtils
 import org.apache.hadoop.fs.Path
-import org.apache.hive.service.rpc.thrift.{TGetInfoType, TGetInfoValue, TProtocolVersion}
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.sql.kyuubi.SparkEbayUtils
 
@@ -33,6 +32,7 @@ import org.apache.kyuubi.engine.spark.util.SparkCatalogUtils
 import org.apache.kyuubi.events.EventBus
 import org.apache.kyuubi.operation.{Operation, OperationHandle}
 import org.apache.kyuubi.session._
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift.{TGetInfoType, TGetInfoValue, TProtocolVersion}
 
 class SparkSessionImpl(
     protocol: TProtocolVersion,

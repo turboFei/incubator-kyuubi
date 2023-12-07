@@ -26,7 +26,6 @@ import scala.util.control.NonFatal
 import io.swagger.v3.oas.annotations.media.{Content, Schema}
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.tags.Tag
-import org.apache.hive.service.rpc.thrift._
 
 import org.apache.kyuubi.{KyuubiSQLException, Logging}
 import org.apache.kyuubi.client.api.v1.dto._
@@ -34,6 +33,7 @@ import org.apache.kyuubi.events.KyuubiOperationEvent
 import org.apache.kyuubi.operation.{FetchOrientation, KyuubiOperation, Operation, OperationHandle}
 import org.apache.kyuubi.server.api.{ApiRequestContext, ApiUtils}
 import org.apache.kyuubi.session.KyuubiSession
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift._
 
 @Tag(name = "Operation")
 @Produces(Array(MediaType.APPLICATION_JSON))

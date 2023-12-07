@@ -26,7 +26,6 @@ import scala.math.BigDecimal.RoundingMode
 
 import org.apache.commons.lang3.StringUtils
 import org.apache.hadoop.fs.{Path, PathFilter}
-import org.apache.hive.service.rpc.thrift.TGetResultSetMetadataResp
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.catalog.HiveTableRelation
 import org.apache.spark.sql.execution.QueryExecution
@@ -42,6 +41,7 @@ import org.apache.kyuubi.engine.spark.schema.SchemaHelper
 import org.apache.kyuubi.engine.spark.session.SparkSessionImpl
 import org.apache.kyuubi.operation.{IterableFetchIterator, OperationHandle, OperationState}
 import org.apache.kyuubi.session.Session
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift.TGetResultSetMetadataResp
 
 class DownloadDataOperation(
     session: Session,

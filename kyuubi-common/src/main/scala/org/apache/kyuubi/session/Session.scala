@@ -19,10 +19,9 @@ package org.apache.kyuubi.session
 
 import java.nio.ByteBuffer
 
-import org.apache.hive.service.rpc.thrift.{TFetchResultsResp, TGetInfoType, TGetInfoValue, TGetResultSetMetadataResp, TProtocolVersion}
-
 import org.apache.kyuubi.operation.FetchOrientation.FetchOrientation
 import org.apache.kyuubi.operation.OperationHandle
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift.{TFetchResultsResp, TGetInfoType, TGetInfoValue, TGetResultSetMetadataResp, TProtocolVersion}
 
 trait Session {
 

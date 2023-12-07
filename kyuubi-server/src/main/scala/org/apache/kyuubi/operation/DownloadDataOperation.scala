@@ -19,10 +19,9 @@ package org.apache.kyuubi.operation
 
 import scala.collection.JavaConverters._
 
-import org.apache.hive.service.rpc.thrift.{TI64Value, TRowSet}
-
 import org.apache.kyuubi.Utils
 import org.apache.kyuubi.session.Session
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift.{TI64Value, TRowSet}
 
 class DownloadDataOperation(
     session: Session,

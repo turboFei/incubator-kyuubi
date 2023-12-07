@@ -22,8 +22,8 @@ import static org.apache.kyuubi.ebay.carmel.gateway.config.CarmelConfig.ConfVars
 import java.net.Socket;
 import org.apache.kyuubi.client.KyuubiSyncThriftClient;
 import org.apache.kyuubi.ebay.carmel.gateway.config.CarmelConfig;
-import org.apache.thrift.protocol.TProtocol;
-import org.apache.thrift.transport.*;
+import org.apache.kyuubi.shaded.thrift.protocol.TProtocol;
+import org.apache.kyuubi.shaded.thrift.transport.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

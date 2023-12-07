@@ -31,7 +31,6 @@ import scala.collection.mutable.ListBuffer
 
 import org.apache.commons.io.FileUtils
 import org.apache.hadoop.shaded.com.nimbusds.jose.util.StandardCharset
-import org.apache.hive.service.rpc.thrift.{TDownloadDataReq, TExecuteStatementReq, TFetchResultsReq, TTransferDataReq}
 import org.scalatest.concurrent.PatienceConfiguration.Timeout
 import org.scalatest.time.SpanSugar.convertIntToGrainOfTime
 
@@ -49,6 +48,7 @@ import org.apache.kyuubi.server.metadata.api.MetadataFilter
 import org.apache.kyuubi.server.metadata.jdbc.JDBCMetadataStore
 import org.apache.kyuubi.service.authentication.{AuthTypes, KyuubiAuthenticationFactory}
 import org.apache.kyuubi.session.{KyuubiBatchSession, KyuubiSessionImpl, KyuubiSessionManager}
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift.{TDownloadDataReq, TExecuteStatementReq, TFetchResultsReq, TTransferDataReq}
 import org.apache.kyuubi.util.command.CommandLineUtils
 
 class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper

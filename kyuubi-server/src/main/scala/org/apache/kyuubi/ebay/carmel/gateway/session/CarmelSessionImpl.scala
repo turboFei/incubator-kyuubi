@@ -21,7 +21,6 @@ import scala.collection.JavaConverters._
 
 import CarmelSessionStatus.CarmelSessionStatus
 import com.codahale.metrics.MetricRegistry
-import org.apache.hive.service.rpc.thrift.{TGetInfoType, TGetInfoValue, TProtocolVersion, TStringValue}
 
 import org.apache.kyuubi.{KyuubiSQLException, Utils}
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
@@ -35,6 +34,7 @@ import org.apache.kyuubi.metrics.MetricsSystem
 import org.apache.kyuubi.operation.FetchOrientation
 import org.apache.kyuubi.operation.log.OperationLog
 import org.apache.kyuubi.session.{KyuubiSessionImpl, KyuubiSessionManager, QUEUE}
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift.{TGetInfoType, TGetInfoValue, TProtocolVersion, TStringValue}
 import org.apache.kyuubi.sql.parser.server.KyuubiParser
 
 class CarmelSessionImpl(

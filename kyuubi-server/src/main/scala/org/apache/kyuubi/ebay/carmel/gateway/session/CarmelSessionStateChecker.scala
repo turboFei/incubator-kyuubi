@@ -21,10 +21,9 @@ import java.util.concurrent.{Callable, Future, LinkedBlockingQueue, ThreadPoolEx
 
 import scala.collection.mutable.ListBuffer
 
-import org.apache.hive.service.rpc.thrift.TGetInfoType
-
 import org.apache.kyuubi.Logging
 import org.apache.kyuubi.session.{SessionHandle, SessionManager}
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift.TGetInfoType
 
 class CarmelSessionStateChecker(sessionMgr: SessionManager) extends Runnable with Logging {
   private val executorService = new ThreadPoolExecutor(
