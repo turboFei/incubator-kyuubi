@@ -19,6 +19,7 @@ package org.apache.kyuubi.engine.spark.operation
 
 import java.util.concurrent.RejectedExecutionException
 
+import scala.Array._
 import scala.collection.JavaConverters._
 
 import org.apache.hadoop.fs.{FileSystem, Path}
@@ -32,7 +33,7 @@ import org.apache.spark.sql.kyuubi.operation.ExecuteStatementHelper
 import org.apache.spark.sql.types._
 
 import org.apache.kyuubi.{KyuubiSQLException, Logging, Utils}
-import org.apache.kyuubi.config.KyuubiConf.OPERATION_RESULT_MAX_ROWS
+import org.apache.kyuubi.config.KyuubiConf.{OPERATION_RESULT_MAX_ROWS, OPERATION_RESULT_SAVE_TO_FILE, OPERATION_RESULT_SAVE_TO_FILE_DIR, OPERATION_RESULT_SAVE_TO_FILE_MINSIZE}
 import org.apache.kyuubi.config.KyuubiEbayConf._
 import org.apache.kyuubi.engine.spark.KyuubiSparkUtil._
 import org.apache.kyuubi.engine.spark.session.SparkSessionImpl
@@ -54,6 +55,8 @@ class ExecuteStatement(
   override protected def supportProgress: Boolean = true
   private var schema: StructType = _
 
+  private var fetchOrcStatement: Option[FetchOrcStatement] = None
+  private var saveFileName: Option[String] = None
   override protected def resultSchema: StructType = {
     if (schema == null || schema.isEmpty) {
       new StructType().add("Result", "string")
@@ -70,6 +73,16 @@ class ExecuteStatement(
 
   override protected def afterRun(): Unit = {
     OperationLog.removeCurrentOperationLog()
+  }
+
+  override def close(): Unit = {
+    clearTempTableOrViewIfNeeded()
+    super.close()
+    fetchOrcStatement.foreach(_.close())
+    saveFileName.foreach { p =>
+      val path = new Path(p)
+      path.getFileSystem(spark.sparkContext.hadoopConfiguration).delete(path, true)
+    }
   }
 
   private def withMetrics(qe: QueryExecution): Unit = {
@@ -378,11 +391,6 @@ class ExecuteStatement(
     }
   }
 
-  override def close(): Unit = {
-    clearTempTableOrViewIfNeeded()
-    super.close()
-  }
-
   override def getResultSetMetadataHints(): Seq[String] =
     Seq(
       s"__kyuubi_operation_result_format__=$resultFormat",
@@ -401,6 +409,29 @@ class ExecuteStatement(
         override def iterator: Iterator[Any] = incrementalCollectResult(resultDF)
       })
     } else {
+      val resultSaveEnabled = getSessionConf(OPERATION_RESULT_SAVE_TO_FILE, spark)
+      lazy val resultSaveThreshold = getSessionConf(OPERATION_RESULT_SAVE_TO_FILE_MINSIZE, spark)
+      if (hasResultSet && resultSaveEnabled && shouldSaveResultToFs(
+          resultMaxRows,
+          resultSaveThreshold,
+          result)) {
+        val sessionId = session.handle.identifier.toString
+        val savePath = session.sessionManager.getConf.get(OPERATION_RESULT_SAVE_TO_FILE_DIR)
+        saveFileName = Some(s"$savePath/$engineId/$sessionId/$statementId")
+        // Rename all col name to avoid duplicate columns
+        val colName = range(0, result.schema.size).map(x => "col" + x)
+        // df.write will introduce an extra shuffle for the outermost limit, and hurt performance
+        if (resultMaxRows > 0) {
+          result.toDF(colName: _*).limit(resultMaxRows).write
+            .option("compression", "zstd").format("orc").save(saveFileName.get)
+        } else {
+          result.toDF(colName: _*).write
+            .option("compression", "zstd").format("orc").save(saveFileName.get)
+        }
+        info(s"Save result to $saveFileName")
+        fetchOrcStatement = Some(new FetchOrcStatement(spark))
+        return fetchOrcStatement.get.getIterator(saveFileName.get, resultSchema)
+      }
       val internalArray = if (resultMaxRows <= 0) {
         info("Execute in full collect mode")
         fullCollectResult(resultDF)
