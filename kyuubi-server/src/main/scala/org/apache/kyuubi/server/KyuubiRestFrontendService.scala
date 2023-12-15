@@ -300,7 +300,9 @@ class KyuubiRestFrontendService(override val serverable: Serverable)
     } else {
       val proxyUser = sessionConf.getOrElse(
         PROXY_USER.key,
-        sessionConf.getOrElse(KyuubiAuthenticationFactory.HS2_PROXY_USER, realUser))
+        sessionConf.getOrElse(
+          KyuubiAuthenticationFactory.HS2_PROXY_USER,
+          sessionConf.getOrElse(KyuubiAuthenticationFactory.KYUUBI_PROXY_BATCH_ACCOUNT, realUser)))
       if (!proxyUser.equals(realUser) && !isAdministrator(realUser)) {
         try {
           KyuubiAuthenticationFactory.verifyProxyAccess(

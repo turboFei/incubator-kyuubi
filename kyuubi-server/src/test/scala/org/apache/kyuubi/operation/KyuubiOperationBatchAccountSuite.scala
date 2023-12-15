@@ -17,15 +17,28 @@
 
 package org.apache.kyuubi.operation
 
-import org.apache.kyuubi.WithKyuubiServer
+import javax.ws.rs.client.Entity
+import javax.ws.rs.core.MediaType
+
+import scala.collection.JavaConverters._
+
+import org.apache.kyuubi.RestFrontendTestHelper
+import org.apache.kyuubi.client.api.v1.dto.{SessionHandle, SessionOpenRequest}
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
+import org.apache.kyuubi.config.KyuubiConf.FrontendProtocols
+import org.apache.kyuubi.config.KyuubiConf.FrontendProtocols.FrontendProtocol
 import org.apache.kyuubi.jdbc.hive.KyuubiStatement
 import org.apache.kyuubi.service.authentication.{AnonymousBatchAccountAuthenticationProviderImpl, KyuubiAuthenticationFactory}
 
-class KyuubiOperationBatchAccountSuite extends WithKyuubiServer with HiveJDBCTestHelper {
+class KyuubiOperationBatchAccountSuite extends RestFrontendTestHelper with HiveJDBCTestHelper {
   override protected def jdbcUrl: String = getJdbcUrl
+  override protected def getJdbcUrl: String =
+    s"jdbc:hive2://${server.frontendServices.last.connectionUrl}/;"
 
-  override protected val conf: KyuubiConf = {
+  override protected val frontendProtocols: Seq[FrontendProtocol] =
+    FrontendProtocols.REST :: FrontendProtocols.THRIFT_BINARY :: Nil
+
+  override protected lazy val conf: KyuubiConf = {
     KyuubiConf().set(KyuubiConf.ENGINE_SHARE_LEVEL, "connection")
       .set(
         KyuubiEbayConf.AUTHENTICATION_BATCH_ACCOUNT_CLASS,
@@ -56,5 +69,18 @@ class KyuubiOperationBatchAccountSuite extends WithKyuubiServer with HiveJDBCTes
         assert(rs.getString(1).contains("b_stf"))
       }
     }
+  }
+
+  test("rest api proxy batch account") {
+    val requestObj = new SessionOpenRequest(Map(
+      KyuubiAuthenticationFactory.KYUUBI_PROXY_BATCH_ACCOUNT -> "batch").asJava)
+
+    val response = webTarget.path("api/v1/sessions")
+      .request(MediaType.APPLICATION_JSON_TYPE)
+      .post(Entity.entity(requestObj, MediaType.APPLICATION_JSON_TYPE))
+
+    val sessionHandle = response.readEntity(classOf[SessionHandle]).getIdentifier
+    assert(server.backendService.sessionManager.getSession(
+      org.apache.kyuubi.session.SessionHandle(sessionHandle)).user == "batch")
   }
 }
