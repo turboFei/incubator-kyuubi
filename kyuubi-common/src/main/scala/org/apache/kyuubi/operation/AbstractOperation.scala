@@ -107,6 +107,7 @@ abstract class AbstractOperation(session: Session) extends Operation with Loggin
     this.operationException = opEx
   }
 
+  def getOperationJobProgress: TProgressUpdateResp = operationJobProgress
   def setOperationJobProgress(opJobProgress: TProgressUpdateResp): Unit = {
     this.operationJobProgress = opJobProgress
   }
