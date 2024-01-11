@@ -766,6 +766,47 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
     batchSession.close()
   }
 
+  test("path operation - CREATE/DELETE/LIST/RENAME") {
+    withSessionConf()()(Map(KyuubiEbayConf.SESSION_CLUSTER.key -> "test")) {
+      withJdbcStatement() { statement =>
+        val tempDir = Utils.createTempDir()
+        try {
+          val subDir = new File(tempDir.toFile, "subDir").toURI.toString
+          // CREATE
+          var result = statement.executeQuery(s"KYUUBI CREATE PATH '$subDir'")
+          assert(result.next())
+          assert(result.getString("path") == subDir)
+          assert(!result.next())
+
+          // LIST
+          result = statement.executeQuery(s"KYUUBI LIST PATH '${tempDir.toFile.getAbsolutePath}'")
+          assert(result.next())
+          assert(result.getString("path") == subDir)
+          assert(!result.next())
+
+          // RENAME
+          val renamedPath = subDir + "-rename"
+          result = statement.executeQuery(s"KYUUBI RENAME PATH '$subDir' TO '$renamedPath'")
+          assert(result.next())
+          assert(result.getString("path") == renamedPath)
+          assert(!result.next())
+
+          // DELETE
+          result = statement.executeQuery(s"KYUUBI DELETE PATH '$renamedPath'")
+          assert(result.next())
+          assert(result.getString("path") == renamedPath)
+          assert(!result.next())
+
+          // LIST after DELETE
+          result = statement.executeQuery(s"KYUUBI LIST PATH '${tempDir.toFile.getAbsolutePath}'")
+          assert(!result.next())
+        } finally {
+          Utils.deleteDirectoryRecursively(tempDir.toFile)
+        }
+      }
+    }
+  }
+
   def checkConfigValue(statement: Statement, config: String, expectedValue: String): Unit = {
     val rs = statement.executeQuery(s"SET `$config`")
     assert(rs.next())

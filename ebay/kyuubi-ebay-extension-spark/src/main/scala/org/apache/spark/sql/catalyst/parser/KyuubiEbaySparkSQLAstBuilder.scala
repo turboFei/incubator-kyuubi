@@ -29,7 +29,7 @@ import org.apache.commons.codec.binary.Hex
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.catalyst.logical.{KyuubiDescribePathCommand, MoveDataCommand, UploadDataCommand}
+import org.apache.spark.sql.catalyst.logical.{KyuubiCreatePathCommand, KyuubiDeletePathCommand, KyuubiDescribePathCommand, KyuubiListPathCommand, KyuubiRenamePathCommand, MoveDataCommand, UploadDataCommand}
 import org.apache.spark.sql.catalyst.parser.ParserUtils.{checkDuplicateKeys, string, withOrigin}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.util.DateTimeUtils.{getZoneId, localDateToDays, stringToTimestamp}
@@ -323,6 +323,14 @@ class KyuubiEbaySparkSQLAstBuilder extends KyuubiEbaySparkSQLBaseVisitor[AnyRef]
     parts.toMap
   }
 
+  override def visitLimitSpec(ctx: LimitSpecContext): Integer = withOrigin(ctx) {
+    try {
+      Integer.valueOf(ctx.limit.getText)
+    } catch {
+      case e: NumberFormatException => throw new ParseException(e.getMessage, ctx)
+    }
+  }
+
   /**
    * Create a partition specification map without optional values.
    */
@@ -375,6 +383,22 @@ class KyuubiEbaySparkSQLAstBuilder extends KyuubiEbaySparkSQLBaseVisitor[AnyRef]
     withOrigin(ctx) {
       KyuubiDescribePathCommand(ctx.multipartIdentifier().getText, ctx.EXTENDED != null)
     }
+
+  override def visitKyuubiCreatePath(ctx: KyuubiCreatePathContext): LogicalPlan = withOrigin(ctx) {
+    KyuubiCreatePathCommand(string(ctx.path))
+  }
+
+  override def visitKyuubiDeletePath(ctx: KyuubiDeletePathContext): LogicalPlan = withOrigin(ctx) {
+    KyuubiDeletePathCommand(string(ctx.path), ctx.RECURSIVE() != null)
+  }
+
+  override def visitKyuubiRenamePath(ctx: KyuubiRenamePathContext): LogicalPlan = withOrigin(ctx) {
+    KyuubiRenamePathCommand(string(ctx.path), string(ctx.dest), ctx.OVERWRITE() != null)
+  }
+
+  override def visitKyuubiListPath(ctx: KyuubiListPathContext): LogicalPlan = withOrigin(ctx) {
+    KyuubiListPathCommand(string(ctx.path), Option(ctx.limitSpec()).map(visitLimitSpec))
+  }
 
   /**
    * Create a String from a string literal context. This supports multiple consecutive string

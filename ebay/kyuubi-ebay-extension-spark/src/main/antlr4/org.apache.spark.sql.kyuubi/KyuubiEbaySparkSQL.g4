@@ -55,7 +55,15 @@ statement
     | MOVE DATA INPATH path=STRING OVERWRITE? INTO
         destDir=STRING (destFileName=STRING)?                       #moveData
     | KYUUBI DESCRIBE PATH EXTENDED? multipartIdentifier            #kyuubiDescribePath
+    | KYUUBI CREATE PATH path=STRING                                #kyuubiCreatePath
+    | KYUUBI DELETE PATH path=STRING RECURSIVE?                     #kyuubiDeletePath
+    | KYUUBI RENAME PATH path=STRING OVERWRITE? TO dest=STRING      #kyuubiRenamePath
+    | KYUUBI LIST PATH path=STRING limitSpec?                       #kyuubiListPath
     | .*?                                                           #passThrough
+    ;
+
+limitSpec
+    : LIMIT limit=number
     ;
 
 partitionSpec
@@ -124,7 +132,9 @@ quotedIdentifier
 
 nonReserved
     : AND
+    | CREATE
     | DATA
+    | DELETE
     | DESCRIBE
     | EXTENDED
     | FALSE
@@ -132,6 +142,8 @@ nonReserved
     | INTERVAL
     | INTO
     | KYUUBI
+    | LIMIT
+    | LIST
     | MOVE
     | OPTIMIZE
     | OPTION
@@ -139,14 +151,19 @@ nonReserved
     | OVERWRITE
     | PARTITION
     | PATH
+    | RECURSIVE
+    | RENAME
     | TABLE
     | TIMESTAMP
+    | TO
     | TRUE
     | UPLOAD
     ;
 
 AND: 'AND';
+CREATE: 'CREATE';
 DATA: 'DATA';
+DELETE: 'DELETE';
 DESCRIBE: 'DESCRIBE';
 EXTENDED: 'EXTENDED';
 FALSE: 'FALSE';
@@ -154,6 +171,8 @@ INPATH: 'INPATH';
 INTERVAL: 'INTERVAL';
 INTO: 'INTO';
 KYUUBI: 'KYUUBI';
+LIMIT: 'LIMIT';
+LIST: 'LIST';
 MOVE: 'MOVE';
 NULL: 'NULL';
 OPTIMIZE: 'OPTIMIZE';
@@ -162,8 +181,11 @@ OR: 'OR';
 OVERWRITE: 'OVERWRITE';
 PARTITION: 'PARTITION';
 PATH: 'PATH';
+RECURSIVE: 'RECURSIVE';
+RENAME: 'RENAME';
 TABLE: 'TABLE';
 TIMESTAMP: 'TIMESTAMP';
+TO: 'TO';
 TRUE: 'TRUE';
 UPLOAD: 'UPLOAD';
 
