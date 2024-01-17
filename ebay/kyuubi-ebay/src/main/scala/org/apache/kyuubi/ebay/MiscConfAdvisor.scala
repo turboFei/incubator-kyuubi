@@ -21,38 +21,33 @@ import java.util.{Map => JMap}
 
 import scala.collection.JavaConverters._
 
-import org.apache.kyuubi.Logging
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.plugin.SessionConfAdvisor
 
-class ChainedSessionConfAdvisor extends SessionConfAdvisor with Logging {
-  val sessionConfAdvisorChain =
-    List(
-      new SparkMajorVersionAdvisor(),
-      new TagBasedSessionConfAdvisor(),
-      new TessConfAdvisor(),
-      new MiscConfAdvisor())
+class MiscConfAdvisor extends SessionConfAdvisor {
 
   override def getConfOverlay(
       user: String,
       sessionConf: JMap[String, String]): JMap[String, String] = {
-    var baseConf = sessionConf.asScala
-    var confOverlay: JMap[String, String] = null
-    sessionConfAdvisorChain.foreach { advisor =>
-      val subConfOverlay = advisor.getConfOverlay(
-        user,
-        baseConf.asJava)
-      if (subConfOverlay != null) {
-        baseConf = baseConf ++ subConfOverlay.asScala
-        if (confOverlay == null) {
-          confOverlay = subConfOverlay
-        } else {
-          confOverlay = (confOverlay.asScala ++ subConfOverlay.asScala).asJava
-        }
-      } else {
-        warn(s"the server plugin[${advisor.getClass.getSimpleName}]" +
-          s" return null value for user: $user, ignore it")
-      }
+    (getBigResultSetConfOverlay(sessionConf) ++ getResultMaxRowsConfOverlay(sessionConf)).asJava
+  }
+
+  def getBigResultSetConfOverlay(sessionConf: JMap[String, String]): Map[String, String] = {
+    if ("true".equalsIgnoreCase(sessionConf.get(KyuubiConf.OPERATION_RESULT_SAVE_TO_FILE.key))) {
+      Map(KyuubiConf.OPERATION_INCREMENTAL_COLLECT.key -> "false")
+    } else {
+      Map.empty[String, String]
     }
-    confOverlay
+  }
+
+  def getResultMaxRowsConfOverlay(sessionConf: JMap[String, String]): Map[String, String] = {
+    if (sessionConf.get(KyuubiConf.OPERATION_RESULT_MAX_ROWS.key) != null) {
+      return Map.empty[String, String]
+    }
+    sessionConf.asScala.get(KyuubiEbayConf.EBAY_OPERATION_MAX_RESULT_COUNT.key).map { maxRows =>
+      Map(KyuubiConf.OPERATION_RESULT_MAX_ROWS.key -> maxRows)
+    }.getOrElse {
+      Map.empty[String, String]
+    }
   }
 }

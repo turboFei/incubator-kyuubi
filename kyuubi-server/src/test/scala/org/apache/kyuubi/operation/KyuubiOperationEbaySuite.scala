@@ -527,7 +527,7 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
         statement.executeQuery(s"set ${KyuubiEbayConf.EBAY_OPERATION_MAX_RESULT_COUNT.key}=0")
         val resultUnLimit = statement.executeQuery("select * from va")
         assert(resultUnLimit.next())
-        assert(resultUnLimit.next())
+        assert(!resultUnLimit.next())
       }
     }
   }
