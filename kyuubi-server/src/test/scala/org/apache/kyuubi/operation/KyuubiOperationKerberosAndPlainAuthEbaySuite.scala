@@ -64,7 +64,7 @@ class KyuubiOperationKerberosAndPlainAuthEbaySuite extends WithKyuubiServer
     assert(UserGroupInformation.isSecurityEnabled)
 
     KyuubiConf()
-      .set(KyuubiConf.AUTHENTICATION_METHOD, Set("KERBEROS", "CUSTOM"))
+      .set(KyuubiConf.AUTHENTICATION_METHOD, Seq("KERBEROS", "CUSTOM"))
       .set(KyuubiConf.SERVER_KEYTAB, testKeytab)
       .set(KyuubiConf.SERVER_PRINCIPAL, testPrincipal)
       .set(KyuubiConf.AUTHENTICATION_LDAP_URL, ldapUrl)
