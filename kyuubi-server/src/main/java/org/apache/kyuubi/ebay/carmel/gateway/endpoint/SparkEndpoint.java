@@ -72,7 +72,9 @@ public class SparkEndpoint implements Comparable<SparkEndpoint> {
                 connectTimeoutInMs,
                 connectTimeoutInMs);
         this.serviceTransport = tProtocol.getTransport();
-        this.syncThriftClient = KyuubiSyncThriftClient.createClient(tProtocol);
+        this.syncThriftClient =
+            KyuubiSyncThriftClient.createClient(
+                hostAndPortArr[0], Integer.parseInt(hostAndPortArr[1]), tProtocol);
       } catch (Exception e) {
         throw new CarmelRuntimeException(
             "error when open transport:" + serverInfo.getServerUrl(), e);

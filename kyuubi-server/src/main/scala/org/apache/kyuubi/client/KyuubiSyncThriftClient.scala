@@ -43,6 +43,7 @@ import org.apache.kyuubi.util.{ThreadUtils, ThriftUtils}
 import org.apache.kyuubi.util.ThreadUtils.scheduleTolerableRunnableWithFixedDelay
 
 class KyuubiSyncThriftClient(
+    val hostPort: (String, Int),
     protocol: TProtocol,
     engineAliveProbeProtocol: Option[TProtocol],
     engineAliveProbeInterval: Long,
@@ -507,13 +508,14 @@ object KyuubiSyncThriftClient extends Logging {
         None
       }
     new KyuubiSyncThriftClient(
+      (host, port),
       tProtocol,
       aliveProbeProtocol,
       aliveProbeInterval,
       aliveTimeout)
   }
 
-  def createClient(tProtocol: TProtocol): KyuubiSyncThriftClient = {
-    new KyuubiSyncThriftClient(tProtocol, None, 0, 0)
+  def createClient(host: String, port: Int, tProtocol: TProtocol): KyuubiSyncThriftClient = {
+    new KyuubiSyncThriftClient((host, port), tProtocol, None, 0, 0)
   }
 }
