@@ -340,6 +340,9 @@ for SPARK_EXTENSION_VERSION in ${SPARK_EXTENSION_VERSIONS[@]}; do
   fi
 done
 
+# Copy Kyuubi Spark Authz shaded extension
+cp "$KYUUBI_HOME/extensions/spark/kyuubi-spark-authz-shaded/target/kyuubi-spark-authz-shaded_${SCALA_VERSION}-${VERSION}.jar" "$DISTDIR/extension/"
+
 if [[ "$ENABLE_WEBUI" == "true" ]]; then
   # Copy web ui dist
   cp -r "$KYUUBI_HOME/kyuubi-server/web-ui/dist" "$DISTDIR/web-ui/"
