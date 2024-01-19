@@ -35,7 +35,7 @@ import org.apache.kyuubi.server.api.v1.ApiRootResource
 import org.apache.kyuubi.server.http.authentication.{AuthenticationFilter, KyuubiHttpAuthenticationFactory}
 import org.apache.kyuubi.server.ui.{JettyServer, JettyUtils}
 import org.apache.kyuubi.service.{AbstractFrontendService, Serverable, Service, ServiceUtils}
-import org.apache.kyuubi.service.authentication.{AuthMethods, AuthTypes, KyuubiAuthenticationFactory}
+import org.apache.kyuubi.service.authentication.{AuthTypes, AuthUtils}
 import org.apache.kyuubi.session.{KyuubiSession, KyuubiSessionManager, SessionHandle}
 import org.apache.kyuubi.util.ThreadUtils
 import org.apache.kyuubi.util.ThreadUtils.scheduleTolerableRunnableWithFixedDelay
@@ -78,9 +78,10 @@ class KyuubiRestFrontendService(override val serverable: Serverable)
 
   private lazy val port: Int = conf.get(FRONTEND_REST_BIND_PORT)
 
-  private lazy val securityEnabled = {
+  private[kyuubi] lazy val securityEnabled = {
     val authTypes = conf.get(AUTHENTICATION_METHOD).map(AuthTypes.withName)
-    KyuubiAuthenticationFactory.getValidPasswordAuthMethod(authTypes) != AuthMethods.NONE
+    AuthUtils.kerberosEnabled(authTypes) ||
+    !AuthUtils.effectivePlainAuthType(authTypes).contains(AuthTypes.NONE)
   }
 
   private lazy val administrators: Set[String] =
@@ -231,7 +232,7 @@ class KyuubiRestFrontendService(override val serverable: Serverable)
     if (userName != session.user && userName != session.realUser) {
       try {
         try {
-          KyuubiAuthenticationFactory.verifyProxyAccess(
+          AuthUtils.verifyProxyAccess(
             userName,
             session.user,
             AuthenticationFilter.getUserIpAddress,
@@ -239,7 +240,7 @@ class KyuubiRestFrontendService(override val serverable: Serverable)
         } catch {
           case e: Throwable =>
             try {
-              KyuubiAuthenticationFactory.verifyBatchAccountAccess(
+              AuthUtils.verifyBatchAccountAccess(
                 userName,
                 session.user,
                 conf)
@@ -301,11 +302,11 @@ class KyuubiRestFrontendService(override val serverable: Serverable)
       val proxyUser = sessionConf.getOrElse(
         PROXY_USER.key,
         sessionConf.getOrElse(
-          KyuubiAuthenticationFactory.HS2_PROXY_USER,
-          sessionConf.getOrElse(KyuubiAuthenticationFactory.KYUUBI_PROXY_BATCH_ACCOUNT, realUser)))
+          AuthUtils.HS2_PROXY_USER,
+          sessionConf.getOrElse(AuthUtils.KYUUBI_PROXY_BATCH_ACCOUNT, realUser)))
       if (!proxyUser.equals(realUser) && !isAdministrator(realUser)) {
         try {
-          KyuubiAuthenticationFactory.verifyProxyAccess(
+          AuthUtils.verifyProxyAccess(
             realUser,
             proxyUser,
             ipAddress,
@@ -313,7 +314,7 @@ class KyuubiRestFrontendService(override val serverable: Serverable)
         } catch {
           case e: Throwable =>
             try {
-              KyuubiAuthenticationFactory.verifyBatchAccountAccess(realUser, proxyUser, conf)
+              AuthUtils.verifyBatchAccountAccess(realUser, proxyUser, conf)
             } catch {
               case be: Throwable =>
                 error("Error fallback to verify batch account access", be)

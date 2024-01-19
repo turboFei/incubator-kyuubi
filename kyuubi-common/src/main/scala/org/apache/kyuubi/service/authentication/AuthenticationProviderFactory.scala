@@ -19,7 +19,7 @@ package org.apache.kyuubi.service.authentication
 
 import javax.security.sasl.AuthenticationException
 
-import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
+import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.service.authentication.AuthMethods.AuthMethod
 import org.apache.kyuubi.util.ClassUtils
 
@@ -60,32 +60,6 @@ object AuthenticationProviderFactory {
       new EngineSecureAuthenticationProviderImpl
     } else {
       new AnonymousAuthenticationProviderImpl
-    }
-  }
-
-  def getBatchAccountAuthProvider(conf: KyuubiConf): Option[BatchAccountAuthenticationProvider] = {
-    conf.get(KyuubiEbayConf.AUTHENTICATION_BATCH_ACCOUNT_CLASS) match {
-      case Some(className) =>
-        val classLoader = Thread.currentThread.getContextClassLoader
-        val cls = Class.forName(className, true, classLoader)
-        val provider = cls match {
-          case c if classOf[BatchAccountAuthenticationProvider].isAssignableFrom(cls) =>
-            val confConstructor = c.getConstructors.exists(p => {
-              val params = p.getParameterTypes
-              params.length == 1 && classOf[KyuubiConf].isAssignableFrom(params(0))
-            })
-            if (confConstructor) {
-              c.getConstructor(classOf[KyuubiConf]).newInstance(conf)
-                .asInstanceOf[BatchAccountAuthenticationProvider]
-            } else {
-              c.newInstance().asInstanceOf[BatchAccountAuthenticationProvider]
-            }
-          case _ => throw new AuthenticationException(
-              s"$className must extend of BatchAccountAuthenticationProvider.")
-        }
-        Option(provider)
-
-      case _ => None
     }
   }
 }

@@ -31,7 +31,7 @@ import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf.{FRONTEND_ADVERTISED_HOST, FRONTEND_CONNECTION_URL_USE_HOSTNAME, PROXY_USER, SESSION_CLOSE_ON_DISCONNECT}
 import org.apache.kyuubi.config.KyuubiReservedKeys._
 import org.apache.kyuubi.operation.{FetchOrientation, OperationHandle}
-import org.apache.kyuubi.service.authentication.KyuubiAuthenticationFactory
+import org.apache.kyuubi.service.authentication.{AuthUtils, KyuubiAuthenticationFactory}
 import org.apache.kyuubi.session.SessionHandle
 import org.apache.kyuubi.shaded.hive.service.rpc.thrift._
 import org.apache.kyuubi.shaded.thrift.protocol.TProtocol
@@ -139,13 +139,13 @@ abstract class TFrontendService(name: String)
       ipAddress: String,
       realUser: String): String = {
     val proxyUser = Option(sessionConf.get(PROXY_USER.key))
-      .getOrElse(sessionConf.get(KyuubiAuthenticationFactory.HS2_PROXY_USER))
-    val batchAccount = sessionConf.get(KyuubiAuthenticationFactory.KYUUBI_PROXY_BATCH_ACCOUNT)
+      .getOrElse(sessionConf.get(AuthUtils.HS2_PROXY_USER))
+    val batchAccount = sessionConf.get(AuthUtils.KYUUBI_PROXY_BATCH_ACCOUNT)
     if (proxyUser == null && batchAccount == null) {
       realUser
     } else if (proxyUser != null) {
       try {
-        KyuubiAuthenticationFactory.verifyProxyAccess(
+        AuthUtils.verifyProxyAccess(
           realUser,
           proxyUser,
           ipAddress,
@@ -153,7 +153,7 @@ abstract class TFrontendService(name: String)
       } catch {
         case e: Throwable => // fall back to verify the batch account
           try {
-            KyuubiAuthenticationFactory.verifyBatchAccountAccess(
+            AuthUtils.verifyBatchAccountAccess(
               realUser,
               proxyUser,
               conf)
@@ -165,7 +165,7 @@ abstract class TFrontendService(name: String)
       }
       proxyUser
     } else {
-      KyuubiAuthenticationFactory.verifyBatchAccountAccess(
+      AuthUtils.verifyBatchAccountAccess(
         realUser,
         batchAccount,
         conf)

@@ -46,7 +46,7 @@ import org.apache.kyuubi.jdbc.hive.logs.KyuubiEngineLogListener
 import org.apache.kyuubi.server.http.util.HttpAuthUtils.AUTHORIZATION_HEADER
 import org.apache.kyuubi.server.metadata.api.MetadataFilter
 import org.apache.kyuubi.server.metadata.jdbc.JDBCMetadataStore
-import org.apache.kyuubi.service.authentication.{AuthTypes, KyuubiAuthenticationFactory}
+import org.apache.kyuubi.service.authentication.{AuthTypes, AuthUtils}
 import org.apache.kyuubi.session.{KyuubiBatchSession, KyuubiSessionImpl, KyuubiSessionManager}
 import org.apache.kyuubi.shaded.hive.service.rpc.thrift.{TDownloadDataReq, TExecuteStatementReq, TFetchResultsReq, TTransferDataReq}
 import org.apache.kyuubi.util.command.CommandLineUtils
@@ -426,7 +426,7 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
 
   test("test proxy batch account with unsupported exception") {
     withSessionConf(Map(
-      KyuubiAuthenticationFactory.KYUUBI_PROXY_BATCH_ACCOUNT -> "b_stf",
+      AuthUtils.KYUUBI_PROXY_BATCH_ACCOUNT -> "b_stf",
       KyuubiEbayConf.SESSION_CLUSTER.key -> "test"))(Map.empty)(Map.empty) {
       val exception = intercept[SQLException] {
         withJdbcStatement() { _ => // no-op

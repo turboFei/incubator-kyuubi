@@ -28,7 +28,7 @@ import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiConf.FrontendProtocols
 import org.apache.kyuubi.config.KyuubiConf.FrontendProtocols.FrontendProtocol
 import org.apache.kyuubi.jdbc.hive.KyuubiStatement
-import org.apache.kyuubi.service.authentication.{AnonymousBatchAccountAuthenticationProviderImpl, KyuubiAuthenticationFactory}
+import org.apache.kyuubi.service.authentication.{AnonymousBatchAccountAuthenticationProviderImpl, AuthUtils}
 
 class KyuubiOperationBatchAccountSuite extends RestFrontendTestHelper with HiveJDBCTestHelper {
   override protected def jdbcUrl: String = getJdbcUrl
@@ -47,7 +47,7 @@ class KyuubiOperationBatchAccountSuite extends RestFrontendTestHelper with HiveJ
 
   test("test proxy batch account") {
     withSessionConf(Map(
-      KyuubiAuthenticationFactory.KYUUBI_PROXY_BATCH_ACCOUNT -> "b_stf"))(Map.empty)(Map.empty) {
+      AuthUtils.KYUUBI_PROXY_BATCH_ACCOUNT -> "b_stf"))(Map.empty)(Map.empty) {
       withJdbcStatement() { statement =>
         val kyuubiStatement = statement.asInstanceOf[KyuubiStatement]
         val rs = kyuubiStatement.executeScala(
@@ -60,7 +60,7 @@ class KyuubiOperationBatchAccountSuite extends RestFrontendTestHelper with HiveJ
 
   test("fallback to verify batch account if proxy user is specified") {
     withSessionConf(Map(
-      KyuubiAuthenticationFactory.HS2_PROXY_USER -> "b_stf"))(Map.empty)(Map.empty) {
+      AuthUtils.HS2_PROXY_USER -> "b_stf"))(Map.empty)(Map.empty) {
       withJdbcStatement() { statement =>
         val kyuubiStatement = statement.asInstanceOf[KyuubiStatement]
         val rs = kyuubiStatement.executeScala(
@@ -73,7 +73,7 @@ class KyuubiOperationBatchAccountSuite extends RestFrontendTestHelper with HiveJ
 
   test("rest api proxy batch account") {
     val requestObj = new SessionOpenRequest(Map(
-      KyuubiAuthenticationFactory.KYUUBI_PROXY_BATCH_ACCOUNT -> "batch").asJava)
+      AuthUtils.KYUUBI_PROXY_BATCH_ACCOUNT -> "batch").asJava)
 
     val response = webTarget.path("api/v1/sessions")
       .request(MediaType.APPLICATION_JSON_TYPE)
