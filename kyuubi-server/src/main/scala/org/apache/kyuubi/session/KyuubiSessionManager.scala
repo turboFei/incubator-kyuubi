@@ -112,6 +112,7 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
         clusterConf.getUserDefaults(user),
         parser)
     } else {
+      val userConf = clusterConf.getUserDefaults(user)
       new KyuubiSessionImpl(
         protocol,
         user,
@@ -119,7 +120,8 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
         ipAddress,
         conf,
         this,
-        clusterConf.getUserDefaults(user),
+        userConf,
+        userConf.get(ENGINE_DO_AS_ENABLED),
         parser)
     }
   }

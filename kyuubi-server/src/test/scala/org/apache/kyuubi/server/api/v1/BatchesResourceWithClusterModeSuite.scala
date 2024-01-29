@@ -47,7 +47,7 @@ class BatchesResourceWithClusterModeSuite extends KyuubiFunSuite with RestFronte
   }
 
   test("open batch session") {
-    val sparkProcessBuilder = new SparkProcessBuilder("kyuubi", conf)
+    val sparkProcessBuilder = new SparkProcessBuilder("kyuubi", true, conf)
     var requestObj = new BatchRequest(
       "spark",
       sparkProcessBuilder.mainResource.get,

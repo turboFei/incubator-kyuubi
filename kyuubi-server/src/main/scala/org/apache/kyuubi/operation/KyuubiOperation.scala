@@ -138,11 +138,10 @@ abstract class KyuubiOperation(session: Session) extends AbstractOperation(sessi
     // renew credentials is not needed for carmel session
     if (session.isInstanceOf[CarmelSessionImpl]) return
 
-    val appUser = session.asInstanceOf[KyuubiSessionImpl].engine.appUser
     val sessionManager = session.sessionManager.asInstanceOf[KyuubiSessionManager]
     sessionManager.credentialsManager.sendCredentialsIfNeeded(
       session.handle.identifier.toString,
-      appUser,
+      session.asInstanceOf[KyuubiSessionImpl].engine.appUser,
       client.sendCredentials,
       session.asInstanceOf[KyuubiSessionImpl].sessionCluster)
   }

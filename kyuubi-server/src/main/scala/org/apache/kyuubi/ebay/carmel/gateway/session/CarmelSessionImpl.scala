@@ -54,6 +54,7 @@ class CarmelSessionImpl(
     conf,
     sessionManager,
     sessionConf,
+    true, // It does not matter for carmel session
     parser) {
   @volatile private var backendSessionStatus = CarmelSessionStatus.ACTIVE
   override def checkSessionAccessPathURIs(): Unit = {}

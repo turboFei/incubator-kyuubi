@@ -118,7 +118,7 @@ class LaunchEngine(session: KyuubiSessionImpl, override val shouldRunAsync: Bool
   }
 
   override protected def applicationInfoMap: Option[Map[String, String]] = {
-    super.applicationInfoMap.map { _ + ("refId" -> session.engine.getEngineRefId()) }
+    super.applicationInfoMap.map { _ + ("refId" -> session.engine.getEngineRefId) }
   }
 
 }
