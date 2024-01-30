@@ -356,11 +356,7 @@ class SparkProcessBuilder(
     conf.getOption(KUBERNETES_NAMESPACE_KEY).orElse(defaultsConf.get(KUBERNETES_NAMESPACE_KEY))
   }
 
-  def cluster(): Option[String] = {
-    conf.get(KyuubiEbayConf.SESSION_CLUSTER)
-  }
-
-  override def validateConf: Unit = Validator.validateConf(conf)
+  override def validateConf(): Unit = Validator.validateConf(conf)
 
   // For spark on kubernetes, spark pod using env SPARK_USER_NAME as current user
   def setSparkUserName(userName: String, buffer: mutable.Buffer[String]): Unit = {
@@ -374,6 +370,10 @@ class SparkProcessBuilder(
 
   private[spark] def engineLogPathConf(): Map[String, String] = {
     Map(KYUUBI_ENGINE_LOG_PATH_KEY -> engineLog.getAbsolutePath)
+  }
+
+  def cluster(): Option[String] = {
+    conf.get(KyuubiEbayConf.SESSION_CLUSTER)
   }
 }
 
