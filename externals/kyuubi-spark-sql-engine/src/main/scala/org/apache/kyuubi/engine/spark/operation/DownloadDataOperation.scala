@@ -286,7 +286,7 @@ object DownloadDataOperation {
       !path.getName.equals("_SUCCESS") && !path.getName.endsWith("crc")
   }
 
-  private val DEFAULT_BLOCK_SIZE = 10 * 1024 * 1024
+  val DEFAULT_BLOCK_SIZE = 10 * 1024 * 1024
 
   // Please see CSVOptions for more details.
   private val DEFAULT_OPTIONS = Map(

@@ -807,6 +807,26 @@ class KyuubiOperationEbaySuite extends WithKyuubiServer with HiveJDBCTestHelper
     }
   }
 
+  test("HADP-52521: support to download remote file") {
+    withSessionConf(Map.empty)(Map.empty)(Map(
+      KyuubiEbayConf.SESSION_CLUSTER.key -> "test")) {
+      withJdbcStatement() { statement =>
+        val connection = statement.getConnection.asInstanceOf[KyuubiConnection]
+        val remoteDir = Utils.createTempDir()
+        val remoteFile = new File(remoteDir.toFile, "local.txt")
+        Files.write(remoteFile.toPath, "test".getBytes(StandardCharset.UTF_8))
+
+        val localDir = Utils.createTempDir()
+        val localFile = new File(localDir.toFile, "local.txt")
+        assert(!localFile.exists())
+
+        connection.downloadFromFile(remoteFile.getAbsolutePath, localDir.toFile.getAbsolutePath)
+        assert(localFile.isFile)
+        assert(FileUtils.readFileToString(localFile, "UTF-8") === "test")
+      }
+    }
+  }
+
   def checkConfigValue(statement: Statement, config: String, expectedValue: String): Unit = {
     val rs = statement.executeQuery(s"SET `$config`")
     assert(rs.next())

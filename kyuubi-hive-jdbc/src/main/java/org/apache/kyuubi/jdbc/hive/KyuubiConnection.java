@@ -2087,4 +2087,9 @@ public class KyuubiConnection implements SQLConnection, KyuubiLoggable {
     }
     return optionSpec.toString();
   }
+
+  public Boolean downloadFromFile(String remoteFile, String localdst) throws SQLException {
+    return downloadFromQuery(
+        null, null, Collections.singletonMap("download_file", remoteFile), localdst);
+  }
 }

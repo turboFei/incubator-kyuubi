@@ -249,7 +249,12 @@ class SparkSQLOperationManager private (name: String) extends OperationManager(n
       query: String,
       format: String,
       options: Map[String, String]): Operation = {
-    val op = new DownloadDataOperation(session, tableName, query, format, options.asJava)
-    addOperation(op)
+    if (options.get(DownloadFileOperation.DOWNLOAD_FILE_OPTION).isDefined) {
+      val op = new DownloadFileOperation(session, tableName, query, format, options.asJava)
+      addOperation(op)
+    } else {
+      val op = new DownloadDataOperation(session, tableName, query, format, options.asJava)
+      addOperation(op)
+    }
   }
 }
