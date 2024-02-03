@@ -50,6 +50,7 @@ class DownloadFileOperation(
   private val downloadFilePath = new Path(options.get(DOWNLOAD_FILE_OPTION))
   private val fs = downloadFilePath.getFileSystem(spark.sparkContext.hadoopConfiguration)
 
+  override val statement: String = s"DOWNLOAD FILE $downloadFilePath"
   override protected def executeStatement(): Unit = withLocalProperties {
     try {
       setState(OperationState.RUNNING)
@@ -57,27 +58,34 @@ class DownloadFileOperation(
       Thread.currentThread().setContextClassLoader(spark.sharedState.jarClassLoader)
       addOperationListener()
 
+      val fetchSize = Option(options).map(_.asScala).flatMap(_.get("fetchBlockSize"))
+        .getOrElse(DownloadDataOperation.DEFAULT_BLOCK_SIZE.toString).toLong
+
+      assert(
+        fetchSize >= 1L * 1024 * 1024 && fetchSize <= 20L * 1024 * 1024,
+        s"fetchBlockSize(${fetchSize}) should be greater than 1M and less than 20M.")
+
       val fileStatus = fs.getFileStatus(downloadFilePath)
       if (fileStatus == null || !fileStatus.isFile) {
         throw KyuubiSQLException(
           s"The file[$downloadFilePath] to be downloaded does not exist or is not a file.")
       }
 
-      val fetchSize = Option(options).map(_.asScala).flatMap(_.get("fetchBlockSize"))
-        .getOrElse(DownloadDataOperation.DEFAULT_BLOCK_SIZE.toString).toLong
+      info(s"Running query $statementId in ${session.handle} DOWNLOAD $downloadFilePath")
+      val dataSize = fileStatus.getLen
+      info(s"Try to download $dataSize bytes data")
 
       val list: JList[DownloadDataBlock] = new JArrayList[DownloadDataBlock]()
-      val dataLen = fs.getContentSummary(downloadFilePath).getLength
 
       // Add total data size to first row.
-      list.add(DownloadDataBlock(schema = None, dataSize = dataLen))
+      list.add(DownloadDataBlock(schema = None, dataSize = dataSize))
 
       val fetchBatchs =
-        BigDecimal(dataLen)./(BigDecimal(fetchSize)).setScale(0, RoundingMode.CEILING).longValue()
+        BigDecimal(dataSize)./(BigDecimal(fetchSize)).setScale(0, RoundingMode.CEILING).longValue()
       assert(fetchBatchs < Int.MaxValue, "The fetch batch too large.")
 
       (0 until fetchBatchs.toInt).foreach { i =>
-        val fetchSizeInBatch = if (i == fetchBatchs - 1) dataLen - i * fetchSize else fetchSize
+        val fetchSizeInBatch = if (i == fetchBatchs - 1) dataSize - i * fetchSize else fetchSize
         list.add(DownloadDataBlock(
           path = Some(downloadFilePath),
           offset = Some(i * fetchSize),
