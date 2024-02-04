@@ -835,10 +835,20 @@ object KyuubiEbayConf extends Logging {
     }
   }
 
+  def isKyuubiBatch(sessionConf: Map[String, String]): Boolean = {
+    sessionConf.get(KYUUBI_SESSION_TYPE_KEY).exists(_.equalsIgnoreCase("BATCH"))
+  }
+
   def confOverlayForSessionType(
       sessionConf: Map[String, String],
       confOverlay: Map[String, String]): Map[String, String] = {
-    if (sessionConf.get(KYUUBI_SESSION_TYPE_KEY).exists(_.equalsIgnoreCase("BATCH"))) {
+    confOverlayForSessionType(isKyuubiBatch(sessionConf), confOverlay)
+  }
+
+  def confOverlayForSessionType(
+      isBatch: Boolean,
+      confOverlay: Map[String, String]): Map[String, String] = {
+    if (isBatch) {
       KyuubiEbayConf.toBatchConf(confOverlay)
     } else {
       confOverlay

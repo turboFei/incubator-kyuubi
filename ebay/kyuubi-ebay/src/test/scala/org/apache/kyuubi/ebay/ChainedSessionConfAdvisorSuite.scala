@@ -27,12 +27,16 @@ class ChainedSessionConfAdvisorSuite extends KyuubiFunSuite {
     val sessionConf = SparkMajorVersionAdvisorSuite.SESSION_CONF_DEMO ++
       TagBasedSessionConfAdvisorSuite.SESSION_CONF_DEMO ++
       TessConfAdvisorSuite.SESSION_CONF_DEMO ++
-      MiscConfAdvisorSuite.SESSION_CONF_DEMO
+      MiscConfAdvisorSuite.SESSION_CONF_DEMO ++
+      PandaEnvConfAdvisorSuite.SESSION_CONF_DEMO ++
+      PySparkConfAdvisorSuite.SESSION_CONF_DEMO
 
     val overlayConf = SparkMajorVersionAdvisorSuite.OVERLAY_CONF_DEMO ++
       TagBasedSessionConfAdvisorSuite.OVERLAY_CONF_DEMO ++
       TessConfAdvisorSuite.OVERLAY_CONF_DEMO ++
       MiscConfAdvisorSuite.OVERLAY_CONF_DEMO ++
+      PandaEnvConfAdvisorSuite.OVERLAY_CONF_DEMO ++
+      PySparkConfAdvisorSuite.OVERLAY_CONF_DEMO ++
       Map("kyuubi.kubernetes.context" -> "28")
 
     assert(advisor.getConfOverlay("demo", sessionConf.asJava).asScala == overlayConf)

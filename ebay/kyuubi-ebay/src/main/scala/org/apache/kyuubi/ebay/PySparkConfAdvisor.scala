@@ -22,39 +22,28 @@ import java.util.{Map => JMap}
 import scala.collection.JavaConverters._
 
 import org.apache.kyuubi.Logging
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
+import org.apache.kyuubi.config.KyuubiConf.OperationLanguages
 import org.apache.kyuubi.plugin.SessionConfAdvisor
 
-class ChainedSessionConfAdvisor extends SessionConfAdvisor with Logging {
-  val sessionConfAdvisorChain =
-    List(
-      new SparkMajorVersionAdvisor(),
-      new TagBasedSessionConfAdvisor(),
-      new TessConfAdvisor(),
-      new MiscConfAdvisor(),
-      new PandaEnvConfAdvisor(),
-      new PySparkConfAdvisor())
-
+class PySparkConfAdvisor extends SessionConfAdvisor with Logging {
   override def getConfOverlay(
       user: String,
       sessionConf: JMap[String, String]): JMap[String, String] = {
-    var baseConf = sessionConf.asScala
-    var confOverlay: JMap[String, String] = null
-    sessionConfAdvisorChain.foreach { advisor =>
-      val subConfOverlay = advisor.getConfOverlay(
-        user,
-        baseConf.asJava)
-      if (subConfOverlay != null) {
-        baseConf = baseConf ++ subConfOverlay.asScala
-        if (confOverlay == null) {
-          confOverlay = subConfOverlay
-        } else {
-          confOverlay = (confOverlay.asScala ++ subConfOverlay.asScala).asJava
-        }
+    if (KyuubiEbayConf.isKyuubiBatch(sessionConf.asScala.toMap)) {
+      Map.empty[String, String].asJava
+    } else {
+      val opLanguage =
+        sessionConf.getOrDefault(KyuubiConf.OPERATION_LANGUAGE.key, OperationLanguages.SQL.toString)
+      if (OperationLanguages.PYTHON.toString.equalsIgnoreCase(opLanguage)) {
+        Map(PySparkConfAdvisor.SPARK_IS_PYTHON -> "true").asJava
       } else {
-        warn(s"the server plugin[${advisor.getClass.getSimpleName}]" +
-          s" return null value for user: $user, ignore it")
+        Map.empty[String, String].asJava
       }
     }
-    confOverlay
   }
+}
+
+object PySparkConfAdvisor {
+  val SPARK_IS_PYTHON = "spark.yarn.isPython"
 }

@@ -22,39 +22,36 @@ import java.util.{Map => JMap}
 import scala.collection.JavaConverters._
 
 import org.apache.kyuubi.Logging
+import org.apache.kyuubi.config.KyuubiEbayConf
 import org.apache.kyuubi.plugin.SessionConfAdvisor
 
-class ChainedSessionConfAdvisor extends SessionConfAdvisor with Logging {
-  val sessionConfAdvisorChain =
-    List(
-      new SparkMajorVersionAdvisor(),
-      new TagBasedSessionConfAdvisor(),
-      new TessConfAdvisor(),
-      new MiscConfAdvisor(),
-      new PandaEnvConfAdvisor(),
-      new PySparkConfAdvisor())
-
+class PandaEnvConfAdvisor extends SessionConfAdvisor with Logging {
+  import PandaEnvConfAdvisor._
   override def getConfOverlay(
       user: String,
       sessionConf: JMap[String, String]): JMap[String, String] = {
-    var baseConf = sessionConf.asScala
-    var confOverlay: JMap[String, String] = null
-    sessionConfAdvisorChain.foreach { advisor =>
-      val subConfOverlay = advisor.getConfOverlay(
-        user,
-        baseConf.asJava)
-      if (subConfOverlay != null) {
-        baseConf = baseConf ++ subConfOverlay.asScala
-        if (confOverlay == null) {
-          confOverlay = subConfOverlay
-        } else {
-          confOverlay = (confOverlay.asScala ++ subConfOverlay.asScala).asJava
-        }
-      } else {
-        warn(s"the server plugin[${advisor.getClass.getSimpleName}]" +
-          s" return null value for user: $user, ignore it")
-      }
+    val isBatch = KyuubiEbayConf.isKyuubiBatch(sessionConf.asScala.toMap)
+    val sessionTag = sessionConf.get(KyuubiEbayConf.SESSION_TAG.key)
+
+    val env = (isBatch, sessionTag) match {
+      case (true, _) => SUBMIT_ENV_ETL // for batch, always etl env
+      case (false, ETL_HANDLER_BEELINE_TAG) => SUBMIT_ENV_ETL
+      case (false, ZETA_TAG) => SUBMIT_ENV_ZETA
+      case _ => SUBMIT_ENV_KYUUBI
     }
-    confOverlay
+
+    KyuubiEbayConf.confOverlayForSessionType(isBatch, Map(SPARK_SUBMIT_ENV -> env)).asJava
   }
+}
+
+object PandaEnvConfAdvisor {
+  val SPARK_SUBMIT_ENV = "spark.submit.env"
+
+  val SUBMIT_ENV_ETL = "etl"
+  val SUBMIT_ENV_ZETA = "zeta"
+  val SUBMIT_ENV_KYUUBI = "kyuubi"
+
+  val ZETA_TAG = "zeta"
+
+  val ETL_HANDLER_BEELINE_TAG = "etl-ttl-handler-kyuubi-beeline"
 }
