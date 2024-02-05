@@ -689,6 +689,14 @@ object KyuubiEbayConf extends Logging {
       .createWithDefault(
         "spark.org.apache.hadoop.yarn.server.webproxy.amfilter.AmIpFilter.param.PROXY_URI_BASES")
 
+  val SERVER_DEREGISTER_GRACEFUL_PERIOD: ConfigEntry[Long] =
+    buildConf("kyuubi.server.deregister.gracefulPeriod")
+      .internal
+      .serverOnly
+      .doc("The graceful period to deregister server from discovery service.")
+      .timeConf
+      .createWithDefaultString("PT5M")
+
   def getDefaultPropertiesFileForCluster(
       clusterOpt: Option[String],
       conf: KyuubiConf = KyuubiConf().loadFileDefaults(),

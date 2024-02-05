@@ -17,6 +17,9 @@
 
 package org.apache.kyuubi.ha.client
 
+import java.util.concurrent.TimeUnit
+
+import org.apache.kyuubi.config.KyuubiEbayConf
 import org.apache.kyuubi.service.FrontendService
 
 /**
@@ -37,5 +40,34 @@ class KyuubiServiceDiscovery(
       warn(s"The Zookeeper ensemble is LOST")
     }
     super.stop()
+  }
+
+  override def stopGracefully(isLost: Boolean): Unit = {
+    val gracefulPeriod = conf.get(KyuubiEbayConf.SERVER_DEREGISTER_GRACEFUL_PERIOD)
+    val startTime = System.currentTimeMillis()
+    while (fe.be.sessionManager.getOpenSessionCount > 0 &&
+      System.currentTimeMillis() - startTime < gracefulPeriod) {
+      info(
+        s"${fe.be.sessionManager.getOpenSessionCount} connection(s) are active, delay shutdown")
+      Thread.sleep(TimeUnit.SECONDS.toMillis(5))
+    }
+    if (fe.be.sessionManager.getOpenSessionCount > 0) {
+      warn(
+        s"${fe.be.sessionManager.getOpenSessionCount} connection(s) are still active," +
+          s" force shutdown")
+      fe.be.sessionManager.allSessions().foreach { session =>
+        warn(s"Closing session ${session.handle.identifier} forcibly" +
+          s" after server deregister graceful period: ${gracefulPeriod}ms.")
+        try {
+          fe.be.sessionManager.closeSession(session.handle)
+        } catch {
+          case e: Throwable =>
+            error(s"Error closing session ${session.handle.identifier}", e)
+        }
+      }
+    }
+    isServerLost.set(isLost)
+    gracefulShutdownLatch.countDown()
+    fe.serverable.stop()
   }
 }
