@@ -20,7 +20,7 @@ package org.apache.kyuubi.ebay
 import scala.collection.JavaConverters._
 
 import org.apache.kyuubi.KyuubiFunSuite
-import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiConf.OperationLanguages
 
 class PySparkConfAdvisorSuite extends KyuubiFunSuite {
@@ -34,6 +34,11 @@ class PySparkConfAdvisorSuite extends KyuubiFunSuite {
 
     sessionConf = Map.empty[String, String].asJava
     confOverlay = Map.empty[String, String].asJava
+    assert(sessionConfAdvisor.getConfOverlay("b_stf", sessionConf) == confOverlay)
+
+    sessionConf =
+      Map(KyuubiEbayConf.SESSION_TAG.key -> PandaEnvConfAdvisor.ETL_HANDLER_BEELINE_TAG).asJava
+    confOverlay = Map(PySparkConfAdvisor.SPARK_IS_PYTHON -> false.toString).asJava
     assert(sessionConfAdvisor.getConfOverlay("b_stf", sessionConf) == confOverlay)
   }
 }

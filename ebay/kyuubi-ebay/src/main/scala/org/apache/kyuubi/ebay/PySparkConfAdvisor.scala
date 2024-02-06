@@ -36,7 +36,10 @@ class PySparkConfAdvisor extends SessionConfAdvisor with Logging {
       val opLanguage =
         sessionConf.getOrDefault(KyuubiConf.OPERATION_LANGUAGE.key, OperationLanguages.SQL.toString)
       if (OperationLanguages.PYTHON.toString.equalsIgnoreCase(opLanguage)) {
-        Map(PySparkConfAdvisor.SPARK_IS_PYTHON -> "true").asJava
+        Map(PySparkConfAdvisor.SPARK_IS_PYTHON -> true.toString).asJava
+      } else if (PandaEnvConfAdvisor.ETL_HANDLER_BEELINE_TAG.equalsIgnoreCase(
+          sessionConf.get(KyuubiEbayConf.SESSION_TAG.key))) {
+        Map(PySparkConfAdvisor.SPARK_IS_PYTHON -> false.toString).asJava
       } else {
         Map.empty[String, String].asJava
       }
