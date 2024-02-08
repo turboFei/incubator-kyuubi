@@ -95,9 +95,19 @@ class TessConfAdvisor extends SessionConfAdvisor with Logging {
         .orElse(temporarySessionConf.get(KyuubiConf.KUBERNETES_NAMESPACE.key))
         .orNull
       kubernetesContext.foreach { context =>
-        allConf = allConf ++ TessFileSessionConfCache.getTessContextSessionConf(
-          context,
-          kubernetesNamespace)
+        val (tessSessionDefaultConf, tessSessionConfOverlay) =
+          TessFileSessionConfCache.getTessContextSessionConf(
+            context,
+            kubernetesNamespace)
+
+        // apply the tess session default conf if not specified
+        for ((k, v) <- tessSessionDefaultConf) {
+          if (!temporarySessionConf.contains(k)) {
+            allConf += k -> v
+          }
+        }
+
+        allConf = allConf ++ tessSessionConfOverlay
       }
 
       KyuubiEbayConf.confOverlayForSessionType(sessionConf.asScala.toMap, allConf).asJava

@@ -21,12 +21,14 @@ import org.apache.kyuubi.KyuubiFunSuite
 
 class TessFileSessionConfCacheSuite extends KyuubiFunSuite {
   test("get context conf only") {
-    assert(TessFileSessionConfCache.getTessContextSessionConf("35") ==
+    assert(TessFileSessionConfCache.getTessContextSessionConf("35") == Map("spark.k2" -> "v2") ->
       Map("kyuubi.kubernetes.context" -> "35", "spark.k1" -> "v1"))
   }
 
   test("get context and namespace conf") {
-    assert(TessFileSessionConfCache.getTessContextSessionConf("35", "k8s_namespace") ==
+    assert(TessFileSessionConfCache.getTessContextSessionConf("35", "k8s_namespace") == Map(
+      "spark.k2" -> "v2",
+      "spark.k3" -> "v3") ->
       Map("kyuubi.kubernetes.context" -> "35", "spark.k1" -> "v2"))
   }
 }

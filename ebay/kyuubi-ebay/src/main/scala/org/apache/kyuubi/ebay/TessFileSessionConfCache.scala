@@ -17,6 +17,7 @@
 
 package org.apache.kyuubi.ebay
 
+import java.io.File
 import java.util.concurrent.TimeUnit
 
 import com.google.common.cache.{CacheBuilder, CacheLoader, LoadingCache}
@@ -28,29 +29,42 @@ import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 object TessFileSessionConfCache extends Logging {
   private val reloadInterval: Long =
     KyuubiEbayConf._kyuubiConf.get(KyuubiConf.SESSION_CONF_FILE_RELOAD_INTERVAL)
-  private lazy val sessionTessContextConfCache: LoadingCache[String, KyuubiConf] =
+
+  private def loadKyuubiConf(propsFile: Option[File]): KyuubiConf = {
+    propsFile match {
+      case None =>
+        error("File not found: $KYUUBI_CONF_DIR/" + propsFile)
+        KyuubiConf(false)
+      case Some(_) =>
+        val conf = KyuubiConf(false)
+        Utils.getPropertiesFromFile(propsFile).foreach { case (k, v) =>
+          conf.set(k, v)
+        }
+        conf
+    }
+  }
+
+  private lazy val sessionTessContextConfCache: LoadingCache[String, (KyuubiConf, KyuubiConf)] =
     CacheBuilder.newBuilder()
       .expireAfterWrite(
         reloadInterval,
         TimeUnit.MILLISECONDS)
-      .build(new CacheLoader[String, KyuubiConf] {
-        override def load(context: String): KyuubiConf = {
-          val propsFile = Utils.getPropertiesFile(s"kyuubi-session-tess-$context.conf")
-          propsFile match {
-            case None =>
-              error("File not found: $KYUUBI_CONF_DIR/" + s"kyuubi-session-tess-$context.conf")
-              KyuubiConf(false)
-            case Some(_) =>
-              val conf = KyuubiConf(false)
-              Utils.getPropertiesFromFile(propsFile).foreach { case (k, v) =>
-                conf.set(k, v)
-              }
-              conf
-          }
+      .build(new CacheLoader[String, (KyuubiConf, KyuubiConf)] {
+        override def load(context: String): (KyuubiConf, KyuubiConf) = {
+          val defaultsPropsFile =
+            Utils.getPropertiesFile(s"kyuubi-session-tess-$context-defaults.conf")
+          val overwritePropsFile =
+            Utils.getPropertiesFile(s"kyuubi-session-tess-$context-overwrite.conf")
+              // for backward compatibility
+              .orElse(Utils.getPropertiesFile(s"kyuubi-session-tess-$context.conf"))
+          loadKyuubiConf(defaultsPropsFile) -> loadKyuubiConf(overwritePropsFile)
         }
       })
 
-  def getTessContextSessionConf(context: String, namespace: String = null): Map[String, String] = {
-    sessionTessContextConfCache.get(context).getUserDefaults(namespace).getAll
+  def getTessContextSessionConf(
+      context: String,
+      namespace: String = null): (Map[String, String], Map[String, String]) = {
+    val (defaultConf, overwriteConf) = sessionTessContextConfCache.get(context)
+    defaultConf.getUserDefaults(namespace).getAll -> overwriteConf.getUserDefaults(namespace).getAll
   }
 }
