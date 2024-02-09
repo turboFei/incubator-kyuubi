@@ -24,7 +24,7 @@ import scala.collection.JavaConverters._
 import org.apache.kyuubi.Logging
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.config.KyuubiEbayConf._
-import org.apache.kyuubi.ebay.TagBasedSessionConfAdvisor.getSessionTagDefaultConf
+import org.apache.kyuubi.ebay.TagBasedSessionConfAdvisor.getSessionTagConf
 import org.apache.kyuubi.plugin.SessionConfAdvisor
 
 class TessConfAdvisor extends SessionConfAdvisor with Logging {
@@ -53,13 +53,32 @@ class TessConfAdvisor extends SessionConfAdvisor with Logging {
         tessEnabledDefault.toString))) {
       val sessionCluster = sessionConf.asScala.get(SESSION_CLUSTER.key)
 
-      val tessDefaultConf = getSessionTagDefaultConf(sessionConf, tessConfTag, sessionCluster)
+      val tessTagConf = getSessionTagConf(tessConfTag, sessionCluster)
 
-      val tessConfOverlay = fileConfCache.get(tessConfOverlayFile)
-      val clusterTessConfOverlay = clusterTessConfFile(sessionCluster).map(fileConfCache.get)
+      val temporaryTessConf = sessionConf.asScala ++ tessTagConf
+      val tessContext = temporaryTessConf.get(SPARK_KUBERNETES_CONTEXT)
+        .orElse(temporaryTessConf.get(KyuubiConf.KUBERNETES_CONTEXT.key))
+      val tessNamespace = temporaryTessConf.get(SPARK_KUBERNETES_NAMESPACE)
+        .orElse(temporaryTessConf.get(KyuubiConf.KUBERNETES_NAMESPACE.key))
 
-      val tessOverlayConf = tessDefaultConf ++ tessConfOverlay.getAll ++ clusterTessConfOverlay.map(
-        _.getAll).getOrElse(Map.empty)
+      val tessDefaultConf = getTessContextNamespaceConf(
+        tessTagConf,
+        user,
+        tessContext,
+        tessNamespace).filterNot { case (k, _) => sessionConf.containsKey(k) }
+
+      val tessConfOverlay = getTessContextNamespaceConf(
+        fileConfCache.get(tessConfOverlayFile).getAll,
+        user,
+        tessContext,
+        tessNamespace)
+      val clusterTessConfOverlay = getTessContextNamespaceConf(
+        clusterTessConfFile(sessionCluster).map(fileConfCache.get).map(_.getAll).getOrElse(
+          Map.empty[String, String]),
+        user,
+        tessContext,
+        tessNamespace)
+      val tessOverlayConf = tessDefaultConf ++ tessConfOverlay ++ clusterTessConfOverlay
 
       val tempSessionConf = sessionConf.asScala.toMap ++ tessOverlayConf
 
@@ -188,4 +207,40 @@ object TessConfAdvisor {
 
   final val SPARK_KUBERNETES_CONTEXT = "spark.kubernetes.context"
   final val SPARK_KUBERNETES_NAMESPACE = "spark.kubernetes.namespace"
+
+  /**
+   * Get the tess context and namespace conf for the user
+   * {key} = value
+   * ___tess_{cluster}___.{key} = value
+   * ___tess_{cluster}___.___{user}___.{key} = value
+   * ___ns_{namespace}___.{key} = value
+   * ___ns_{namespace}___.___{user}___.{key} = value
+   * ___tess_{cluster}_ns_{namespace}___.{key} = value
+   * ___tess_{cluster}_ns_{namespace}___.___{user}___.{key} = value
+   */
+  def getTessContextNamespaceConf(
+      tessConf: Map[String, String],
+      user: String,
+      tessContext: Option[String],
+      tessNamespace: Option[String]): Map[String, String] = {
+    val kyuubiConf = new KyuubiConf(false)
+    tessConf.foreach { case (k, v) =>
+      kyuubiConf.set(k, v)
+    }
+
+    val contextDefaults =
+      tessContext.map(c => getTagConfOnly(kyuubiConf, s"tess_$c")).getOrElse(Map.empty)
+    val namespaceDefaults =
+      tessNamespace.map(ns => getTagConfOnly(kyuubiConf, s"ns_$ns")).getOrElse(Map.empty)
+    val contextNamespaceDefaults = tessContext.zip(tessNamespace).headOption.map { case (c, ns) =>
+      getTagConfOnly(kyuubiConf, s"tess_${c}_ns_${ns}")
+    }.getOrElse(Map.empty)
+
+    val newKyuubiConf = new KyuubiConf(false)
+    (tessConf ++ contextDefaults ++ namespaceDefaults ++ contextNamespaceDefaults).foreach {
+      case (k, v) =>
+        newKyuubiConf.set(k, v)
+    }
+    newKyuubiConf.getUserDefaults(user).getAll
+  }
 }

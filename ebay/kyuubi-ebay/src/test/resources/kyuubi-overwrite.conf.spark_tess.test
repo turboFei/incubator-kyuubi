@@ -16,3 +16,4 @@
 #
 
 spark.tess.key2=value2
+kyuubi.session.tess.scratchdir=/tmp/spark

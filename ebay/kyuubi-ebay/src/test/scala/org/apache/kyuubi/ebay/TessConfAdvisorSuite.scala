@@ -38,6 +38,43 @@ class TessConfAdvisorSuite extends KyuubiFunSuite {
         KyuubiEbayConf.KYUUBI_SESSION_TYPE_KEY -> "BATCH")).asJava).asScala ==
       KyuubiEbayConf.toBatchConf(OVERLAY_CONF_DEMO))
   }
+
+  test("get tess context namespace conf") {
+    val tessConf = Map(
+      "spark.k1" -> "v1",
+      "___tess_130___.spark.k1" -> "v2",
+      "___tess_130___.___b_stf___.spark.k1" -> "v4",
+      "___ns_tokenization___.spark.k2" -> "v2",
+      "___tess_130_ns_tokenization___.spark.k3" -> "v3")
+
+    assert(TessConfAdvisor.getTessContextNamespaceConf(
+      tessConf,
+      "kyuubi",
+      Some("130"),
+      Some("tokenization")) ==
+      Map("spark.k1" -> "v2", "spark.k2" -> "v2", "spark.k3" -> "v3"))
+
+    assert(TessConfAdvisor.getTessContextNamespaceConf(
+      tessConf,
+      "b_stf",
+      Some("130"),
+      Some("tokenization")) ==
+      Map("spark.k1" -> "v4", "spark.k2" -> "v2", "spark.k3" -> "v3"))
+
+    assert(TessConfAdvisor.getTessContextNamespaceConf(
+      tessConf,
+      "b_stf",
+      None,
+      Some("tokenization")) ==
+      Map("spark.k1" -> "v1", "spark.k2" -> "v2"))
+
+    assert(TessConfAdvisor.getTessContextNamespaceConf(
+      tessConf,
+      "b_stf",
+      None,
+      None) ==
+      Map("spark.k1" -> "v1"))
+  }
 }
 
 object TessConfAdvisorSuite {

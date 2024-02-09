@@ -125,12 +125,16 @@ object TagBasedSessionConfAdvisor extends Logging {
       sessionConf: JMap[String, String],
       sessionTag: String,
       sessionCluster: Option[String]): Map[String, String] = {
-    val defaultConf = fileConfCache.get(defaultConfFile)
-    val clusterDefaultConf = clusterDefaultConfFile(sessionCluster).map(fileConfCache.get)
-    val tagLevelDefaultConf = KyuubiEbayConf.getTagConfOnly(defaultConf, sessionTag) ++
-      clusterDefaultConf.map(KyuubiEbayConf.getTagConfOnly(_, sessionTag)).getOrElse(Map.empty)
-    tagLevelDefaultConf.filterNot { case (key, _) =>
+    val tagLevelConf = getSessionTagConf(sessionTag, sessionCluster)
+    tagLevelConf.filterNot { case (key, _) =>
       sessionConf.containsKey(key)
     }
+  }
+
+  def getSessionTagConf(sessionTag: String, sessionCluster: Option[String]): Map[String, String] = {
+    val defaultConf = fileConfCache.get(defaultConfFile)
+    val clusterDefaultConf = clusterDefaultConfFile(sessionCluster).map(fileConfCache.get)
+    KyuubiEbayConf.getTagConfOnly(defaultConf, sessionTag) ++
+      clusterDefaultConf.map(KyuubiEbayConf.getTagConfOnly(_, sessionTag)).getOrElse(Map.empty)
   }
 }

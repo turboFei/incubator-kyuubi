@@ -446,7 +446,6 @@ object KyuubiEbayConf extends Logging {
   val SESSION_TESS_SCRATCH_DIR: OptionalConfigEntry[String] =
     buildConf("kyuubi.session.tess.scratchdir")
       .internal
-      .serverOnly
       .stringConf
       .createOptional
 
