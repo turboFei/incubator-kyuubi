@@ -33,6 +33,13 @@ class PandaEnvConfAdvisorSuite extends KyuubiFunSuite {
 
     sessionConf = Map(KyuubiEbayConf.KYUUBI_SESSION_TYPE_KEY -> "BATCH").asJava
     overlayConf = Map("kyuubi.batchConf.spark." + PandaEnvConfAdvisor.SPARK_SUBMIT_ENV ->
+      PandaEnvConfAdvisor.SUBMIT_ENV_CLI).asJava
+    assert(sessionConfAdvisor.getConfOverlay("b_stf", sessionConf) == overlayConf)
+
+    sessionConf = Map(
+      KyuubiEbayConf.KYUUBI_SESSION_TYPE_KEY -> "BATCH",
+      KyuubiEbayConf.KYUUBI_BATCH_MAIN_CLASS -> PandaEnvConfAdvisor.ETL_SQL_DRIVER).asJava
+    overlayConf = Map("kyuubi.batchConf.spark." + PandaEnvConfAdvisor.SPARK_SUBMIT_ENV ->
       PandaEnvConfAdvisor.SUBMIT_ENV_ETL).asJava
     assert(sessionConfAdvisor.getConfOverlay("b_stf", sessionConf) == overlayConf)
 

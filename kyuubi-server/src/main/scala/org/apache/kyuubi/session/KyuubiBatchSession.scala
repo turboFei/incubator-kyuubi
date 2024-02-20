@@ -85,7 +85,9 @@ class KyuubiBatchSession(
 
   override val normalizedConf: Map[String, String] =
     sessionConf.getBatchConf(batchType) ++ sessionManager.validateBatchConf(conf) ++
-      Map(KyuubiEbayConf.KYUUBI_SESSION_TYPE_KEY -> sessionType.toString)
+      Map(KyuubiEbayConf.KYUUBI_SESSION_TYPE_KEY -> sessionType.toString) ++
+      Option(className).map(c => Map(KyuubiEbayConf.KYUUBI_BATCH_MAIN_CLASS -> c)).getOrElse(
+        Map.empty)
 
   val optimizedConf: Map[String, String] = {
     val confOverlay = sessionManager.sessionConfAdvisor.map(_.getConfOverlay(

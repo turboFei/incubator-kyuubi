@@ -889,5 +889,6 @@ object KyuubiEbayConf extends Logging {
 
   final val KYUUBI_SESSION_ID_KEY = "kyuubi.session.id"
   final val KYUUBI_SESSION_TYPE_KEY = "kyuubi.session.type"
+  final val KYUUBI_BATCH_MAIN_CLASS = "kyuubi.batch.mainClass"
   final val ZETA_TAG_KEY = "zeta"
 }

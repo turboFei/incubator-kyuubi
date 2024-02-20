@@ -25,6 +25,16 @@ import org.apache.kyuubi.Logging
 import org.apache.kyuubi.config.KyuubiEbayConf
 import org.apache.kyuubi.plugin.SessionConfAdvisor
 
+/**
+ * For Batch session:
+ *  ETL: batch app with ETL_SQL_DRIVER as MainClass
+ *  CLI: batch app with other MainClass
+ *
+ * For Interactive Session:
+ *  ETL: etl-ttl-handler-kyuubi-beeline session tag
+ *  ZETA: zeta session tag
+ *  KYUUBI: other interactive connections
+ */
 class PandaEnvConfAdvisor extends SessionConfAdvisor with Logging {
   import PandaEnvConfAdvisor._
   override def getConfOverlay(
@@ -34,7 +44,13 @@ class PandaEnvConfAdvisor extends SessionConfAdvisor with Logging {
     val sessionTag = sessionConf.get(KyuubiEbayConf.SESSION_TAG.key)
 
     val env = (isBatch, sessionTag) match {
-      case (true, _) => SUBMIT_ENV_ETL // for batch, always etl env
+      case (true, _) =>
+        val batchMainClass = sessionConf.get(KyuubiEbayConf.KYUUBI_BATCH_MAIN_CLASS)
+        if (ETL_SQL_DRIVER.equals(batchMainClass)) {
+          SUBMIT_ENV_ETL // only include SQL apps for ETL
+        } else {
+          SUBMIT_ENV_CLI // for other batch app, using CLI env
+        }
       case (false, ETL_HANDLER_BEELINE_TAG) => SUBMIT_ENV_ETL
       case (false, ZETA_TAG) => SUBMIT_ENV_ZETA
       case _ => SUBMIT_ENV_KYUUBI
@@ -50,8 +66,10 @@ object PandaEnvConfAdvisor {
   val SUBMIT_ENV_ETL = "etl"
   val SUBMIT_ENV_ZETA = "zeta"
   val SUBMIT_ENV_KYUUBI = "kyuubi"
+  val SUBMIT_ENV_CLI = "cli"
 
   val ZETA_TAG = "zeta"
 
   val ETL_HANDLER_BEELINE_TAG = "etl-ttl-handler-kyuubi-beeline"
+  val ETL_SQL_DRIVER = "org.apache.spark.sql.ebay.ETLSqlDriver"
 }
