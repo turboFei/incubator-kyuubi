@@ -162,11 +162,8 @@ class SparkSessionImpl(
     }
   }
 
-  def increaseRunTime(time: Long): Unit = {
-    sessionRunTime.getAndAdd(time)
-  }
-
-  def increaseCpuTime(time: Long): Unit = {
-    sessionCpuTime.getAndAdd(time)
+  def increaseRunAndCpuTime(runTime: Long, cpuTime: Long): Unit = {
+    sessionEvent.sessionRunTime = sessionRunTime.addAndGet(runTime)
+    sessionEvent.sessionCpuTime = sessionCpuTime.addAndGet(cpuTime)
   }
 }
