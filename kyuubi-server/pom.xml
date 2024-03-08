@@ -93,6 +93,12 @@
         </dependency>
 
         <dependency>
+            <groupId>org.apache.kyuubi</groupId>
+            <artifactId>kyuubi-relocated-hive-metastore-client</artifactId>
+            <version>${kyuubi-relocated.version}</version>
+        </dependency>
+
+        <dependency>
             <groupId>org.antlr</groupId>
             <artifactId>antlr4-runtime</artifactId>
         </dependency>
@@ -121,6 +127,7 @@
             <groupId>org.apache.hive</groupId>
             <artifactId>hive-metastore</artifactId>
             <version>${hive.version}</version>
+            <scope>test</scope>
             <exclusions>
                 <exclusion>
                     <groupId>*</groupId>
@@ -133,6 +140,7 @@
             <groupId>org.apache.hive</groupId>
             <artifactId>hive-standalone-metastore</artifactId>
             <version>${hive.version}</version>
+            <scope>test</scope>
             <exclusions>
                 <exclusion>
                     <groupId>*</groupId>
@@ -145,6 +153,7 @@
             <groupId>org.apache.hive</groupId>
             <artifactId>hive-serde</artifactId>
             <version>${hive.version}</version>
+            <scope>test</scope>
             <exclusions>
                 <exclusion>
                     <groupId>*</groupId>
@@ -157,6 +166,7 @@
             <groupId>org.apache.hive.shims</groupId>
             <artifactId>hive-shims-common</artifactId>
             <version>${hive.version}</version>
+            <scope>test</scope>
             <exclusions>
                 <exclusion>
                     <groupId>*</groupId>
@@ -169,6 +179,7 @@
             <groupId>org.apache.hive.shims</groupId>
             <artifactId>hive-shims-0.23</artifactId>
             <version>${hive.version}</version>
+            <scope>test</scope>
             <exclusions>
                 <exclusion>
                     <groupId>*</groupId>
@@ -181,6 +192,7 @@
             <groupId>org.apache.hive</groupId>
             <artifactId>hive-common</artifactId>
             <version>${hive.version}</version>
+            <scope>test</scope>
             <exclusions>
                 <exclusion>
                     <groupId>*</groupId>
@@ -193,6 +205,7 @@
             <groupId>org.apache.hive</groupId>
             <artifactId>hive-storage-api</artifactId>
             <version>${hive.storage-api.version}</version>
+            <scope>test</scope>
             <exclusions>
                 <exclusion>
                     <groupId>*</groupId>
@@ -204,16 +217,19 @@
         <dependency>
             <groupId>org.apache.thrift</groupId>
             <artifactId>libfb303</artifactId>
+            <scope>test</scope>
         </dependency>
 
         <dependency>
             <groupId>org.apache.thrift</groupId>
             <artifactId>libthrift</artifactId>
+            <scope>test</scope>
         </dependency>
 
         <dependency>
             <groupId>org.apache.hive</groupId>
             <artifactId>hive-service-rpc</artifactId>
+            <scope>test</scope>
         </dependency>
 
         <dependency>

@@ -20,9 +20,6 @@ package org.apache.kyuubi.credentials
 import java.io.File
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.hive.conf.HiveConf
-import org.apache.hadoop.hive.metastore.{IMetaStoreClient, RetryingMetaStoreClient}
-import org.apache.hadoop.hive.metastore.security.DelegationTokenIdentifier
 import org.apache.hadoop.io.Text
 import org.apache.hadoop.security.{Credentials, SecurityUtil}
 import org.apache.hadoop.security.UserGroupInformation.AuthenticationMethod
@@ -30,6 +27,9 @@ import org.apache.hadoop.security.token.Token
 
 import org.apache.kyuubi.Logging
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
+import org.apache.kyuubi.shaded.hive.metastore.{IMetaStoreClient, RetryingMetaStoreClient}
+import org.apache.kyuubi.shaded.hive.metastore.conf.MetastoreConf
+import org.apache.kyuubi.shaded.hive.metastore.security.DelegationTokenIdentifier
 
 class HiveDelegationTokenProvider extends HadoopDelegationTokenProvider with Logging {
   val HIVE_CONF_DIR = "HIVE_CONF_DIR"
@@ -42,7 +42,7 @@ class HiveDelegationTokenProvider extends HadoopDelegationTokenProvider with Log
   override def serviceName: String = "hive"
 
   override def initialize(hadoopConf: Configuration, kyuubiConf: KyuubiConf): Unit = {
-    val conf = new HiveConf(hadoopConf, classOf[HiveConf])
+    val conf = MetastoreConf.newMetastoreConf(hadoopConf)
     if (kyuubiConf.get(KyuubiEbayConf.SESSION_CLUSTER_MODE_ENABLED)) {
       kyuubiConf.getEnvs.get(HIVE_CONF_DIR).foreach { hiveConfEnv =>
         val hiveSite = new File(hiveConfEnv, HIVE_SITE)
@@ -65,7 +65,7 @@ class HiveDelegationTokenProvider extends HadoopDelegationTokenProvider with Log
       principal = conf.getTrimmed(principalKey, "")
       require(principal.nonEmpty, s"Hive principal $principalKey undefined")
 
-      client = Some(RetryingMetaStoreClient.getProxy(conf, false))
+      client = Some(RetryingMetaStoreClient.getProxy(conf))
       info(s"Created HiveMetaStoreClient with metastore uris $metastoreUris")
     }
   }

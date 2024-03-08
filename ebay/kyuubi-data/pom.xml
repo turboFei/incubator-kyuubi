@@ -59,7 +59,7 @@
         <dependency>
             <groupId>jline</groupId>
             <artifactId>jline</artifactId>
-            <version>${hive.client.jline.version}</version>
+            <version>${jline.version}</version>
             <exclusions>
                 <exclusion>
                     <groupId>*</groupId>
