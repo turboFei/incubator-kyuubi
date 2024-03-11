@@ -25,7 +25,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.kyuubi.ebay.carmel.gateway.config.CarmelConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
