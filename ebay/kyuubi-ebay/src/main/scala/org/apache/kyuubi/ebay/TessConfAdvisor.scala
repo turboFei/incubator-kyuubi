@@ -55,7 +55,7 @@ class TessConfAdvisor extends SessionConfAdvisor with Logging {
 
       val tessTagConf = getSessionTagConf(tessConfTag, sessionCluster)
 
-      val temporaryTessConf = sessionConf.asScala ++ tessTagConf
+      val temporaryTessConf = tessTagConf ++ sessionConf.asScala
       val tessContext = temporaryTessConf.get(SPARK_KUBERNETES_CONTEXT)
         .orElse(temporaryTessConf.get(KyuubiConf.KUBERNETES_CONTEXT.key))
       val tessNamespace = temporaryTessConf.get(SPARK_KUBERNETES_NAMESPACE)

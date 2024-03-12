@@ -98,5 +98,8 @@ object TessConfAdvisorSuite {
     "spark.kubernetes.executor.annotation.io.sherlock.metrics/namespace" -> "adlc",
     "spark.kubernetes.driver.label.applicationinstance.tess.io/name" -> "adlc-ai",
     "spark.tess.overwrite" -> "true",
-    "kyuubi.kubernetes.context" -> "28")
+    "kyuubi.kubernetes.context" -> "28",
+    "spark.kubernetes.namespace" -> "kyuubi-ns",
+    "spark.key2" -> "v2",
+    "spark.key4" -> "v4")
 }
