@@ -696,6 +696,22 @@ object KyuubiEbayConf extends Logging {
       .timeConf
       .createWithDefaultString("PT5M")
 
+  val HADOOP_PATH_QUALIFY_CONFIGS: ConfigEntry[Seq[String]] =
+    buildConf("kyuubi.hadoop.path.qualify.configs")
+      .internal
+      .serverOnly
+      .doc("The path configs to make qualified with hadoop defaultFS.")
+      .stringConf
+      .toSequence()
+      .createWithDefault(Seq("spark.files", "spark.jars", "spark.submit.pyFiles"))
+
+  val HADOOP_PATH_QUALIFY_ENABLED: ConfigEntry[Boolean] =
+    buildConf("kyuubi.hadoop.path.qualify.enabled")
+      .internal
+      .doc("Whether to qualify the path configs with hadoop defaultFS.")
+      .booleanConf
+      .createWithDefault(false)
+
   def getDefaultPropertiesFileForCluster(
       clusterOpt: Option[String],
       conf: KyuubiConf = KyuubiConf().loadFileDefaults(),

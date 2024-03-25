@@ -29,6 +29,7 @@ class ChainedSessionConfAdvisor extends SessionConfAdvisor with Logging {
     List(
       new SparkMajorVersionAdvisor(),
       new TagBasedSessionConfAdvisor(),
+      new HadoopPathQualifyConfAdvisor(),
       new TessConfAdvisor(),
       new MiscConfAdvisor(),
       new PandaEnvConfAdvisor(),

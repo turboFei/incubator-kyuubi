@@ -114,8 +114,10 @@ object TagBasedSessionConfAdvisor extends Logging {
     cluster.map(c => s"$defaultConfFile.$c")
   }
 
+  def getDefaultConf(): KyuubiConf = fileConfCache.get(defaultConfFile)
+
   def getSessionClusterConf(sessionConf: JMap[String, String]): JMap[String, String] = {
-    (fileConfCache.get(defaultConfFile).getAll ++
+    (getDefaultConf().getAll ++
       clusterDefaultConfFile(sessionConf.asScala.get(SESSION_CLUSTER.key)).map(
         fileConfCache.get).map(_.getAll).getOrElse(
         Map.empty)).asJava
@@ -132,7 +134,7 @@ object TagBasedSessionConfAdvisor extends Logging {
   }
 
   def getSessionTagConf(sessionTag: String, sessionCluster: Option[String]): Map[String, String] = {
-    val defaultConf = fileConfCache.get(defaultConfFile)
+    val defaultConf = getDefaultConf()
     val clusterDefaultConf = clusterDefaultConfFile(sessionCluster).map(fileConfCache.get)
     KyuubiEbayConf.getTagConfOnly(defaultConf, sessionTag) ++
       clusterDefaultConf.map(KyuubiEbayConf.getTagConfOnly(_, sessionTag)).getOrElse(Map.empty)

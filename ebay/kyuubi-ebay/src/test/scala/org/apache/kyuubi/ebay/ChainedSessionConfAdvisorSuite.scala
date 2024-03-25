@@ -26,6 +26,7 @@ class ChainedSessionConfAdvisorSuite extends KyuubiFunSuite {
     val advisor = new ChainedSessionConfAdvisor()
     val sessionConf = SparkMajorVersionAdvisorSuite.SESSION_CONF_DEMO ++
       TagBasedSessionConfAdvisorSuite.SESSION_CONF_DEMO ++
+      HadoopPathQualifyConfAdvisorSuite.SESSION_CONF_DEMO ++
       TessConfAdvisorSuite.SESSION_CONF_DEMO ++
       MiscConfAdvisorSuite.SESSION_CONF_DEMO ++
       PandaEnvConfAdvisorSuite.SESSION_CONF_DEMO ++
@@ -33,6 +34,7 @@ class ChainedSessionConfAdvisorSuite extends KyuubiFunSuite {
 
     val overlayConf = SparkMajorVersionAdvisorSuite.OVERLAY_CONF_DEMO ++
       TagBasedSessionConfAdvisorSuite.OVERLAY_CONF_DEMO ++
+      HadoopPathQualifyConfAdvisorSuite.OVERLAY_CONF_DEMO ++
       TessConfAdvisorSuite.OVERLAY_CONF_DEMO ++
       MiscConfAdvisorSuite.OVERLAY_CONF_DEMO ++
       PandaEnvConfAdvisorSuite.OVERLAY_CONF_DEMO ++
