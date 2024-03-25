@@ -33,4 +33,4 @@ COPY --from=builder /workspace/*.RELEASE ./
 
 LABEL com.ebay.adi.adlc.include="*.tgz,*.md5,*.RELEASE"
 # please update the version when releaseing new Kyuubi binary
-LABEL com.ebay.adi.adlc.tag="1.9.0-ebay-SNAPSHOT"
+LABEL com.ebay.adi.adlc.tag="1.10.0-ebay-SNAPSHOT"
