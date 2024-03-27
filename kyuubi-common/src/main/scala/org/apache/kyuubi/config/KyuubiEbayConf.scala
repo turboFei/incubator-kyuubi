@@ -712,6 +712,15 @@ object KyuubiEbayConf extends Logging {
       .booleanConf
       .createWithDefault(false)
 
+  val SERVER_LIMIT_CONNECTIONS_TAG_LIMITS: ConfigEntry[Seq[String]] =
+    buildConf("kyuubi.server.limit.connections.tagLimits")
+      .internal
+      .serverOnly
+      .doc("The session tag and limit for server connections limit, such as `tag1=10,tag2=10`.")
+      .stringConf
+      .toSequence()
+      .createWithDefault(Nil)
+
   def getDefaultPropertiesFileForCluster(
       clusterOpt: Option[String],
       conf: KyuubiConf = KyuubiConf().loadFileDefaults(),
@@ -895,10 +904,34 @@ object KyuubiEbayConf extends Logging {
     conf.get(SESSION_TAG.key).orElse(conf.get(org.apache.kyuubi.session.SESSION_TAG))
   }
 
+  def getSessionTag(sessionMgr: SessionManager, conf: Map[String, String]): Option[String] = {
+    sessionMgr.validateAndNormalizeConf(conf).get(SESSION_TAG.key)
+      .orElse(conf.get(org.apache.kyuubi.session.SESSION_TAG))
+  }
+
   def moveQueueEnabled(conf: KyuubiConf): Boolean = {
     getSessionTag(conf) == Some(ZETA_TAG_KEY) && conf.get(
       SESSION_ENGINE_LAUNCH_MOVE_QUEUE_ENABLED) && !conf.get(
       KyuubiEbayConf.ENGINE_SPARK_TESS_ENABLED)
+  }
+
+  /**
+   * Get the server connection limiter tags and limit.
+   */
+  def getServerLimiterTagsAndLimits(conf: KyuubiConf): Map[String, Int] = {
+    conf.get(KyuubiEbayConf.SERVER_LIMIT_CONNECTIONS_TAG_LIMITS).flatMap { tagLimit =>
+      tagLimit.split("=") match {
+        case Array(tag, limit) if limit.toInt > 0 => Some(tag -> limit.toInt)
+        case _ => None
+      }
+    }.toMap
+  }
+
+  case class ServerConnectionLimitScope(cluster: Option[String], tag: Option[String])
+  def normalizeServerConnectionLimitScope(
+      limitScope: ServerConnectionLimitScope,
+      limiterTags: Seq[String]): ServerConnectionLimitScope = {
+    limitScope.copy(tag = limitScope.tag.filter(limiterTags.contains))
   }
 
   private[kyuubi] lazy val _kyuubiConf = KyuubiConf().loadFileDefaults()

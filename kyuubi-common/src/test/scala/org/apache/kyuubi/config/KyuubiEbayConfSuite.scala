@@ -102,4 +102,11 @@ class KyuubiEbayConfSuite extends KyuubiFunSuite {
     kyuubiConf.unset(KyuubiEbayConf.SESSION_TAG)
     assert(!KyuubiEbayConf.moveQueueEnabled(kyuubiConf))
   }
+
+  test("getServerLimiterTagsAndLimit") {
+    val kyuubiConf = KyuubiConf()
+    kyuubiConf.set(KyuubiEbayConf.SERVER_LIMIT_CONNECTIONS_TAG_LIMITS.key, "zeta=100,etl=50,test=0")
+    assert(KyuubiEbayConf.getServerLimiterTagsAndLimits(kyuubiConf) ==
+      Map("zeta" -> 100, "etl" -> 50))
+  }
 }

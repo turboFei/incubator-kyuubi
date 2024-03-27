@@ -62,7 +62,8 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
   lazy val metadataManager: Option[MetadataManager] =
     if (conf.isRESTEnabled) Some(new MetadataManager()) else None
 
-  private val limiters = new ConcurrentHashMap[Option[String], SessionLimiter]().asScala
+  private val limiters =
+    new ConcurrentHashMap[KyuubiEbayConf.ServerConnectionLimitScope, SessionLimiter]().asScala
   private val batchLimiters = new ConcurrentHashMap[Option[String], SessionLimiter]().asScala
   // lazy is required for plugins since the conf is null when this class initialization
   lazy val sessionConfAdvisor: Seq[SessionConfAdvisor] = PluginLoader.loadSessionConfAdvisor(conf)
@@ -98,7 +99,9 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
       ipAddress: String,
       conf: Map[String, String]): Session = {
     val sessionCluster = getSessionCluster(conf)
-    limiters.get(sessionCluster).foreach(_.increment(UserIpAddress(user, ipAddress)))
+    getLimiter(sessionCluster, conf).foreach(_.increment(UserIpAddress(
+      user,
+      ipAddress)))
     val clusterConf = getClusterConf(conf)
 
     if (KyuubiEbayConf.isCarmelCluster(getConf, sessionCluster)) {
@@ -159,9 +162,7 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
             session.user,
             session.ipAddress)))
         case _ =>
-          limiters.get(session.sessionCluster).foreach(_.decrement(UserIpAddress(
-            session.user,
-            session.ipAddress)))
+          getLimiter(session).foreach(_.decrement(UserIpAddress(session.user, session.ipAddress)))
       }
     }
   }
@@ -393,7 +394,18 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
         userUnlimitedList,
         userDenyList).foreach {
         limiter =>
-          limiters.put(clusterOpt, limiter)
+          limiters.put(KyuubiEbayConf.ServerConnectionLimitScope(clusterOpt, tag = None), limiter)
+      }
+      tagsAndLimits.foreach { case (tag, tagLimit) =>
+        val limitScope = KyuubiEbayConf.ServerConnectionLimitScope(clusterOpt, Some(tag))
+        applySessionLimiter(
+          tagLimit,
+          ipAddressLimit,
+          userIpAddressLimit,
+          userUnlimitedList,
+          userDenyList).foreach {
+          limiter => limiters.put(limitScope, limiter)
+        }
       }
 
       val userBatchLimit = clusterConf.get(SERVER_LIMIT_BATCH_CONNECTIONS_PER_USER).getOrElse(0)
@@ -414,24 +426,28 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
   }
 
   private[kyuubi] def getUnlimitedUsers(cluster: Option[String]): Set[String] = {
-    limiters.get(cluster).orElse(batchLimiters.get(cluster)).map(SessionLimiter.getUnlimitedUsers)
+    findClusterLimiter(cluster).orElse(batchLimiters.get(cluster)).map(
+      SessionLimiter.getUnlimitedUsers)
       .getOrElse(Set.empty)
   }
 
   private[kyuubi] def refreshUnlimitedUsers(cluster: Option[String], conf: KyuubiConf): Unit = {
     val unlimitedUsers = conf.get(SERVER_LIMIT_CONNECTIONS_USER_UNLIMITED_LIST)
-    limiters.get(cluster).foreach(SessionLimiter.resetUnlimitedUsers(_, unlimitedUsers))
+    getClusterLimiters(cluster).foreach(SessionLimiter.resetUnlimitedUsers(
+      _,
+      unlimitedUsers))
     batchLimiters.get(cluster).foreach(SessionLimiter.resetUnlimitedUsers(_, unlimitedUsers))
   }
 
   private[kyuubi] def getDenyUsers(cluster: Option[String]): Set[String] = {
-    limiters.get(cluster).orElse(batchLimiters.get(cluster)).map(SessionLimiter.getDenyUsers)
+    findClusterLimiter(cluster).orElse(batchLimiters.get(cluster)).map(
+      SessionLimiter.getDenyUsers)
       .getOrElse(Set.empty)
   }
 
   private[kyuubi] def refreshDenyUsers(cluster: Option[String], conf: KyuubiConf): Unit = {
     val denyUsers = conf.get(SERVER_LIMIT_CONNECTIONS_USER_DENY_LIST).filter(_.nonEmpty)
-    limiters.get(cluster).foreach(SessionLimiter.resetDenyUsers(_, denyUsers))
+    getClusterLimiters(cluster).foreach(SessionLimiter.resetDenyUsers(_, denyUsers))
     batchLimiters.get(cluster).foreach(SessionLimiter.resetDenyUsers(_, denyUsers))
   }
 
@@ -475,6 +491,33 @@ class KyuubiSessionManager private (name: String) extends SessionManager(name) {
 
   private def getSessionCluster(sessionConf: Map[String, String]): Option[String] = {
     KyuubiEbayConf.getSessionCluster(this, sessionConf)
+  }
+
+  private def getSessionTag(sessionConf: Map[String, String]): Option[String] = {
+    KyuubiEbayConf.getSessionTag(this, sessionConf)
+  }
+
+  private lazy val tagsAndLimits = KyuubiEbayConf.getServerLimiterTagsAndLimits(conf)
+  private lazy val limiterTags = tagsAndLimits.keys.toSeq
+  private def getLimiter(limitScope: KyuubiEbayConf.ServerConnectionLimitScope)
+      : Option[SessionLimiter] = {
+    limiters.get(KyuubiEbayConf.normalizeServerConnectionLimitScope(limitScope, limiterTags))
+  }
+  private def getLimiter(
+      cluster: Option[String],
+      conf: Map[String, String]): Option[SessionLimiter] = {
+    getLimiter(KyuubiEbayConf.ServerConnectionLimitScope(cluster, getSessionTag(conf)))
+  }
+  private def getLimiter(session: KyuubiSession): Option[SessionLimiter] = {
+    getLimiter(KyuubiEbayConf.ServerConnectionLimitScope(
+      session.sessionCluster,
+      session.sessionTag))
+  }
+  private def getClusterLimiters(cluster: Option[String]): Seq[SessionLimiter] = {
+    limiters.filter(_._1.cluster == cluster).values.toSeq
+  }
+  private def findClusterLimiter(cluster: Option[String]): Option[SessionLimiter] = {
+    getClusterLimiters(cluster).headOption
   }
 
   private[kyuubi] def getClusterConf(sessionConf: Map[String, String]): KyuubiConf = {
