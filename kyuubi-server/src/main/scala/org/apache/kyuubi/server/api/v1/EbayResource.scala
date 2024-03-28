@@ -89,9 +89,7 @@ private[v1] class EbayResource extends ApiRequestContext with Logging {
 
   @ApiResponse(
     responseCode = "200",
-    content = Array(new Content(
-      mediaType = MediaType.APPLICATION_JSON,
-      array = new ArraySchema(schema = new Schema(implementation = classOf[String])))),
+    content = Array(new Content(mediaType = MediaType.APPLICATION_JSON)),
     description = "delete the user spark engines with specified subdomain")
   @DELETE
   @Path("engines")
