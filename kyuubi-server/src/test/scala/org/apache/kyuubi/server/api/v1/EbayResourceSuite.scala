@@ -42,4 +42,21 @@ class EbayResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper {
     val groups = response.readEntity(new GenericType[Seq[String]]() {})
     assert(groups.nonEmpty)
   }
+
+  test("users") {
+    val response = webTarget.path("api/v1/ebay/users")
+      .queryParam("user", Utils.currentUser)
+      .request()
+      .header(AUTHORIZATION_HEADER, s"BASIC $encodeAuthorization")
+      .get()
+    assert(200 == response.getStatus)
+  }
+
+  test("engines") {
+    val response = webTarget.path("api/v1/ebay/engines")
+      .request()
+      .header(AUTHORIZATION_HEADER, s"BASIC $encodeAuthorization")
+      .delete()
+    assert(200 == response.getStatus)
+  }
 }
