@@ -45,7 +45,6 @@ class EbayResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper {
 
   test("users") {
     val response = webTarget.path("api/v1/ebay/users")
-      .queryParam("user", Utils.currentUser)
       .request()
       .header(AUTHORIZATION_HEADER, s"BASIC $encodeAuthorization")
       .get()
