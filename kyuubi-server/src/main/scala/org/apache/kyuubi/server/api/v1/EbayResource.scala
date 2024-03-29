@@ -31,6 +31,7 @@ import org.apache.kyuubi.{KYUUBI_VERSION, Logging, Utils}
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiEbayConf}
 import org.apache.kyuubi.engine.{EngineType, ShareLevel}
 import org.apache.kyuubi.ha.HighAvailabilityConf
+import org.apache.kyuubi.ha.client.DiscoveryClient
 import org.apache.kyuubi.ha.client.DiscoveryClientProvider.withDiscoveryClient
 import org.apache.kyuubi.server.api.ApiRequestContext
 import org.apache.kyuubi.session.KyuubiSessionManager
@@ -80,8 +81,7 @@ private[v1] class EbayResource extends ApiRequestContext with Logging {
     clusterOptList.map { clusterOpt =>
       val clusterConf = getClusterConf(clusterOpt)
       val users = withDiscoveryClient(clusterConf) { discoveryClient =>
-        val engineSpace = sparkSQLUserEngineSpace(clusterConf)
-        discoveryClient.getChildren(engineSpace)
+        getChildren(discoveryClient, sparkSQLUserEngineSpace(clusterConf))
       }
       s"${clusterOpt.orNull}" -> users
     }
@@ -109,19 +109,21 @@ private[v1] class EbayResource extends ApiRequestContext with Logging {
       withDiscoveryClient(clusterConf) { discoveryClient =>
         users.foreach { user =>
           val userEngineSpace = s"$engineSpace/$user/$subdomain"
-          try {
-            val engineNodes = discoveryClient.getChildren(userEngineSpace)
-            if (engineNodes.isEmpty) {
-              responseMessageBuilder.append(s"No engine found in $userEngineSpace\n")
-            } else {
-              engineNodes.foreach { engine =>
+          val engineNodes = getChildren(discoveryClient, userEngineSpace)
+          if (engineNodes.isEmpty) {
+            responseMessageBuilder.append(s"No engine found in $userEngineSpace\n")
+          } else {
+            engineNodes.foreach { engine =>
+              try {
                 discoveryClient.delete(s"$userEngineSpace/$engine")
                 responseMessageBuilder.append(s"Deleted $engine from $userEngineSpace\n")
+              } catch {
+                case e: Throwable =>
+                  responseMessageBuilder.append(
+                    s"Failed to delete $engine from $userEngineSpace: " +
+                      s"${e.getMessage}\n")
               }
             }
-          } catch {
-            case _: Exception =>
-              responseMessageBuilder.append(s"No engine found in $userEngineSpace\n")
           }
         }
       }
@@ -143,5 +145,13 @@ private[v1] class EbayResource extends ApiRequestContext with Logging {
   private def sparkSQLUserEngineSpace(conf: KyuubiConf): String = {
     val serverSpace = conf.get(HighAvailabilityConf.HA_NAMESPACE)
     s"${serverSpace}_${KYUUBI_VERSION}_${ShareLevel.USER}_${EngineType.SPARK_SQL}"
+  }
+
+  private def getChildren(discoveryClient: DiscoveryClient, path: String): Seq[String] = {
+    try {
+      discoveryClient.getChildren(path)
+    } catch {
+      case _: Throwable => Seq.empty
+    }
   }
 }
