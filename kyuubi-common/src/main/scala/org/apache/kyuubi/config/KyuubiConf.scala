@@ -2023,6 +2023,16 @@ object KyuubiConf {
       .intConf
       .createWithDefault(65536)
 
+  val METADATA_SEARCH_WINDOW: OptionalConfigEntry[Long] =
+    buildConf("kyuubi.metadata.search.window")
+      .doc("The time window to restrict user queries to metadata within a specific period. " +
+        "For example, if the window is set to P7D, only metadata from the past 7 days can be " +
+        "queried. If not set, it allows searching all metadata information in the metadata store.")
+      .version("1.10.1")
+      .timeConf
+      .checkValue(_ > 0, "must be positive number")
+      .createOptional
+
   val ENGINE_EXEC_WAIT_QUEUE_SIZE: ConfigEntry[Int] =
     buildConf("kyuubi.backend.engine.exec.pool.wait.queue.size")
       .doc("Size of the wait queue for the operation execution thread pool in SQL engine" +
