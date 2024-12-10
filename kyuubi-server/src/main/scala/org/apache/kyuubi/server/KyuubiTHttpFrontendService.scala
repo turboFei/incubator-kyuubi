@@ -362,8 +362,7 @@ final class KyuubiTHttpFrontendService(
 
   override protected def reserveSessionOnDisconnect(sessionHandle: SessionHandle): Unit = {
     be.sessionManager.getSession(sessionHandle) match {
-      case kyuubiSession: KyuubiSessionImpl =>
-        kyuubiSession.client.disconnect()
+      case kyuubiSession: KyuubiSessionImpl => kyuubiSession.client.disconnect()
       case _ =>
     }
   }
