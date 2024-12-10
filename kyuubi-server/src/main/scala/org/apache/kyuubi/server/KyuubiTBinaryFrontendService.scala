@@ -31,7 +31,7 @@ import org.apache.kyuubi.metrics.MetricsConstants._
 import org.apache.kyuubi.metrics.MetricsSystem
 import org.apache.kyuubi.service.{Serverable, Service, TBinaryFrontendService}
 import org.apache.kyuubi.service.TFrontendService.{CURRENT_SERVER_CONTEXT, FeServiceServerContext, OK_STATUS}
-import org.apache.kyuubi.session.KyuubiSessionImpl
+import org.apache.kyuubi.session.{KyuubiSessionImpl, SessionHandle}
 import org.apache.kyuubi.shaded.hive.service.rpc.thrift._
 import org.apache.kyuubi.shaded.thrift.protocol.TProtocol
 import org.apache.kyuubi.shaded.thrift.server.ServerContext
@@ -121,5 +121,13 @@ final class KyuubiTBinaryFrontendService(
     val resp = new TRenewDelegationTokenResp
     resp.setStatus(notSupportTokenErrorStatus)
     resp
+  }
+
+  override protected def reserveSessionOnDisconnect(sessionHandle: SessionHandle): Unit = {
+    be.sessionManager.getSession(sessionHandle) match {
+      case kyuubiSession: KyuubiSessionImpl =>
+        kyuubiSession.client.disconnect()
+      case _ =>
+    }
   }
 }

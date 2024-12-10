@@ -606,6 +606,8 @@ abstract class TFrontendService(name: String)
 
   protected def isServer(): Boolean = false
 
+  protected def reserveSessionOnDisconnect(sessionHandle: SessionHandle): Unit = {}
+
   class FeTServerEventHandler extends TServerEventHandler {
     implicit def toFeServiceServerContext(context: ServerContext): FeServiceServerContext = {
       context.asInstanceOf[FeServiceServerContext]
@@ -616,13 +618,15 @@ abstract class TFrontendService(name: String)
       if (handle != null) {
         info(s"Session [$handle] disconnected without closing properly, close it now")
         try {
-          val needToClose = be.sessionManager.getSession(handle).conf
-            .getOrElse(SESSION_CLOSE_ON_DISCONNECT.key, "true").toBoolean
+          val session = be.sessionManager.getSession(handle)
+          val needToClose = session.isForAliveProbe ||
+            session.conf.getOrElse(SESSION_CLOSE_ON_DISCONNECT.key, "true").toBoolean
           if (needToClose) {
             be.closeSession(handle)
           } else {
             warn(s"Session not actually closed because configuration " +
               s"${SESSION_CLOSE_ON_DISCONNECT.key} is set to false")
+            reserveSessionOnDisconnect(handle)
           }
         } catch {
           case e: KyuubiSQLException =>

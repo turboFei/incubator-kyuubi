@@ -47,7 +47,7 @@ import org.apache.kyuubi.server.http.ThriftHttpServlet
 import org.apache.kyuubi.server.http.authentication.AuthenticationFilter
 import org.apache.kyuubi.service.{Serverable, Service, ServiceUtils, TFrontendService}
 import org.apache.kyuubi.service.TFrontendService.{CURRENT_SERVER_CONTEXT, OK_STATUS}
-import org.apache.kyuubi.session.KyuubiSessionImpl
+import org.apache.kyuubi.session.{KyuubiSessionImpl, SessionHandle}
 import org.apache.kyuubi.shaded.hive.service.rpc.thrift.{TCLIService, TOpenSessionReq, TOpenSessionResp}
 import org.apache.kyuubi.shaded.thrift.protocol.TBinaryProtocol
 import org.apache.kyuubi.util.NamedThreadFactory
@@ -358,5 +358,13 @@ final class KyuubiTHttpFrontendService(
     }
 
     ret
+  }
+
+  override protected def reserveSessionOnDisconnect(sessionHandle: SessionHandle): Unit = {
+    be.sessionManager.getSession(sessionHandle) match {
+      case kyuubiSession: KyuubiSessionImpl =>
+        kyuubiSession.client.disconnect()
+      case _ =>
+    }
   }
 }

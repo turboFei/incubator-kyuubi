@@ -460,6 +460,16 @@ class KyuubiSyncThriftClient private (
         throw e
     }
   }
+
+  /**
+   * Disconnect the connection from Kyuubi server to kyuubi engine without closing the session.
+   * This is used to reserve the session on the engine side.
+   */
+  def disconnect(): Unit = {
+    info(s"Disconnecting the connection to the engine[$engineId] for session[$remoteSessionHandle]")
+    protocol.getTransport.close()
+    engineAliveProbeProtocol.foreach(_.getTransport.close())
+  }
 }
 
 private[kyuubi] object KyuubiSyncThriftClient extends Logging {
