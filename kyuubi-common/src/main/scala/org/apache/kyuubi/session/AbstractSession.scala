@@ -58,6 +58,12 @@ abstract class AbstractSession(
 
   override val sessionIdleTimeoutThreshold: Long = sessionManager.getConf.get(SESSION_IDLE_TIMEOUT)
 
+  @volatile private var _sessionBrokenTime: Long = 0
+  override def getSessionBrokenTime: Long = _sessionBrokenTime
+  override def setSessionBrokenTime(brokenTime: Long): Unit = _sessionBrokenTime = brokenTime
+  override def sessionBrokenTimeoutThreshold: Long =
+    sessionManager.getConf.get(SESSION_CLOSE_ON_DISCONNECT_TIMEOUT)
+
   val normalizedConf: Map[String, String] = sessionManager.validateAndNormalizeConf(conf)
 
   override lazy val name: Option[String] = normalizedConf.get(SESSION_NAME.key)

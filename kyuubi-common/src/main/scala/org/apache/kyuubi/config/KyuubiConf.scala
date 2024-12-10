@@ -1685,6 +1685,12 @@ object KyuubiConf {
       .booleanConf
       .createWithDefault(true)
 
+  val SESSION_CLOSE_ON_DISCONNECT_TIMEOUT: ConfigEntry[Long] =
+    buildConf("kyuubi.session.close.on.disconnect.timeout")
+      .version("1.10.1")
+      .timeConf
+      .createWithDefaultString("PT5M")
+
   val BATCH_SESSION_IDLE_TIMEOUT: ConfigEntry[Long] = buildConf("kyuubi.batch.session.idle.timeout")
     .doc("Batch session idle timeout, it will be closed when it's not accessed for this duration")
     .version("1.6.2")

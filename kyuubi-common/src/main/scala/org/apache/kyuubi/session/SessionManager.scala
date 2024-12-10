@@ -318,6 +318,11 @@ abstract class SessionManager(name: String) extends CompositeService(name) {
                 info(s"Closing session ${session.handle.identifier} that has been idle for more" +
                   s" than ${session.sessionIdleTimeoutThreshold} ms")
                 closeSession(session.handle)
+              } else if (session.getSessionBrokenTime > 0 &&
+                session.getSessionBrokenTime + session.sessionBrokenTimeoutThreshold < current) {
+                info(s"Closing session ${session.handle.identifier} that has been broken for more" +
+                  s" than ${session.sessionBrokenTimeoutThreshold} ms")
+                closeSession(session.handle)
               } else {
                 session.closeExpiredOperations()
               }

@@ -39,6 +39,10 @@ trait Session {
   def getNoOperationTime: Long
   def sessionIdleTimeoutThreshold: Long
 
+  def getSessionBrokenTime: Long
+  def setSessionBrokenTime(brokenTime: Long): Unit
+  def sessionBrokenTimeoutThreshold: Long
+
   def sessionManager: SessionManager
 
   def open(): Unit
