@@ -20,7 +20,6 @@ package org.apache.kyuubi.config
 object KyuubiReservedKeys {
   final val KYUUBI_CLIENT_IP_KEY = "kyuubi.client.ipAddress"
   final val KYUUBI_CLIENT_VERSION_KEY = "kyuubi.client.version"
-  final val KYUUBI_ENGINE_REFID = "kyuubi.engine.refId"
   final val KYUUBI_SERVER_IP_KEY = "kyuubi.server.ipAddress"
   final val KYUUBI_SESSION_USER_KEY = "kyuubi.session.user"
   final val KYUUBI_SESSION_SIGN_PUBLICKEY = "kyuubi.session.sign.publickey"
@@ -38,6 +37,7 @@ object KyuubiReservedKeys {
   final val KYUUBI_ENGINE_SUBMIT_TIME_KEY = "kyuubi.engine.submit.time"
   final val KYUUBI_ENGINE_CREDENTIALS_KEY = "kyuubi.engine.credentials"
   final val KYUUBI_ENGINE_APP_MGR_INFO_KEY = "kyuubi.engine.appMgrInfo"
+  final val KYUUBI_ENGINE_REF_ID = "kyuubi.engine.refId"
   final val KYUUBI_SESSION_HANDLE_KEY = "kyuubi.session.handle"
   final val KYUUBI_SESSION_ALIVE_PROBE = "kyuubi.session.alive.probe"
   final val KYUUBI_SESSION_ENGINE_LAUNCH_HANDLE_GUID =

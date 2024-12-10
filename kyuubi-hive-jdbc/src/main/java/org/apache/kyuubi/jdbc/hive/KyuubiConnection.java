@@ -841,7 +841,7 @@ public class KyuubiConnection implements SQLConnection, KyuubiLoggable {
       LOG.debug("Error getting Kyuubi session local client ip address", e);
     }
     openConf.put(Utils.KYUUBI_CLIENT_VERSION_KEY, Utils.getVersion());
-    if (engineRefId != null) {
+    if (StringUtils.isNotBlank(engineRefId)) {
       openConf.put("kyuubi.engine.refId", engineRefId);
     }
     openReq.setConfiguration(openConf);

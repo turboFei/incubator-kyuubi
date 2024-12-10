@@ -26,7 +26,7 @@ import org.apache.kyuubi.client.KyuubiSyncThriftClient
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf._
 import org.apache.kyuubi.config.KyuubiConf.EngineOpenOnFailure._
-import org.apache.kyuubi.config.KyuubiReservedKeys.{KYUUBI_ENGINE_CREDENTIALS_KEY, KYUUBI_ENGINE_REFID, KYUUBI_SESSION_HANDLE_KEY, KYUUBI_SESSION_SIGN_PUBLICKEY, KYUUBI_SESSION_USER_SIGN}
+import org.apache.kyuubi.config.KyuubiReservedKeys.{KYUUBI_ENGINE_CREDENTIALS_KEY, KYUUBI_ENGINE_REF_ID, KYUUBI_SESSION_HANDLE_KEY, KYUUBI_SESSION_SIGN_PUBLICKEY, KYUUBI_SESSION_USER_SIGN}
 import org.apache.kyuubi.engine.{EngineRef, KyuubiApplicationManager}
 import org.apache.kyuubi.events.{EventBus, KyuubiSessionEvent}
 import org.apache.kyuubi.ha.client.DiscoveryClientProvider._
@@ -80,7 +80,7 @@ class KyuubiSessionImpl(
     user,
     doAsEnabled,
     sessionManager.groupProvider,
-    optimizedConf.getOrElse(KYUUBI_ENGINE_REFID, handle.identifier.toString),
+    optimizedConf.getOrElse(KYUUBI_ENGINE_REF_ID, handle.identifier.toString),
     sessionManager.applicationManager,
     sessionManager.engineStartupProcessSemaphore)
   private[kyuubi] val launchEngineOp = sessionManager.operationManager
