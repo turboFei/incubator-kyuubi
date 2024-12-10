@@ -21,7 +21,7 @@
     <parent>
         <groupId>org.apache.kyuubi</groupId>
         <artifactId>kyuubi-parent</artifactId>
-        <version>1.8.0-SNAPSHOT</version>
+        <version>1.11.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>kyuubi-hive-jdbc</artifactId>
@@ -72,21 +72,6 @@
         </dependency>
 
         <dependency>
-            <groupId>org.apache.thrift</groupId>
-            <artifactId>libfb303</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>org.apache.thrift</groupId>
-            <artifactId>libthrift</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>org.apache.hive</groupId>
-            <artifactId>hive-service-rpc</artifactId>
-        </dependency>
-
-        <dependency>
             <groupId>commons-codec</groupId>
             <artifactId>commons-codec</artifactId>
         </dependency>
@@ -114,7 +99,17 @@
 
         <dependency>
             <groupId>org.apache.kyuubi</groupId>
-            <artifactId>${kyuubi-shaded-zookeeper.artifacts}</artifactId>
+            <artifactId>kyuubi-relocated-thrift</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.kyuubi</groupId>
+            <artifactId>kyuubi-relocated-hive-service-rpc</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.kyuubi</groupId>
+            <artifactId>${kyuubi-relocated-zookeeper.artifacts}</artifactId>
         </dependency>
 
         <dependency>

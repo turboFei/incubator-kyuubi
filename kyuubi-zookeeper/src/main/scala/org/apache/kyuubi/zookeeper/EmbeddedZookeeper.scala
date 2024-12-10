@@ -19,11 +19,13 @@ package org.apache.kyuubi.zookeeper
 
 import java.io.File
 import java.net.InetSocketAddress
+import java.nio.file.Paths
 
 import org.apache.kyuubi.Utils._
-import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.{ConfigEntry, KyuubiConf}
 import org.apache.kyuubi.service.{AbstractService, ServiceState}
 import org.apache.kyuubi.shaded.zookeeper.server.{NIOServerCnxnFactory, ZooKeeperServer}
+import org.apache.kyuubi.util.JavaUtils
 import org.apache.kyuubi.zookeeper.ZookeeperConf._
 
 class EmbeddedZookeeper extends AbstractService("EmbeddedZookeeper") {
@@ -31,27 +33,43 @@ class EmbeddedZookeeper extends AbstractService("EmbeddedZookeeper") {
   private var zks: ZooKeeperServer = _
   private var serverFactory: NIOServerCnxnFactory = _
   private var dataDirectory: File = _
+  private var dataLogDirectory: File = _
   // TODO: Is it right in prod?
   private val deleteDataDirectoryOnClose = true
   private var host: String = _
 
   override def initialize(conf: KyuubiConf): Unit = synchronized {
-    dataDirectory = new File(conf.get(ZK_DATA_DIR))
+    dataDirectory = resolvePathIfRelative(conf, ZK_DATA_DIR)
+    dataLogDirectory = resolvePathIfRelative(conf, ZK_DATA_LOG_DIR)
+
     val clientPort = conf.get(ZK_CLIENT_PORT)
     val tickTime = conf.get(ZK_TICK_TIME)
     val maxClientCnxns = conf.get(ZK_MAX_CLIENT_CONNECTIONS)
     val minSessionTimeout = conf.get(ZK_MIN_SESSION_TIMEOUT)
     val maxSessionTimeout = conf.get(ZK_MAX_SESSION_TIMEOUT)
-    host = conf.get(ZK_CLIENT_PORT_ADDRESS).getOrElse(findLocalInetAddress.getCanonicalHostName)
+    host = conf.get(ZK_CLIENT_PORT_ADDRESS).getOrElse {
+      if (conf.get(ZK_CLIENT_USE_HOSTNAME)) {
+        JavaUtils.findLocalInetAddress.getCanonicalHostName
+      } else {
+        JavaUtils.findLocalInetAddress.getHostAddress
+      }
+    }
 
-    zks = new ZooKeeperServer(dataDirectory, dataDirectory, tickTime)
-    zks.setMinSessionTimeout(minSessionTimeout)
-    zks.setMaxSessionTimeout(maxSessionTimeout)
+    try {
+      zks = new ZooKeeperServer(dataDirectory, dataLogDirectory, tickTime)
+      zks.setMinSessionTimeout(minSessionTimeout)
+      zks.setMaxSessionTimeout(maxSessionTimeout)
 
-    serverFactory = new NIOServerCnxnFactory
-    serverFactory.configure(new InetSocketAddress(host, clientPort), maxClientCnxns)
+      serverFactory = new NIOServerCnxnFactory
+      serverFactory.configure(new InetSocketAddress(host, clientPort), maxClientCnxns)
 
-    super.initialize(conf)
+      super.initialize(conf)
+    } catch {
+      case e: Exception =>
+        throw new RuntimeException(
+          s"Failed to initialize the embedded ZooKeeper server, binding to $host:$clientPort",
+          e)
+    }
   }
 
   override def start(): Unit = synchronized {
@@ -66,7 +84,10 @@ class EmbeddedZookeeper extends AbstractService("EmbeddedZookeeper") {
     if (getServiceState == ServiceState.STARTED) {
       if (null != serverFactory) serverFactory.shutdown()
       if (null != zks) zks.shutdown()
-      if (deleteDataDirectoryOnClose) deleteDirectoryRecursively(dataDirectory)
+      if (deleteDataDirectoryOnClose) {
+        deleteDirectoryRecursively(dataDirectory)
+        deleteDirectoryRecursively(dataLogDirectory)
+      }
     }
     super.stop()
   }
@@ -75,4 +96,10 @@ class EmbeddedZookeeper extends AbstractService("EmbeddedZookeeper") {
     assert(zks != null, s"$getName is in $getServiceState")
     s"$host:${serverFactory.getLocalPort}"
   }
+
+  def resolvePathIfRelative(conf: KyuubiConf, configEntry: ConfigEntry[String]): File = {
+    val dirFromConfig = conf.get(configEntry)
+    Paths.get(sys.env.getOrElse(KyuubiConf.KYUUBI_HOME, ".")).resolve(dirFromConfig).toFile
+  }
+
 }

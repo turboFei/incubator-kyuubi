@@ -132,6 +132,116 @@ class PySparkTests extends WithKyuubiServer with HiveJDBCTestHelper {
     })
   }
 
+  test("Support python magic syntax for python notebook") {
+    checkPythonRuntimeAndVersion()
+    withSessionConf()(Map(KyuubiConf.ENGINE_SPARK_PYTHON_MAGIC_ENABLED.key -> "true"))() {
+      withMultipleConnectionJdbcStatement()({ stmt =>
+        val statement = stmt.asInstanceOf[KyuubiStatement]
+        statement.executePython("x = [[1, 'a'], [3, 'b']]")
+
+        val resultSet1 = statement.executePython("%json x")
+        assert(resultSet1.next())
+        val output1 = resultSet1.getString("output")
+        assert(output1 == "{\"application/json\":[[1,\"a\"],[3,\"b\"]]}")
+
+        val resultSet2 = statement.executePython("%table x")
+        assert(resultSet2.next())
+        val output2 = resultSet2.getString("output")
+        assert(output2 == "{\"application/vnd.livy.table.v1+json\":{" +
+          "\"headers\":[" +
+          "{\"name\":\"0\",\"type\":\"INT_TYPE\"},{\"name\":\"1\",\"type\":\"STRING_TYPE\"}" +
+          "]," +
+          "\"data\":[" +
+          "[1,\"a\"],[3,\"b\"]" +
+          "]}}")
+
+        Seq("table", "json", "matplot").foreach { magic =>
+          val e = intercept[KyuubiSQLException] {
+            statement.executePython(s"%$magic invalid_value")
+          }.getMessage
+          assert(e.contains("KeyError: 'invalid_value'"))
+        }
+
+        statement.executePython("y = [[1, 2], [3, 'b']]")
+        var e = intercept[KyuubiSQLException] {
+          statement.executePython("%table y")
+        }.getMessage
+        assert(e.contains("table rows have different types"))
+
+        e = intercept[KyuubiSQLException] {
+          statement.executePython("%magic_unknown")
+        }.getMessage
+        assert(e.contains("unknown magic command 'magic_unknown'"))
+      })
+    }
+
+    withSessionConf()(Map(KyuubiConf.ENGINE_SPARK_PYTHON_MAGIC_ENABLED.key -> "false"))() {
+      withMultipleConnectionJdbcStatement()({ stmt =>
+        val statement = stmt.asInstanceOf[KyuubiStatement]
+        statement.executePython("x = [[1, 'a'], [3, 'b']]")
+        val e = intercept[KyuubiSQLException] {
+          statement.executePython("%json x")
+        }.getMessage
+        assert(e.contains("SyntaxError: invalid syntax"))
+      })
+    }
+  }
+
+  test("catch all exception when dump the result to json") {
+    checkPythonRuntimeAndVersion()
+    withSessionConf()(Map(KyuubiConf.ENGINE_SPARK_PYTHON_MAGIC_ENABLED.key -> "true"))() {
+      withMultipleConnectionJdbcStatement()({ stmt =>
+        val statement = stmt.asInstanceOf[KyuubiStatement]
+        statement.executePython("l = [('Alice', 1)]")
+        statement.executePython("df = spark.createDataFrame(l)")
+        val errorMsg = intercept[KyuubiSQLException] {
+          statement.executePython("%json df")
+        }.getMessage
+        assert(errorMsg.contains("Object of type DataFrame is not JSON serializable"))
+
+        statement.executePython("df = spark.createDataFrame(l).collect()")
+        val result = statement.executePython("%json df")
+        assert(result.next())
+        assert(result.getString("output") == "{\"application/json\":[[\"Alice\",1]]}")
+      })
+    }
+  }
+
+  test("Support to cancel Spark python operation") {
+    checkPythonRuntimeAndVersion()
+    withMultipleConnectionJdbcStatement()({ stmt =>
+      val statement = stmt.asInstanceOf[KyuubiStatement]
+      statement.executeQuery("SET kyuubi.operation.language=PYTHON")
+      val code1 =
+        """
+          |i = 0
+          |i
+          |""".stripMargin
+      val resultSet1 = statement.executeQuery(code1)
+      assert(resultSet1.next())
+      assert(resultSet1.getString("status") === "ok")
+      assert(resultSet1.getString("output") === "0")
+      val code2 =
+        """
+          |import time
+          |while True:
+          |   i +=1
+          |   time.sleep(1)
+          |""".stripMargin
+      statement.executeAsync(code2)
+      statement.cancel()
+
+      val code3 =
+        """
+          |i
+          |""".stripMargin
+      val resultSet3 = statement.executeQuery(code3)
+      assert(resultSet3.next())
+      assert(resultSet3.getString("status") === "ok")
+      assert(resultSet3.getString("output").toInt > 0)
+    })
+  }
+
   private def runPySparkTest(
       pyCode: String,
       output: String): Unit = {
@@ -167,7 +277,7 @@ class PySparkTests extends WithKyuubiServer with HiveJDBCTestHelper {
       }
       op(tempPyFile.getPath)
     } finally {
-      Files.delete(tempPyFile.toPath)
+      Files.deleteIfExists(tempPyFile.toPath)
     }
   }
 }

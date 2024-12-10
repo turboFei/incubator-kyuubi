@@ -22,12 +22,10 @@ import java.lang.{Boolean => JBoolean}
 import java.net.URL
 import java.util.{ArrayList => JArrayList, Collections => JCollections, List => JList}
 
-import scala.collection.JavaConverters._
 import scala.collection.convert.ImplicitConversions._
 
 import org.apache.commons.cli.{CommandLine, DefaultParser, Options}
 import org.apache.flink.api.common.JobID
-import org.apache.flink.client.cli.{CustomCommandLine, DefaultCLI, GenericCLI}
 import org.apache.flink.configuration.Configuration
 import org.apache.flink.core.fs.Path
 import org.apache.flink.runtime.util.EnvironmentInformation
@@ -38,22 +36,24 @@ import org.apache.flink.table.gateway.service.context.{DefaultContext, SessionCo
 import org.apache.flink.table.gateway.service.result.ResultFetcher
 import org.apache.flink.table.gateway.service.session.Session
 import org.apache.flink.util.JarUtils
+import org.apache.hadoop.security.{Credentials, UserGroupInformation}
 
 import org.apache.kyuubi.{KyuubiException, Logging}
-import org.apache.kyuubi.util.SemanticVersion
-import org.apache.kyuubi.util.reflect._
+import org.apache.kyuubi.util.{KyuubiHadoopUtils, SemanticVersion}
 import org.apache.kyuubi.util.reflect.ReflectUtils._
 
 object FlinkEngineUtils extends Logging {
 
   val EMBEDDED_MODE_CLIENT_OPTIONS: Options = getEmbeddedModeClientOptions(new Options)
 
-  val SUPPORTED_FLINK_VERSIONS: Array[SemanticVersion] =
-    Array("1.16", "1.17").map(SemanticVersion.apply)
+  private def SUPPORTED_FLINK_VERSIONS =
+    Set("1.17", "1.18", "1.19", "1.20").map(SemanticVersion.apply)
+
+  val FLINK_RUNTIME_VERSION: SemanticVersion = SemanticVersion(EnvironmentInformation.getVersion)
 
   def checkFlinkVersion(): Unit = {
     val flinkVersion = EnvironmentInformation.getVersion
-    if (SUPPORTED_FLINK_VERSIONS.contains(SemanticVersion(flinkVersion))) {
+    if (SUPPORTED_FLINK_VERSIONS.contains(FLINK_RUNTIME_VERSION)) {
       info(s"The current Flink version is $flinkVersion")
     } else {
       throw new UnsupportedOperationException(
@@ -61,15 +61,6 @@ object FlinkEngineUtils extends Logging {
           s"only Flink ${SUPPORTED_FLINK_VERSIONS.mkString(", ")} are supported now.")
     }
   }
-
-  def isFlinkVersionAtMost(targetVersionString: String): Boolean =
-    SemanticVersion(EnvironmentInformation.getVersion).isVersionAtMost(targetVersionString)
-
-  def isFlinkVersionAtLeast(targetVersionString: String): Boolean =
-    SemanticVersion(EnvironmentInformation.getVersion).isVersionAtLeast(targetVersionString)
-
-  def isFlinkVersionEqualTo(targetVersionString: String): Boolean =
-    SemanticVersion(EnvironmentInformation.getVersion).isVersionEqualTo(targetVersionString)
 
   /**
    * Copied and modified from [[org.apache.flink.table.client.cli.CliOptionsParser]]
@@ -116,18 +107,14 @@ object FlinkEngineUtils extends Logging {
     val libDirs: JList[URL] = Option(checkUrls(line, CliOptionsParser.OPTION_LIBRARY))
       .getOrElse(JCollections.emptyList())
     val dependencies: JList[URL] = discoverDependencies(jars, libDirs)
-    if (FlinkEngineUtils.isFlinkVersionEqualTo("1.16")) {
-      val commandLines: JList[CustomCommandLine] =
-        Seq(new GenericCLI(flinkConf, flinkConfDir), new DefaultCLI).asJava
-      DynConstructors.builder()
-        .impl(
-          classOf[DefaultContext],
-          classOf[Configuration],
-          classOf[JList[CustomCommandLine]])
-        .build()
-        .newInstance(flinkConf, commandLines)
-        .asInstanceOf[DefaultContext]
-    } else if (FlinkEngineUtils.isFlinkVersionEqualTo("1.17")) {
+    if (FLINK_RUNTIME_VERSION >= "1.19") {
+      invokeAs[DefaultContext](
+        classOf[DefaultContext],
+        "load",
+        (classOf[Configuration], flinkConf),
+        (classOf[JList[URL]], dependencies),
+        (classOf[Boolean], JBoolean.TRUE))
+    } else if (FLINK_RUNTIME_VERSION >= "1.17") {
       invokeAs[DefaultContext](
         classOf[DefaultContext],
         "load",
@@ -144,9 +131,6 @@ object FlinkEngineUtils extends Logging {
   def getSessionContext(session: Session): SessionContext = getField(session, "sessionContext")
 
   def getResultJobId(resultFetch: ResultFetcher): Option[JobID] = {
-    if (FlinkEngineUtils.isFlinkVersionAtMost("1.16")) {
-      return None
-    }
     try {
       Option(getField[JobID](resultFetch, "jobID"))
     } catch {
@@ -182,5 +166,33 @@ object FlinkEngineUtils extends Logging {
         }
       }).toList
     } else null
+  }
+
+  def renewDelegationToken(delegationToken: String): Unit = {
+    val newCreds = KyuubiHadoopUtils.decodeCredentials(delegationToken)
+    val newTokens = KyuubiHadoopUtils.getTokenMap(newCreds)
+
+    val updateCreds = new Credentials()
+    val oldCreds = UserGroupInformation.getCurrentUser.getCredentials
+    newTokens.foreach { case (alias, newToken) =>
+      val oldToken = oldCreds.getToken(alias)
+      if (oldToken != null) {
+        if (KyuubiHadoopUtils.compareIssueDate(newToken, oldToken) > 0) {
+          updateCreds.addToken(alias, newToken)
+        } else {
+          warn(s"Ignore token with earlier issue date: $newToken")
+        }
+      } else {
+        info(s"Add new unknown token $newToken")
+        updateCreds.addToken(alias, newToken)
+      }
+    }
+
+    if (updateCreds.numberOfTokens() > 0) {
+      info("Update delegation tokens. " +
+        s"The number of tokens sent by the server is ${newCreds.numberOfTokens()}. " +
+        s"The actual number of updated tokens is ${updateCreds.numberOfTokens()}.")
+      UserGroupInformation.getCurrentUser.addCredentials(updateCreds)
+    }
   }
 }

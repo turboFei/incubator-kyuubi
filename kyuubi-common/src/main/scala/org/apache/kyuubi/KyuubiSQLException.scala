@@ -23,9 +23,8 @@ import java.sql.SQLException
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 
-import org.apache.hive.service.rpc.thrift.{TStatus, TStatusCode}
-
 import org.apache.kyuubi.Utils.stringifyException
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift.{TStatus, TStatusCode}
 import org.apache.kyuubi.util.reflect.DynConstructors
 
 /**
@@ -83,8 +82,8 @@ object KyuubiSQLException {
     }
   }
 
-  def featureNotSupported(): KyuubiSQLException = {
-    KyuubiSQLException("feature not supported", sqlState = "0A000")
+  def featureNotSupported(message: String = "feature not supported"): KyuubiSQLException = {
+    KyuubiSQLException(message, sqlState = "0A000")
   }
 
   def connectionDoesNotExist(): KyuubiSQLException = {
@@ -156,7 +155,7 @@ object KyuubiSQLException {
     (i1, i2, i3)
   }
 
-  def toCause(details: Seq[String]): Throwable = {
+  def toCause(details: Iterable[String]): Throwable = {
     var ex: Throwable = null
     if (details != null && details.nonEmpty) {
       val head = details.head
@@ -172,7 +171,7 @@ object KyuubiSQLException {
         val lineNum = line.substring(i3 + 1).toInt
         new StackTraceElement(clzName, methodName, fileName, lineNum)
       }
-      ex = newInstance(exClz, msg, toCause(details.slice(length + 2, details.length)))
+      ex = newInstance(exClz, msg, toCause(details.slice(length + 2, details.size)))
       ex.setStackTrace(stackTraceElements.toArray)
     }
     ex

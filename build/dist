@@ -215,7 +215,7 @@ else
   echo "Making distribution for Kyuubi $VERSION in '$DISTDIR'..."
 fi
 
-MVN_DIST_OPT="-DskipTests -Dmaven.javadoc.skip=true -Dmaven.scaladoc.skip=true -Dmaven.source.skip"
+MVN_DIST_OPT="-DskipTests -Dmaven.source.skip"
 
 if [[ "$ENABLE_WEBUI" == "true" ]]; then
   MVN_DIST_OPT="$MVN_DIST_OPT -Pweb-ui"
@@ -233,6 +233,13 @@ if [[ "$HIVE_PROVIDED" == "true" ]]; then
   MVN_DIST_OPT="$MVN_DIST_OPT -Phive-provided"
 fi
 
+# clean up all versions of Spark extension, to avoid collecting outdated artifacts
+SPARK_EXTENSION_VERSIONS=('3-2' '3-3' '3-4' '3-5')
+# shellcheck disable=SC2068
+for SPARK_EXTENSION_VERSION in ${SPARK_EXTENSION_VERSIONS[@]}; do
+  rm -f "$KYUUBI_HOME/extensions/spark/kyuubi-extension-spark-$SPARK_EXTENSION_VERSION/target/kyuubi-extension-spark-${SPARK_EXTENSION_VERSION}_${SCALA_VERSION}-${VERSION}.jar"
+done
+
 export MAVEN_OPTS="${MAVEN_OPTS:--Xmx2g}"
 
 BUILD_COMMAND=("$MVN" clean install $MVN_DIST_OPT $@)
@@ -240,8 +247,31 @@ BUILD_COMMAND=("$MVN" clean install $MVN_DIST_OPT $@)
 echo -e "\nBuilding with..."
 # shellcheck disable=SC2145
 echo -e "\$ ${BUILD_COMMAND[@]}\n"
-
 "${BUILD_COMMAND[@]}"
+
+FILTERED_ARGS=()
+# shellcheck disable=SC2045
+for arg in "$@"; do
+    if [[ $arg == *scala-2.12* ]]; then
+        FILTERED_ARGS+=("${arg//scala-2.12/scala-2.13}")
+    elif [[ $arg == *scala-2.13* ]]; then
+        FILTERED_ARGS+=("${arg//scala-2.13/scala-2.12}")
+    else
+        FILTERED_ARGS+=("$arg")
+    fi
+done
+
+# shellcheck disable=SC2050
+if [ "$SCALA_VERSION" = "2.12" ]; then
+  EXTRA_SPARK_ENGINE_BUILD_COMMAND=("$MVN" install $MVN_DIST_OPT ${FILTERED_ARGS[@]} -Pscala-2.13 -pl :kyuubi-spark-sql-engine_2.13 -am)
+else
+  EXTRA_SPARK_ENGINE_BUILD_COMMAND=("$MVN" install $MVN_DIST_OPT ${FILTERED_ARGS[@]} -pl :kyuubi-spark-sql-engine_2.12 -am)
+fi
+
+# shellcheck disable=SC2145
+echo -e "\$ ${EXTRA_SPARK_ENGINE_BUILD_COMMAND[@]}\n"
+
+"${EXTRA_SPARK_ENGINE_BUILD_COMMAND[@]}"
 
 # Make directories
 rm -rf "$DISTDIR"
@@ -249,6 +279,7 @@ mkdir -p "$DISTDIR/pid"
 mkdir -p "$DISTDIR/logs"
 mkdir -p "$DISTDIR/work"
 mkdir -p "$DISTDIR/jars"
+mkdir -p "$DISTDIR/db-scripts"
 mkdir -p "$DISTDIR/beeline-jars"
 mkdir -p "$DISTDIR/web-ui"
 mkdir -p "$DISTDIR/externals/engines/flink"
@@ -270,6 +301,9 @@ echo "Build flags: $@" >> "$DISTDIR/RELEASE"
 # Copy kyuubi server jars
 cp -r "$KYUUBI_HOME"/kyuubi-assembly/target/scala-$SCALA_VERSION/jars/*.jar "$DISTDIR/jars/"
 
+# Copy kyuubi database scripts
+cp -r "$KYUUBI_HOME"/kyuubi-server/src/main/resources/sql/* "$DISTDIR/db-scripts/"
+
 # Copy kyuubi beeline jars
 cp "$KYUUBI_HOME"/kyuubi-hive-beeline/target/*.jar "$DISTDIR/beeline-jars/"
 
@@ -285,7 +319,10 @@ done
 cp "$KYUUBI_HOME/externals/kyuubi-flink-sql-engine/target/kyuubi-flink-sql-engine_${SCALA_VERSION}-${VERSION}.jar" "$DISTDIR/externals/engines/flink/"
 
 # Copy spark engines
-cp "$KYUUBI_HOME/externals/kyuubi-spark-sql-engine/target/kyuubi-spark-sql-engine_${SCALA_VERSION}-${VERSION}.jar" "$DISTDIR/externals/engines/spark/"
+# shellcheck disable=SC2045
+for scala_version in 2.12 2.13; do
+  cp "$KYUUBI_HOME/externals/kyuubi-spark-sql-engine/target/kyuubi-spark-sql-engine_${scala_version}-${VERSION}.jar" "$DISTDIR/externals/engines/spark/"
+done
 
 # Copy trino engines
 cp "$KYUUBI_HOME/externals/kyuubi-trino-engine/target/kyuubi-trino-engine_${SCALA_VERSION}-${VERSION}.jar" "$DISTDIR/externals/engines/trino/"
@@ -326,16 +363,7 @@ for jar in $(ls "$DISTDIR/jars/"); do
   fi
 done
 
-# Copy kyuubi tools
-if [[ -f "$KYUUBI_HOME/tools/spark-block-cleaner/target/spark-block-cleaner_${SCALA_VERSION}-${VERSION}.jar" ]]; then
-  mkdir -p "$DISTDIR/tools/spark-block-cleaner/kubernetes"
-  mkdir -p "$DISTDIR/tools/spark-block-cleaner/jars"
-  cp -r "$KYUUBI_HOME"/tools/spark-block-cleaner/kubernetes/* "$DISTDIR/tools/spark-block-cleaner/kubernetes/"
-  cp "$KYUUBI_HOME/tools/spark-block-cleaner/target/spark-block-cleaner_${SCALA_VERSION}-${VERSION}.jar" "$DISTDIR/tools/spark-block-cleaner/jars/"
-fi
-
 # Copy Kyuubi Spark extension
-SPARK_EXTENSION_VERSIONS=('3-1' '3-2' '3-3')
 # shellcheck disable=SC2068
 for SPARK_EXTENSION_VERSION in ${SPARK_EXTENSION_VERSIONS[@]}; do
   if [[ -f $"$KYUUBI_HOME/extensions/spark/kyuubi-extension-spark-$SPARK_EXTENSION_VERSION/target/kyuubi-extension-spark-${SPARK_EXTENSION_VERSION}_${SCALA_VERSION}-${VERSION}.jar" ]]; then

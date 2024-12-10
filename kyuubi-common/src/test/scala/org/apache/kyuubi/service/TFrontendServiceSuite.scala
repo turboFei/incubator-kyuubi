@@ -21,7 +21,6 @@ import java.time.Duration
 
 import scala.collection.JavaConverters._
 
-import org.apache.hive.service.rpc.thrift._
 import org.scalatest.time._
 
 import org.apache.kyuubi.{KyuubiFunSuite, KyuubiSQLException, Utils}
@@ -30,6 +29,7 @@ import org.apache.kyuubi.config.KyuubiConf._
 import org.apache.kyuubi.operation.{OperationHandle, TClientTestUtils}
 import org.apache.kyuubi.service.TFrontendService.FeServiceServerContext
 import org.apache.kyuubi.session.{AbstractSession, SessionHandle}
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift._
 
 class TFrontendServiceSuite extends KyuubiFunSuite {
 
@@ -40,8 +40,8 @@ class TFrontendServiceSuite extends KyuubiFunSuite {
     .set(KyuubiConf.SESSION_CHECK_INTERVAL, Duration.ofSeconds(5).toMillis)
     .set(KyuubiConf.SESSION_IDLE_TIMEOUT, Duration.ofSeconds(5).toMillis)
     .set(KyuubiConf.OPERATION_IDLE_TIMEOUT, Duration.ofSeconds(20).toMillis)
-    .set(KyuubiConf.SESSION_CONF_RESTRICT_LIST, Seq("spark.*"))
-    .set(KyuubiConf.SESSION_CONF_IGNORE_LIST, Seq("session.engine.*"))
+    .set(KyuubiConf.SESSION_CONF_RESTRICT_LIST, Set("spark.*"))
+    .set(KyuubiConf.SESSION_CONF_IGNORE_LIST, Set("session.engine.*"))
 
   private def withSessionHandle(f: (TCLIService.Iface, TSessionHandle) => Unit): Unit = {
     TClientTestUtils.withSessionHandle(server.frontendServices.head.connectionUrl, Map.empty)(f)
@@ -113,6 +113,33 @@ class TFrontendServiceSuite extends KyuubiFunSuite {
     service2.initialize(conf2)
     // use ip
     assert(service2.connectionUrl.split("\\.")(0).toInt > 0)
+  }
+
+  test("advertised host") {
+
+    def newService: TBinaryFrontendService = {
+      new TBinaryFrontendService("DummyThriftBinaryFrontendService") {
+        override val serverable: Serverable = new NoopTBinaryFrontendServer
+        override val discoveryService: Option[Service] = None
+      }
+    }
+
+    val conf = new KyuubiConf()
+      .set(FRONTEND_THRIFT_BINARY_BIND_HOST.key, "localhost")
+      .set(FRONTEND_THRIFT_BINARY_BIND_PORT, 0)
+      .set(FRONTEND_ADVERTISED_HOST, "dummy.host")
+    val service = newService
+
+    service.initialize(conf)
+    assert(service.connectionUrl.startsWith("dummy.host"))
+
+    val service2 = newService
+    val conf2 = KyuubiConf()
+      .set(FRONTEND_THRIFT_BINARY_BIND_HOST.key, "localhost")
+      .set(FRONTEND_THRIFT_BINARY_BIND_PORT, 0)
+
+    service2.initialize(conf2)
+    assert(service2.connectionUrl.startsWith("localhost"))
   }
 
   test("open session") {
@@ -522,31 +549,27 @@ class TFrontendServiceSuite extends KyuubiFunSuite {
         .getSession(SessionHandle(handle))
         .asInstanceOf[AbstractSession]
       var lastAccessTime = session.lastAccessTime
-      assert(sessionManager.getOpenSessionCount === 1)
+      assert(sessionManager.getActiveUserSessionCount === 1)
       assert(session.lastIdleTime > 0)
 
       val cancelOpReq = new TCancelOperationReq(resp.getOperationHandle)
       val cancelOpResp = client.CancelOperation(cancelOpReq)
       assert(cancelOpResp.getStatus.getStatusCode === TStatusCode.SUCCESS_STATUS)
-      assert(sessionManager.getOpenSessionCount === 1)
+      assert(sessionManager.getActiveUserSessionCount === 1)
       assert(session.lastIdleTime === 0)
-      eventually(timeout(Span(60, Seconds)), interval(Span(1, Seconds))) {
-        assert(lastAccessTime < session.lastAccessTime)
-      }
+
       lastAccessTime = session.lastAccessTime
 
       eventually(timeout(Span(60, Seconds)), interval(Span(1, Seconds))) {
         assert(lastAccessTime <= session.lastIdleTime)
       }
-
       info("operation is terminated")
-      assert(lastAccessTime === session.lastAccessTime)
-      assert(sessionManager.getOpenSessionCount === 1)
 
       eventually(timeout(Span(60, Seconds)), interval(Span(1, Seconds))) {
         assert(session.lastAccessTime > lastAccessTime)
       }
-      assert(sessionManager.getOpenSessionCount === 0)
+      info("session is terminated")
+      assert(sessionManager.getActiveUserSessionCount === 0)
     }
   }
 

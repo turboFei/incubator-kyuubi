@@ -27,13 +27,15 @@ import org.scalatest.Assertions._
 
 import org.apache.kyuubi.Utils
 import org.apache.kyuubi.plugin.spark.authz.RangerTestUsers._
+import org.apache.kyuubi.plugin.spark.authz.V2JdbcTableCatalogPrivilegesBuilderSuite._
+import org.apache.kyuubi.plugin.spark.authz.ranger.DeltaCatalogRangerSparkExtensionSuite._
 import org.apache.kyuubi.plugin.spark.authz.util.AuthZUtils._
 
 trait SparkSessionProvider {
   protected val catalogImpl: String
   protected def format: String = if (catalogImpl == "hive") "hive" else "parquet"
 
-  protected val extension: SparkSessionExtensions => Unit = _ => Unit
+  protected val extension: SparkSessionExtensions => Unit = _ => ()
   protected val sqlExtensions: String = ""
 
   protected val extraSparkConf: SparkConf = new SparkConf()
@@ -41,7 +43,7 @@ trait SparkSessionProvider {
   protected lazy val spark: SparkSession = {
     val metastore = {
       val path = Utils.createTempDir(prefix = "hms")
-      Files.delete(path)
+      Files.deleteIfExists(path)
       path
     }
     val ret = SparkSession.builder()
@@ -79,7 +81,15 @@ trait SparkSessionProvider {
       f
     } finally {
       res.foreach {
-        case (t, "table") => doAs(admin, sql(s"DROP TABLE IF EXISTS $t"))
+        case (t, "table") => doAs(
+            admin, {
+              val purgeOption =
+                if (isSparkV32OrGreater && isCatalogSupportPurge(
+                    spark.sessionState.catalogManager.currentCatalog.name())) {
+                  "PURGE"
+                } else ""
+              sql(s"DROP TABLE IF EXISTS $t $purgeOption")
+            })
         case (db, "database") => doAs(admin, sql(s"DROP DATABASE IF EXISTS $db"))
         case (fn, "function") => doAs(admin, sql(s"DROP FUNCTION IF EXISTS $fn"))
         case (view, "view") => doAs(admin, sql(s"DROP VIEW IF EXISTS $view"))
@@ -96,4 +106,11 @@ trait SparkSessionProvider {
     doAs(user, assert(sql(query).collect() === result))
   }
 
+  private def isCatalogSupportPurge(catalogName: String): Boolean = {
+    val unsupportedCatalogs = Set(v2JdbcTableCatalogClassName, deltaCatalogClassName)
+    spark.conf.getOption(s"spark.sql.catalog.$catalogName") match {
+      case Some(catalog) if !unsupportedCatalogs.contains(catalog) => true
+      case _ => false
+    }
+  }
 }

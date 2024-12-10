@@ -28,11 +28,11 @@ import org.apache.hadoop.fs.FileSystem
 import org.apache.hadoop.security.{SaslRpcServer, UserGroupInformation}
 import org.apache.hadoop.security.SaslRpcServer.AuthMethod
 import org.apache.hadoop.security.token.SecretManager.InvalidToken
-import org.apache.thrift.{TException, TProcessor}
-import org.apache.thrift.protocol.TProtocol
-import org.apache.thrift.transport._
 
 import org.apache.kyuubi.Logging
+import org.apache.kyuubi.shaded.thrift.{TException, TProcessor}
+import org.apache.kyuubi.shaded.thrift.protocol.TProtocol
+import org.apache.kyuubi.shaded.thrift.transport._
 
 class HadoopThriftAuthBridgeServer(secretMgr: KyuubiDelegationTokenManager) {
   import HadoopThriftAuthBridgeServer._
@@ -131,7 +131,7 @@ object HadoopThriftAuthBridgeServer {
   class TUGIAssumingProcessor(
       wrapped: TProcessor,
       secretMgr: KyuubiDelegationTokenManager) extends TProcessor with Logging {
-    override def process(in: TProtocol, out: TProtocol): Boolean = {
+    override def process(in: TProtocol, out: TProtocol): Unit = {
       val transport = in.getTransport
       transport match {
         case saslTrans: TSaslServerTransport =>
@@ -196,7 +196,7 @@ object HadoopThriftAuthBridgeServer {
 
     def getPasswd(identifier: KyuubiDelegationTokenIdentifier): Array[Char] = {
       val passwd = secretMgr.retrievePassword(identifier)
-      Base64.getMimeEncoder.encodeToString(passwd).toCharArray
+      Base64.getEncoder.encodeToString(passwd).toCharArray
     }
 
     override def handle(callbacks: Array[Callback]): Unit = {

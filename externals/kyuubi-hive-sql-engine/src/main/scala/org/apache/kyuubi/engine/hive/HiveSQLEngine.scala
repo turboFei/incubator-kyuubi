@@ -18,6 +18,7 @@
 package org.apache.kyuubi.engine.hive
 
 import java.security.PrivilegedExceptionAction
+import java.time.Instant
 
 import scala.util.control.NonFatal
 
@@ -26,6 +27,8 @@ import org.apache.hadoop.security.UserGroupInformation
 
 import org.apache.kyuubi.{Logging, Utils}
 import org.apache.kyuubi.config.{KyuubiConf, KyuubiReservedKeys}
+import org.apache.kyuubi.config.KyuubiConf.{ENGINE_HIVE_DEPLOY_MODE, ENGINE_KEYTAB, ENGINE_PRINCIPAL}
+import org.apache.kyuubi.engine.deploy.DeployMode
 import org.apache.kyuubi.engine.hive.HiveSQLEngine.currentEngine
 import org.apache.kyuubi.engine.hive.events.{HiveEngineEvent, HiveEventHandlerRegister}
 import org.apache.kyuubi.events.EventBus
@@ -44,7 +47,10 @@ class HiveSQLEngine extends Serverable("HiveSQLEngine") {
     super.start()
     // Start engine self-terminating checker after all services are ready and it can be reached by
     // all servers in engine spaces.
-    backendService.sessionManager.startTerminatingChecker(() => stop())
+    backendService.sessionManager.startTerminatingChecker(() => {
+      selfExited = true
+      stop()
+    })
   }
 
   override protected def stopServer(): Unit = {
@@ -65,6 +71,7 @@ object HiveSQLEngine extends Logging {
   var currentEngine: Option[HiveSQLEngine] = None
   val hiveConf = new HiveConf()
   val kyuubiConf = new KyuubiConf()
+  val user = UserGroupInformation.getCurrentUser.getShortUserName
 
   def startEngine(): Unit = {
     try {
@@ -77,6 +84,14 @@ object HiveSQLEngine extends Logging {
     kyuubiConf.setIfMissing(KyuubiConf.FRONTEND_THRIFT_BINARY_BIND_PORT, 0)
     kyuubiConf.setIfMissing(HA_ZK_CONN_RETRY_POLICY, RetryPolicies.N_TIME.toString)
 
+    // align with the operational behavior of HiveServer2, it is necessary to
+    // include the `hiveserver2-site.xml` configuration within the HiveConf settings.
+    // for instance, upon the installation of the Hive Ranger plugin, authorization
+    // configurations are appended to the `hiveserver2-site.xml` file. Similarly, to activate
+    // the Ranger plugin for the Hive engine within Kyuubi, it is essential for the Hive engine
+    // to load the `hiveserver2-site.xml` file. This ensures that the Hive engine's
+    // security features are consistent with those managed by HiveServer2. See [KYUUBI #5878].
+    hiveConf.addResource("hiveserver2-site.xml")
     for ((k, v) <- kyuubiConf.getAll) {
       hiveConf.set(k, v)
     }
@@ -97,6 +112,8 @@ object HiveSQLEngine extends Logging {
     }
 
     val engine = new HiveSQLEngine()
+    val appName = s"kyuubi_${user}_hive_${Instant.now}"
+    hiveConf.setIfUnset("hive.engine.name", appName)
     info(s"Starting ${engine.getName}")
     engine.initialize(kyuubiConf)
     EventBus.post(HiveEngineEvent(engine))
@@ -118,20 +135,40 @@ object HiveSQLEngine extends Logging {
     SignalRegister.registerLogger(logger)
     try {
       Utils.fromCommandLineArgs(args, kyuubiConf)
-      val sessionUser = kyuubiConf.getOption(KyuubiReservedKeys.KYUUBI_SESSION_USER_KEY)
+      val proxyUser = kyuubiConf.getOption(KyuubiReservedKeys.KYUUBI_SESSION_USER_KEY)
+      require(proxyUser.isDefined, s"${KyuubiReservedKeys.KYUUBI_SESSION_USER_KEY} is not set")
       val realUser = UserGroupInformation.getLoginUser
+      val principal = kyuubiConf.get(ENGINE_PRINCIPAL)
+      val keytab = kyuubiConf.get(ENGINE_KEYTAB)
 
-      if (sessionUser.isEmpty || sessionUser.get == realUser.getShortUserName) {
-        startEngine()
-      } else {
-        val effectiveUser = UserGroupInformation.createProxyUser(sessionUser.get, realUser)
-        effectiveUser.doAs(new PrivilegedExceptionAction[Unit] {
-          override def run(): Unit = startEngine()
-        })
+      val ugi = DeployMode.withName(kyuubiConf.get(ENGINE_HIVE_DEPLOY_MODE)) match {
+        case DeployMode.LOCAL
+            if UserGroupInformation.isSecurityEnabled && principal.isDefined && keytab.isDefined =>
+          UserGroupInformation.loginUserFromKeytab(principal.get, keytab.get)
+          UserGroupInformation.getCurrentUser
+        case DeployMode.LOCAL if proxyUser.get != realUser.getShortUserName =>
+          val newUGI = UserGroupInformation.createProxyUser(proxyUser.get, realUser)
+          newUGI.doAs(new PrivilegedExceptionAction[Unit] {
+            override def run(): Unit = {
+              val engineCredentials =
+                kyuubiConf.getOption(KyuubiReservedKeys.KYUUBI_ENGINE_CREDENTIALS_KEY)
+              kyuubiConf.unset(KyuubiReservedKeys.KYUUBI_ENGINE_CREDENTIALS_KEY)
+              engineCredentials.filter(_.nonEmpty).foreach { credentials =>
+                HiveTBinaryFrontendService.renewDelegationToken(credentials)
+              }
+            }
+          })
+          newUGI
+        case _ =>
+          UserGroupInformation.getCurrentUser
       }
 
+      ugi.doAs(new PrivilegedExceptionAction[Unit] {
+        override def run(): Unit = startEngine()
+      })
     } catch {
-      case t: Throwable => currentEngine match {
+      case t: Throwable =>
+        currentEngine match {
           case Some(engine) =>
             engine.stop()
             val event = HiveEngineEvent(engine)
@@ -140,6 +177,7 @@ object HiveSQLEngine extends Logging {
           case _ =>
             error(s"Failed to start Hive SQL engine: ${t.getMessage}.", t)
         }
+        throw t
     }
   }
 }

@@ -17,19 +17,37 @@
 
 package org.apache.kyuubi.server.http.util
 
+import java.nio.charset.StandardCharsets
 import java.security.SecureRandom
 import java.util
-import java.util.StringTokenizer
+import java.util.{Base64, StringTokenizer}
 
 import scala.collection.mutable
 
 import org.apache.kyuubi.Logging
+import org.apache.kyuubi.server.http.authentication.{AuthenticationFilter, AuthSchemes}
+import org.apache.kyuubi.service.authentication.Credential
 
 object HttpAuthUtils extends Logging {
-  val WWW_AUTHENTICATE = "WWW-Authenticate"
-  val AUTHORIZATION = "Authorization"
-  val BASIC = "Basic"
+  // HTTP header used by the server endpoint during an authentication sequence.
+  val WWW_AUTHENTICATE_HEADER = "WWW-Authenticate"
+  // HTTP header used by the client endpoint during an authentication sequence.
+  val AUTHORIZATION_HEADER = "Authorization"
+  // HTTP header prefix used by the SPNEGO client/server endpoints during an
+  // authentication sequence.
   val NEGOTIATE = "Negotiate"
+  // HTTP header prefix used during the Basic authentication sequence.
+  val BASIC = "Basic"
+  // HTTP header prefix used during the Basic authentication sequence.
+  val DIGEST = "Digest"
+
+  // RFC 7617: The 'Basic' HTTP Authentication Scheme
+  def basicAuthorizationHeader(userId: String, password: String = "none"): String =
+    "BASIC " + new String(
+      Base64.getEncoder.encode(s"$userId:$password".getBytes()),
+      StandardCharsets.UTF_8)
+
+  def bearerAuthorizationHeader(token: String): String = AuthSchemes.BEARER + " " + token
 
   private val COOKIE_ATTR_SEPARATOR = "&"
   private val COOKIE_CLIENT_USER_NAME = "cu"
@@ -93,5 +111,12 @@ object HttpAuthUtils extends Logging {
       map.put(key, value)
     }
     map
+  }
+
+  def getCredentialExtraInfo: Map[String, String] = {
+    Map(Credential.CLIENT_IP_KEY ->
+      Option(
+        AuthenticationFilter.HTTP_PROXY_HEADER_CLIENT_IP_ADDRESS.get()).getOrElse(
+        AuthenticationFilter.HTTP_CLIENT_IP_ADDRESS.get()))
   }
 }

@@ -21,9 +21,6 @@ import java.io.IOException
 
 import com.codahale.metrics.MetricRegistry
 import org.apache.commons.lang3.StringUtils
-import org.apache.hive.service.rpc.thrift._
-import org.apache.thrift.TException
-import org.apache.thrift.transport.TTransportException
 
 import org.apache.kyuubi.{KyuubiSQLException, Utils}
 import org.apache.kyuubi.config.KyuubiReservedKeys.KYUUBI_OPERATION_HANDLE_KEY
@@ -32,7 +29,10 @@ import org.apache.kyuubi.metrics.MetricsConstants.{OPERATION_FAIL, OPERATION_OPE
 import org.apache.kyuubi.metrics.MetricsSystem
 import org.apache.kyuubi.operation.FetchOrientation.FetchOrientation
 import org.apache.kyuubi.operation.OperationState.OperationState
-import org.apache.kyuubi.session.{KyuubiSessionImpl, KyuubiSessionManager, Session}
+import org.apache.kyuubi.session.{KyuubiSession, KyuubiSessionImpl, KyuubiSessionManager, Session}
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift._
+import org.apache.kyuubi.shaded.thrift.TException
+import org.apache.kyuubi.shaded.thrift.transport.TTransportException
 import org.apache.kyuubi.util.ThriftUtils
 
 abstract class KyuubiOperation(session: Session) extends AbstractOperation(session) {
@@ -100,6 +100,17 @@ abstract class KyuubiOperation(session: Session) extends AbstractOperation(sessi
       }
   }
 
+  override def run(): Unit = {
+    beforeRun()
+    try {
+      session.asInstanceOf[KyuubiSession].handleSessionException {
+        runInternal()
+      }
+    } finally {
+      afterRun()
+    }
+  }
+
   override protected def beforeRun(): Unit = {
     setHasResultSet(true)
     setState(OperationState.RUNNING)
@@ -107,11 +118,10 @@ abstract class KyuubiOperation(session: Session) extends AbstractOperation(sessi
   }
 
   protected def sendCredentialsIfNeeded(): Unit = {
-    val appUser = session.asInstanceOf[KyuubiSessionImpl].engine.appUser
     val sessionManager = session.sessionManager.asInstanceOf[KyuubiSessionManager]
     sessionManager.credentialsManager.sendCredentialsIfNeeded(
       session.handle.identifier.toString,
-      appUser,
+      session.asInstanceOf[KyuubiSessionImpl].engine.appUser,
       client.sendCredentials)
   }
 
@@ -142,13 +152,6 @@ abstract class KyuubiOperation(session: Session) extends AbstractOperation(sessi
     if (!isClosedOrCanceled) {
       setState(OperationState.CLOSED)
       MetricsSystem.tracing(_.decCount(MetricRegistry.name(OPERATION_OPEN, opType)))
-      try {
-        // For launch engine operation, we use OperationLog to pass engine submit log but
-        // at that time we do not have remoteOpHandle
-        getOperationLog.foreach(_.close())
-      } catch {
-        case e: IOException => error(e.getMessage, e)
-      }
       if (_remoteOpHandle != null) {
         try {
           client.closeOperation(_remoteOpHandle)
@@ -157,6 +160,13 @@ abstract class KyuubiOperation(session: Session) extends AbstractOperation(sessi
             warn(s"Error closing ${_remoteOpHandle.getOperationId}: ${e.getMessage}", e)
         }
       }
+    }
+    try {
+      // For launch engine operation, we use OperationLog to pass engine submit log but
+      // at that time we do not have remoteOpHandle
+      getOperationLog.foreach(_.close())
+    } catch {
+      case e: IOException => error(e.getMessage, e)
     }
   }
 
@@ -179,18 +189,24 @@ abstract class KyuubiOperation(session: Session) extends AbstractOperation(sessi
     }
   }
 
-  override def getNextRowSetInternal(order: FetchOrientation, rowSetSize: Int): TRowSet = {
+  override def getNextRowSetInternal(
+      order: FetchOrientation,
+      rowSetSize: Int): TFetchResultsResp = {
     validateDefaultFetchOrientation(order)
     assertState(OperationState.FINISHED)
     setHasResultSet(true)
-    client.fetchResults(_remoteOpHandle, order, rowSetSize, fetchLog = false)
+    val rowset = client.fetchResults(_remoteOpHandle, order, rowSetSize, fetchLog = false)
+    val resp = new TFetchResultsResp(OK_STATUS)
+    resp.setResults(rowset)
+    resp.setHasMoreRows(false)
+    resp
   }
 
   override def shouldRunAsync: Boolean = false
 
   protected def eventEnabled: Boolean = false
 
-  if (eventEnabled) EventBus.post(KyuubiOperationEvent(this))
+  if (eventEnabled) EventBus.post(getOperationEvent)
 
   override def setState(newState: OperationState): Unit = {
     MetricsSystem.tracing { ms =>
@@ -201,6 +217,26 @@ abstract class KyuubiOperation(session: Session) extends AbstractOperation(sessi
       ms.markMeter(MetricRegistry.name(OPERATION_STATE, newState.toString.toLowerCase))
     }
     super.setState(newState)
-    if (eventEnabled) EventBus.post(KyuubiOperationEvent(this))
+    if (eventEnabled) EventBus.post(getOperationEvent)
+  }
+
+  def getOperationEvent: KyuubiOperationEvent = {
+    val kyuubiSession = session.asInstanceOf[KyuubiSession]
+    KyuubiOperationEvent(
+      statementId,
+      Option(remoteOpHandle()).map(OperationHandle(_).identifier.toString).orNull,
+      statement,
+      shouldRunAsync,
+      state.name(),
+      lastAccessTime,
+      createTime,
+      startTime,
+      completedTime,
+      Option(operationException),
+      kyuubiSession.handle.identifier.toString,
+      kyuubiSession.user,
+      kyuubiSession.sessionType.toString,
+      kyuubiSession.connectionUrl,
+      metrics)
   }
 }

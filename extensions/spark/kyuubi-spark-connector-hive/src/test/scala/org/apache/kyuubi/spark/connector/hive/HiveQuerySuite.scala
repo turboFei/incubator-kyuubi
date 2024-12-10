@@ -21,23 +21,31 @@ import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 
 class HiveQuerySuite extends KyuubiHiveTest {
 
-  def withTempNonPartitionedTable(spark: SparkSession, table: String)(f: => Unit): Unit = {
+  def withTempNonPartitionedTable(
+      spark: SparkSession,
+      table: String,
+      format: String = "PARQUET",
+      hiveTable: Boolean = false)(f: => Unit): Unit = {
     spark.sql(
       s"""
          | CREATE TABLE IF NOT EXISTS
          | $table (id String, date String)
-         | USING PARQUET
+         | ${if (hiveTable) "STORED AS" else "USING"} $format
          |""".stripMargin).collect()
     try f
     finally spark.sql(s"DROP TABLE $table")
   }
 
-  def withTempPartitionedTable(spark: SparkSession, table: String)(f: => Unit): Unit = {
+  def withTempPartitionedTable(
+      spark: SparkSession,
+      table: String,
+      format: String = "PARQUET",
+      hiveTable: Boolean = false)(f: => Unit): Unit = {
     spark.sql(
       s"""
          | CREATE TABLE IF NOT EXISTS
          | $table (id String, year String, month string)
-         | USING PARQUET
+         | ${if (hiveTable) "STORED AS" else "USING"} $format
          | PARTITIONED BY (year, month)
          |""".stripMargin).collect()
     try f
@@ -70,7 +78,9 @@ class HiveQuerySuite extends KyuubiHiveTest {
                | SELECT * FROM hive.ns1.tb1
                |""".stripMargin)
         }
-        assert(e.getMessage().contains("Table or view not found: hive.ns1.tb1"))
+        assert(e.message.contains(
+          "[TABLE_OR_VIEW_NOT_FOUND] The table or view `hive`.`ns1`.`tb1` cannot be found.") ||
+          e.message.contains("Table or view not found: hive.ns1.tb1"))
       }
     }
   }
@@ -147,7 +157,7 @@ class HiveQuerySuite extends KyuubiHiveTest {
     }
   }
 
-  test("Partitioned table insert and static and dynamic insert") {
+  test("Partitioned table insert overwrite static and dynamic insert") {
     withSparkSession() { spark =>
       val table = "hive.default.employee"
       withTempPartitionedTable(spark, table) {
@@ -163,22 +173,120 @@ class HiveQuerySuite extends KyuubiHiveTest {
     }
   }
 
+  test("[KYUUBI #5414] Reader should not polluted the global hiveconf instance") {
+    withSparkSession() { spark =>
+      val table = "hive.default.hiveconf_test"
+      withTempPartitionedTable(spark, table, "ORC", hiveTable = true) {
+        spark.sql(
+          s"""
+             | INSERT OVERWRITE
+             | $table PARTITION(year = '2022')
+             | VALUES("yi", "08")
+             |""".stripMargin).collect()
+
+        checkQueryResult(s"select * from $table", spark, Array(Row.apply("yi", "2022", "08")))
+        checkQueryResult(s"select count(*) as c from $table", spark, Array(Row.apply(1)))
+      }
+    }
+  }
+
   test("Partitioned table insert and static partition value is empty string") {
     withSparkSession() { spark =>
       val table = "hive.default.employee"
       withTempPartitionedTable(spark, table) {
-        val exception = intercept[KyuubiHiveConnectorException] {
-          spark.sql(
-            s"""
-               | INSERT OVERWRITE
-               | $table PARTITION(year = '', month = '08')
-               | VALUES("yi")
-               |""".stripMargin).collect()
-        }
-        // 1. not thrown `Dynamic partition cannot be the parent of a static partition`
-        // 2. thrown `Partition spec is invalid`, should be consist with spark v1.
-        assert(exception.message.contains("Partition spec is invalid. The spec (year='') " +
-          "contains an empty partition column value"))
+        spark.sql(
+          s"""
+             | INSERT OVERWRITE
+             | $table PARTITION(year = '', month = '08')
+             | VALUES("yi")
+             |""".stripMargin).collect()
+
+        checkQueryResult(s"select * from $table", spark, Array(Row.apply("yi", null, "08")))
+      }
+    }
+  }
+
+  test("read partitioned avro table") {
+    readPartitionedTable("AVRO", true)
+    readPartitionedTable("AVRO", false)
+  }
+
+  test("read un-partitioned avro table") {
+    readUnPartitionedTable("AVRO", true)
+    readUnPartitionedTable("AVRO", false)
+  }
+
+  test("read partitioned textfile table") {
+    readPartitionedTable("TEXTFILE", true)
+    readPartitionedTable("TEXTFILE", false)
+  }
+
+  test("read un-partitioned textfile table") {
+    readUnPartitionedTable("TEXTFILE", true)
+    readUnPartitionedTable("TEXTFILE", false)
+  }
+
+  test("read partitioned SequenceFile table") {
+    readPartitionedTable("SequenceFile", true)
+    readPartitionedTable("SequenceFile", false)
+  }
+
+  test("read un-partitioned SequenceFile table") {
+    readUnPartitionedTable("SequenceFile", true)
+    readUnPartitionedTable("SequenceFile", false)
+  }
+
+  test("read partitioned ORC table") {
+    readPartitionedTable("ORC", true)
+    readPartitionedTable("ORC", false)
+  }
+
+  test("read un-partitioned ORC table") {
+    readUnPartitionedTable("ORC", true)
+    readUnPartitionedTable("ORC", false)
+  }
+
+  test("Partitioned table insert into static and dynamic insert") {
+    val table = "hive.default.employee"
+    withTempPartitionedTable(spark, table) {
+      spark.sql(
+        s"""
+           | INSERT INTO
+           | $table PARTITION(year = '2022')
+           | SELECT * FROM VALUES("yi", "08")
+           |""".stripMargin).collect()
+
+      checkQueryResult(s"select * from $table", spark, Array(Row.apply("yi", "2022", "08")))
+    }
+  }
+
+  private def readPartitionedTable(format: String, hiveTable: Boolean): Unit = {
+    withSparkSession() { spark =>
+      val table = "hive.default.employee"
+      withTempPartitionedTable(spark, table, format, hiveTable) {
+        spark.sql(
+          s"""
+             | INSERT OVERWRITE
+             | $table PARTITION(year = '2023')
+             | VALUES("zhao", "09")
+             |""".stripMargin)
+        checkQueryResult(s"select * from $table", spark, Array(Row.apply("zhao", "2023", "09")))
+      }
+    }
+  }
+
+  private def readUnPartitionedTable(format: String, hiveTable: Boolean): Unit = {
+    withSparkSession() { spark =>
+      val table = "hive.default.employee"
+      withTempNonPartitionedTable(spark, table, format, hiveTable) {
+        spark.sql(
+          s"""
+             | INSERT OVERWRITE
+             | $table
+             | VALUES("zhao", "2023-09-21")
+             |""".stripMargin).collect()
+
+        checkQueryResult(s"select * from $table", spark, Array(Row.apply("zhao", "2023-09-21")))
       }
     }
   }

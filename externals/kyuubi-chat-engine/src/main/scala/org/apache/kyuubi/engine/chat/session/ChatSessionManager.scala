@@ -16,8 +16,6 @@
  */
 package org.apache.kyuubi.engine.chat.session
 
-import org.apache.hive.service.rpc.thrift.TProtocolVersion
-
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf.ENGINE_SHARE_LEVEL
 import org.apache.kyuubi.config.KyuubiReservedKeys.KYUUBI_SESSION_HANDLE_KEY
@@ -27,6 +25,7 @@ import org.apache.kyuubi.engine.chat.operation.ChatOperationManager
 import org.apache.kyuubi.engine.chat.provider.ChatProvider
 import org.apache.kyuubi.operation.OperationManager
 import org.apache.kyuubi.session.{Session, SessionHandle, SessionManager}
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift.TProtocolVersion
 
 class ChatSessionManager(name: String)
   extends SessionManager(name) {
@@ -60,12 +59,12 @@ class ChatSessionManager(name: String)
   override def closeSession(sessionHandle: SessionHandle): Unit = {
     super.closeSession(sessionHandle)
     if (conf.get(ENGINE_SHARE_LEVEL) == ShareLevel.CONNECTION.toString) {
-      info("Session stopped due to shared level is Connection.")
-      stopSession()
+      info("Chat engine stopped due to session stopped and shared level is CONNECTION.")
+      stopEngine()
     }
   }
 
-  private def stopSession(): Unit = {
+  private def stopEngine(): Unit = {
     ChatEngine.currentEngine.foreach(_.stop())
   }
 }

@@ -22,20 +22,21 @@ import javax.security.sasl.AuthenticationException
 import javax.servlet.{Filter, FilterChain, FilterConfig, ServletException, ServletRequest, ServletResponse}
 import javax.servlet.http.{HttpServletRequest, HttpServletResponse}
 
-import scala.collection.mutable.HashMap
+import scala.collection.mutable
 
 import org.apache.kyuubi.Logging
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf.{AUTHENTICATION_METHOD, FRONTEND_PROXY_HTTP_CLIENT_IP_HEADER}
+import org.apache.kyuubi.server.http.util.HttpAuthUtils.AUTHORIZATION_HEADER
 import org.apache.kyuubi.service.authentication.{AuthTypes, InternalSecurityAccessor}
-import org.apache.kyuubi.service.authentication.AuthTypes.{KERBEROS, NOSASL}
+import org.apache.kyuubi.service.authentication.AuthTypes.{CUSTOM, KERBEROS, NOSASL}
 
 class AuthenticationFilter(conf: KyuubiConf) extends Filter with Logging {
   import AuthenticationFilter._
-  import AuthenticationHandler._
   import AuthSchemes._
 
-  private[authentication] val authSchemeHandlers = new HashMap[AuthScheme, AuthenticationHandler]()
+  private[authentication] val authSchemeHandlers =
+    new mutable.HashMap[AuthScheme, AuthenticationHandler]()
 
   private[authentication] def addAuthHandler(authHandler: AuthenticationHandler): Unit = {
     authHandler.init(conf)
@@ -57,7 +58,7 @@ class AuthenticationFilter(conf: KyuubiConf) extends Filter with Logging {
     val authTypes = conf.get(AUTHENTICATION_METHOD).map(AuthTypes.withName)
     val spnegoKerberosEnabled = authTypes.contains(KERBEROS)
     val basicAuthTypeOpt = {
-      if (authTypes == Seq(NOSASL)) {
+      if (authTypes.toSet == Set(NOSASL)) {
         authTypes.headOption
       } else {
         authTypes.filterNot(_.equals(KERBEROS)).filterNot(_.equals(NOSASL)).headOption
@@ -68,8 +69,19 @@ class AuthenticationFilter(conf: KyuubiConf) extends Filter with Logging {
       addAuthHandler(kerberosHandler)
     }
     basicAuthTypeOpt.foreach { basicAuthType =>
-      val basicHandler = new BasicAuthenticationHandler(basicAuthType)
-      addAuthHandler(basicHandler)
+      if (basicAuthType.equals(CUSTOM)) {
+        conf.get(KyuubiConf.AUTHENTICATION_CUSTOM_BASIC_CLASS).foreach { _ =>
+          val basicHandler = new BasicAuthenticationHandler(CUSTOM)
+          addAuthHandler(basicHandler)
+        }
+        conf.get(KyuubiConf.AUTHENTICATION_CUSTOM_BEARER_CLASS).foreach { bearerClassName =>
+          val bearerHandler = new BearerAuthenticationHandler(bearerClassName)
+          addAuthHandler(bearerHandler)
+        }
+      } else {
+        val basicHandler = new BasicAuthenticationHandler(basicAuthType)
+        addAuthHandler(basicHandler)
+      }
     }
     if (InternalSecurityAccessor.get() != null) {
       val internalHandler = new KyuubiInternalAuthenticationHandler
@@ -109,32 +121,33 @@ class AuthenticationFilter(conf: KyuubiConf) extends Filter with Logging {
     HTTP_PROXY_HEADER_CLIENT_IP_ADDRESS.set(
       httpRequest.getHeader(conf.get(FRONTEND_PROXY_HTTP_CLIENT_IP_HEADER)))
 
-    if (matchedHandler == null) {
-      debug(s"No auth scheme matched for url: ${httpRequest.getRequestURL}")
-      httpResponse.setStatus(HttpServletResponse.SC_UNAUTHORIZED)
-      AuthenticationAuditLogger.audit(httpRequest, httpResponse)
-      httpResponse.sendError(
-        HttpServletResponse.SC_UNAUTHORIZED,
-        s"No auth scheme matched for $authorization")
-    } else {
-      HTTP_AUTH_TYPE.set(matchedHandler.authScheme.toString)
-      try {
+    try {
+      if (matchedHandler == null) {
+        debug(s"No auth scheme matched for url: ${httpRequest.getRequestURL}")
+        httpResponse.setStatus(HttpServletResponse.SC_UNAUTHORIZED)
+        httpResponse.sendError(
+          HttpServletResponse.SC_UNAUTHORIZED,
+          s"No auth scheme matched for $authorization")
+      } else {
+        HTTP_AUTH_TYPE.set(matchedHandler.authScheme.toString)
         val authUser = matchedHandler.authenticate(httpRequest, httpResponse)
         if (authUser != null) {
           HTTP_CLIENT_USER_NAME.set(authUser)
           doFilter(filterChain, httpRequest, httpResponse)
         }
-        AuthenticationAuditLogger.audit(httpRequest, httpResponse)
-      } catch {
-        case e: AuthenticationException =>
-          httpResponse.setStatus(HttpServletResponse.SC_FORBIDDEN)
-          AuthenticationAuditLogger.audit(httpRequest, httpResponse)
-          HTTP_CLIENT_USER_NAME.remove()
-          HTTP_CLIENT_IP_ADDRESS.remove()
-          HTTP_PROXY_HEADER_CLIENT_IP_ADDRESS.remove()
-          HTTP_AUTH_TYPE.remove()
-          httpResponse.sendError(HttpServletResponse.SC_FORBIDDEN, e.getMessage)
       }
+    } catch {
+      case e: AuthenticationException =>
+        httpResponse.setStatus(HttpServletResponse.SC_FORBIDDEN)
+        HTTP_CLIENT_USER_NAME.remove()
+        HTTP_CLIENT_IP_ADDRESS.remove()
+        HTTP_PROXY_HEADER_CLIENT_IP_ADDRESS.remove()
+        HTTP_AUTH_TYPE.remove()
+        HTTP_CLIENT_PROXY_USER_NAME.remove()
+        HTTP_FORWARDED_ADDRESSES.remove()
+        httpResponse.sendError(HttpServletResponse.SC_FORBIDDEN, e.getMessage)
+    } finally {
+      AuthenticationAuditLogger.audit(httpRequest, httpResponse)
     }
   }
 
@@ -178,12 +191,22 @@ object AuthenticationFilter {
   final val HTTP_AUTH_TYPE = new ThreadLocal[String]() {
     override protected def initialValue(): String = null
   }
+  final val HTTP_CLIENT_PROXY_USER_NAME = new ThreadLocal[String]() {
+    override protected def initialValue(): String = null
+  }
+  final val HTTP_FORWARDED_ADDRESSES = new ThreadLocal[List[String]] {
+    override protected def initialValue: List[String] = List.empty
+  }
 
   def getUserIpAddress: String = HTTP_CLIENT_IP_ADDRESS.get
 
   def getUserProxyHeaderIpAddress: String = HTTP_PROXY_HEADER_CLIENT_IP_ADDRESS.get()
 
+  def getForwardedAddresses: List[String] = HTTP_FORWARDED_ADDRESSES.get
+
   def getUserName: String = HTTP_CLIENT_USER_NAME.get
+
+  def getProxyUserName: String = HTTP_CLIENT_PROXY_USER_NAME.get
 
   def getAuthType: String = HTTP_AUTH_TYPE.get()
 }

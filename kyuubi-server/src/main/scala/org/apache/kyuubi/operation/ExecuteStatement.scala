@@ -20,15 +20,16 @@ package org.apache.kyuubi.operation
 import scala.collection.JavaConverters._
 
 import com.codahale.metrics.MetricRegistry
-import org.apache.hive.service.rpc.thrift.{TGetOperationStatusResp, TOperationState, TProtocolVersion}
-import org.apache.hive.service.rpc.thrift.TOperationState._
 
 import org.apache.kyuubi.KyuubiSQLException
 import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.KyuubiConf.OPERATION_QUERY_TIMEOUT_MONITOR_ENABLED
 import org.apache.kyuubi.metrics.{MetricsConstants, MetricsSystem}
 import org.apache.kyuubi.operation.FetchOrientation.FETCH_NEXT
 import org.apache.kyuubi.operation.log.OperationLog
 import org.apache.kyuubi.session.Session
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift.{TGetOperationStatusResp, TOperationState}
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift.TOperationState._
 
 class ExecuteStatement(
     session: Session,
@@ -58,6 +59,10 @@ class ExecuteStatement(
     OperationLog.removeCurrentOperationLog()
   }
 
+  private val isTimeoutMonitorEnabled: Boolean = confOverlay.getOrElse[String](
+    OPERATION_QUERY_TIMEOUT_MONITOR_ENABLED.key,
+    OPERATION_QUERY_TIMEOUT_MONITOR_ENABLED.defaultValStr).toBoolean
+
   private def executeStatement(): Unit = {
     try {
       // We need to avoid executing query in sync mode, because there is no heartbeat mechanism
@@ -84,7 +89,7 @@ class ExecuteStatement(
       var lastStateUpdateTime: Long = 0L
       val stateUpdateInterval =
         session.sessionManager.getConf.get(KyuubiConf.OPERATION_STATUS_UPDATE_INTERVAL)
-      while (!isComplete) {
+      while (!isComplete && !isTerminalState(state)) {
         fetchQueryLog()
         verifyTStatus(statusResp.getStatus)
         if (statusResp.getProgressUpdateResponse != null) {
@@ -119,9 +124,7 @@ class ExecuteStatement(
               // this will cause the client of the lower version to get stuck.
               // Check thrift protocol version <= HIVE_CLI_SERVICE_PROTOCOL_V8(Hive 2.1.0),
               // convert TIMEDOUT_STATE to CANCELED.
-              if getProtocolVersion.getValue <=
-                TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V8.getValue =>
-            setState(OperationState.CANCELED)
+              if isHive21OrLower => setState(OperationState.CANCELED)
 
           case TIMEDOUT_STATE =>
             setState(OperationState.TIMEOUT)
@@ -143,6 +146,9 @@ class ExecuteStatement(
       // see if anymore log could be fetched
       fetchQueryLog()
     } catch onError()
+    finally {
+      shutdownTimeoutMonitor()
+    }
 
   private def fetchQueryLog(): Unit = {
     getOperationLog.foreach { logger =>
@@ -157,6 +163,9 @@ class ExecuteStatement(
   }
 
   override protected def runInternal(): Unit = {
+    if (isTimeoutMonitorEnabled) {
+      addTimeoutMonitor(queryTimeout)
+    }
     executeStatement()
     val sessionManager = session.sessionManager
     val asyncOperation: Runnable = () => waitStatementComplete()

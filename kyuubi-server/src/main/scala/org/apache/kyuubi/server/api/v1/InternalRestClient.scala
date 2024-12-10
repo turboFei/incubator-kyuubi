@@ -19,6 +19,8 @@ package org.apache.kyuubi.server.api.v1
 
 import java.util.Base64
 
+import scala.collection.JavaConverters._
+
 import org.apache.kyuubi.client.{BatchRestApi, KyuubiRestClient}
 import org.apache.kyuubi.client.api.v1.dto.{Batch, CloseBatchResponse, OperationLog}
 import org.apache.kyuubi.client.auth.AuthHeaderGenerator
@@ -32,39 +34,64 @@ import org.apache.kyuubi.service.authentication.InternalSecurityAccessor
  * @param kyuubiInstance the kyuubi instance host:port.
  * @param socketTimeout the socket timeout for http client.
  * @param connectTimeout the connect timeout for http client.
+ * @param securityEnabled if enable secure access.
+ * @param requestMaxAttempts the request max attempts for http client.
+ * @param requestAttemptWait the request attempt wait for http client.
  */
-class InternalRestClient(kyuubiInstance: String, socketTimeout: Int, connectTimeout: Int) {
-  require(
-    InternalSecurityAccessor.get() != null,
-    "Internal secure access across Kyuubi instances is not enabled")
+class InternalRestClient(
+    kyuubiInstance: String,
+    proxyClientIpHeader: String,
+    socketTimeout: Int,
+    connectTimeout: Int,
+    securityEnabled: Boolean,
+    requestMaxAttempts: Int,
+    requestAttemptWait: Int) {
+  if (securityEnabled) {
+    require(
+      InternalSecurityAccessor.get() != null,
+      "Internal secure access across Kyuubi instances is not enabled")
+  }
 
   private val internalBatchRestApi = new BatchRestApi(initKyuubiRestClient())
 
-  def getBatch(user: String, batchId: String): Batch = {
+  def getBatch(user: String, clientIp: String, batchId: String): Batch = {
     withAuthUser(user) {
-      internalBatchRestApi.getBatchById(batchId)
+      internalBatchRestApi.getBatchById(batchId, Map(proxyClientIpHeader -> clientIp).asJava)
     }
   }
 
-  def getBatchLocalLog(user: String, batchId: String, from: Int, size: Int): OperationLog = {
+  def getBatchLocalLog(
+      user: String,
+      clientIp: String,
+      batchId: String,
+      from: Int,
+      size: Int): OperationLog = {
     withAuthUser(user) {
-      internalBatchRestApi.getBatchLocalLog(batchId, from, size)
+      internalBatchRestApi.getBatchLocalLog(
+        batchId,
+        from,
+        size,
+        Map(proxyClientIpHeader -> clientIp).asJava)
     }
   }
 
-  def deleteBatch(user: String, batchId: String): CloseBatchResponse = {
+  def deleteBatch(user: String, clientIp: String, batchId: String): CloseBatchResponse = {
     withAuthUser(user) {
-      internalBatchRestApi.deleteBatch(batchId, null)
+      internalBatchRestApi.deleteBatch(batchId, Map(proxyClientIpHeader -> clientIp).asJava)
     }
   }
 
   private def initKyuubiRestClient(): KyuubiRestClient = {
-    KyuubiRestClient.builder(s"http://$kyuubiInstance")
+    val builder = KyuubiRestClient.builder(s"http://$kyuubiInstance")
       .apiVersion(KyuubiRestClient.ApiVersion.V1)
       .socketTimeout(socketTimeout)
       .connectionTimeout(connectTimeout)
-      .authHeaderGenerator(InternalRestClient.internalAuthHeaderGenerator)
-      .build()
+      .maxAttempts(requestMaxAttempts)
+      .attemptWaitTime(requestAttemptWait)
+    if (securityEnabled) {
+      builder.authHeaderGenerator(InternalRestClient.internalAuthHeaderGenerator)
+    }
+    builder.build()
   }
 
   private def withAuthUser[T](user: String)(f: => T): T = {
@@ -82,7 +109,7 @@ object InternalRestClient {
     override def initialValue(): String = null
   }
 
-  final val internalAuthHeaderGenerator = new AuthHeaderGenerator {
+  final lazy val internalAuthHeaderGenerator = new AuthHeaderGenerator {
     override def generateAuthHeader(): String = {
       val authUser = AUTH_USER.get()
       require(authUser != null, "The auth user shall be not null")

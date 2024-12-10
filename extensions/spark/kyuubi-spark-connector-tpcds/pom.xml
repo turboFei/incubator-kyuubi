@@ -21,11 +21,11 @@
     <parent>
         <groupId>org.apache.kyuubi</groupId>
         <artifactId>kyuubi-parent</artifactId>
-        <version>1.8.0-SNAPSHOT</version>
+        <version>1.11.0-SNAPSHOT</version>
         <relativePath>../../../pom.xml</relativePath>
     </parent>
 
-    <artifactId>kyuubi-spark-connector-tpcds_2.12</artifactId>
+    <artifactId>kyuubi-spark-connector-tpcds_${scala.binary.version}</artifactId>
     <packaging>jar</packaging>
     <name>Kyuubi Spark TPC-DS Connector</name>
     <url>https://kyuubi.apache.org/</url>
@@ -129,26 +129,15 @@
             <scope>test</scope>
         </dependency>
 
-        <!--
-          Spark requires `commons-collections` and `commons-io` but got them from transitive
-          dependencies of `hadoop-client`. As we are using Hadoop Shaded Client, we need add
-          them explicitly. See more details at SPARK-33212.
-          -->
         <dependency>
-            <groupId>commons-collections</groupId>
-            <artifactId>commons-collections</artifactId>
+            <groupId>javax.servlet</groupId>
+            <artifactId>javax.servlet-api</artifactId>
             <scope>test</scope>
         </dependency>
 
         <dependency>
-            <groupId>commons-io</groupId>
-            <artifactId>commons-io</artifactId>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>jakarta.xml.bind</groupId>
-            <artifactId>jakarta.xml.bind-api</artifactId>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -213,4 +202,45 @@
         <outputDirectory>target/scala-${scala.binary.version}/classes</outputDirectory>
         <testOutputDirectory>target/scala-${scala.binary.version}/test-classes</testOutputDirectory>
     </build>
+
+    <profiles>
+        <profile>
+            <id>cross-version-test</id>
+            <dependencies>
+                <dependency>
+                    <groupId>org.apache.kyuubi</groupId>
+                    <artifactId>kyuubi-spark-connector-tpcds-local_${scala.binary.version}</artifactId>
+                    <version>${project.version}</version>
+                    <scope>system</scope>
+                    <systemPath>${project.basedir}/target/kyuubi-spark-connector-tpcds_${scala.binary.version}-${project.version}.jar</systemPath>
+                </dependency>
+            </dependencies>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-clean-plugin</artifactId>
+                        <configuration>
+                            <excludeDefaultDirectories>true</excludeDefaultDirectories>
+                            <filesets>
+                                <fileset>
+                                    <directory>target/scala-${scala.binary.version}/classes</directory>
+                                    <includes>**/*.*</includes>
+                                </fileset>
+                            </filesets>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>clean target/scala-${scala.binary.version}/classes</id>
+                                <goals>
+                                    <goal>clean</goal>
+                                </goals>
+                                <phase>process-test-classes</phase>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

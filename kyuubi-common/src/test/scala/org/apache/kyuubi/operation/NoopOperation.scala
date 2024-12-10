@@ -21,12 +21,11 @@ import java.nio.ByteBuffer
 
 import scala.collection.JavaConverters._
 
-import org.apache.hive.service.rpc.thrift.{TColumn, TColumnDesc, TGetResultSetMetadataResp, TPrimitiveTypeEntry, TRowSet, TStringColumn, TTableSchema, TTypeDesc, TTypeEntry, TTypeId}
-
 import org.apache.kyuubi.KyuubiSQLException
 import org.apache.kyuubi.operation.FetchOrientation.FetchOrientation
 import org.apache.kyuubi.operation.log.OperationLog
 import org.apache.kyuubi.session.Session
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift.{TColumn, TColumnDesc, TFetchResultsResp, TGetResultSetMetadataResp, TPrimitiveTypeEntry, TStringColumn, TTableSchema, TTypeDesc, TTypeEntry, TTypeId}
 import org.apache.kyuubi.util.ThriftUtils
 
 class NoopOperation(session: Session, shouldFail: Boolean = false)
@@ -76,11 +75,16 @@ class NoopOperation(session: Session, shouldFail: Boolean = false)
     resp
   }
 
-  override def getNextRowSetInternal(order: FetchOrientation, rowSetSize: Int): TRowSet = {
+  override def getNextRowSetInternal(
+      order: FetchOrientation,
+      rowSetSize: Int): TFetchResultsResp = {
     val col = TColumn.stringVal(new TStringColumn(Seq(opType).asJava, ByteBuffer.allocate(0)))
     val tRowSet = ThriftUtils.newEmptyRowSet
     tRowSet.addToColumns(col)
-    tRowSet
+    val resp = new TFetchResultsResp(OK_STATUS)
+    resp.setResults(tRowSet)
+    resp.setHasMoreRows(false)
+    resp
   }
 
   override def shouldRunAsync: Boolean = false

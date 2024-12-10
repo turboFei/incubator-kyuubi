@@ -98,6 +98,12 @@ object JdbcUtils extends Logging {
     }
   }
 
+  def mapResultSet[R](rs: ResultSet)(rowMapper: ResultSet => R): Seq[R] = {
+    val builder = Seq.newBuilder[R]
+    while (rs.next()) builder += rowMapper(rs)
+    builder.result
+  }
+
   def redactPassword(password: Option[String]): String = {
     password match {
       case Some(s) if StringUtils.isNotBlank(s) => s"${"*" * s.length}(length:${s.length})"
@@ -107,8 +113,8 @@ object JdbcUtils extends Logging {
 
   def isDuplicatedKeyDBErr(cause: Throwable): Boolean = {
     val duplicatedKeyKeywords = Seq(
-      "duplicate key value in a unique or primary key constraint or unique index", // Derby
       "Duplicate entry", // MySQL
+      "duplicate key value violates unique constraint", // PostgreSQL
       "A UNIQUE constraint failed" // SQLite
     )
     duplicatedKeyKeywords.exists(cause.getMessage.contains)

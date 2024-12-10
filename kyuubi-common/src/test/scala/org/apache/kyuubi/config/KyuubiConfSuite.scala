@@ -45,6 +45,15 @@ class KyuubiConfSuite extends KyuubiFunSuite {
     assert(conf.getOption("spark.kyuubi.yes").get === "no")
   }
 
+  test("load config from --conf arguments") {
+    val conf = KyuubiConf()
+    assert(conf.get(KINIT_MAX_ATTEMPTS) === 10)
+
+    val args: Array[String] = Array("--conf", "kyuubi.kinit.max.attempts=15")
+    conf.loadFromArgs(args)
+    assert(conf.get(KINIT_MAX_ATTEMPTS) === 15)
+  }
+
   test("set and unset conf") {
     val conf = new KyuubiConf(false)
 
@@ -199,5 +208,26 @@ class KyuubiConfSuite extends KyuubiFunSuite {
     assertResult(kSeq.head)("kyuubi.abc")
     assertResult(kSeq(1))("kyuubi.efg")
     assertResult(kSeq(2))("kyuubi.xyz")
+  }
+
+  test("KYUUBI #4843 - Support multiple kubernetes contexts and namespaces") {
+    val kyuubiConf = KyuubiConf(false)
+    kyuubiConf.set("kyuubi.kubernetes.28.master.address", "k8s://master")
+    kyuubiConf.set(
+      "kyuubi.kubernetes.28.ns1.authenticate.oauthTokenFile",
+      "/var/run/secrets/kubernetes.io/token.ns1")
+    kyuubiConf.set(
+      "kyuubi.kubernetes.28.ns2.authenticate.oauthTokenFile",
+      "/var/run/secrets/kubernetes.io/token.ns2")
+
+    val kubernetesConf1 = kyuubiConf.getKubernetesConf(Some("28"), Some("ns1"))
+    assert(kubernetesConf1.get(KyuubiConf.KUBERNETES_MASTER) == Some("k8s://master"))
+    assert(kubernetesConf1.get(KyuubiConf.KUBERNETES_AUTHENTICATE_OAUTH_TOKEN_FILE) ==
+      Some("/var/run/secrets/kubernetes.io/token.ns1"))
+
+    val kubernetesConf2 = kyuubiConf.getKubernetesConf(Some("28"), Some("ns2"))
+    assert(kubernetesConf2.get(KyuubiConf.KUBERNETES_MASTER) == Some("k8s://master"))
+    assert(kubernetesConf2.get(KyuubiConf.KUBERNETES_AUTHENTICATE_OAUTH_TOKEN_FILE) ==
+      Some("/var/run/secrets/kubernetes.io/token.ns2"))
   }
 }

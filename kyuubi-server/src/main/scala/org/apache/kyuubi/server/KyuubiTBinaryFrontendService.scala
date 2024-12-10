@@ -20,20 +20,21 @@ package org.apache.kyuubi.server
 import java.util.Base64
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.hive.service.rpc.thrift._
-import org.apache.thrift.protocol.TProtocol
-import org.apache.thrift.server.ServerContext
 
 import org.apache.kyuubi.KyuubiSQLException
 import org.apache.kyuubi.cli.Handle
 import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.KyuubiConf.KYUUBI_SERVER_THRIFT_RESULTSET_DEFAULT_FETCH_SIZE
 import org.apache.kyuubi.config.KyuubiReservedKeys._
 import org.apache.kyuubi.ha.client.{KyuubiServiceDiscovery, ServiceDiscovery}
 import org.apache.kyuubi.metrics.MetricsConstants._
 import org.apache.kyuubi.metrics.MetricsSystem
 import org.apache.kyuubi.service.{Serverable, Service, TBinaryFrontendService}
 import org.apache.kyuubi.service.TFrontendService.{CURRENT_SERVER_CONTEXT, FeServiceServerContext, OK_STATUS}
-import org.apache.kyuubi.session.KyuubiSessionImpl
+import org.apache.kyuubi.session.{KyuubiSessionImpl, SessionHandle}
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift._
+import org.apache.kyuubi.shaded.thrift.protocol.TProtocol
+import org.apache.kyuubi.shaded.thrift.server.ServerContext
 
 final class KyuubiTBinaryFrontendService(
     override val serverable: Serverable)
@@ -48,6 +49,8 @@ final class KyuubiTBinaryFrontendService(
       None
     }
   }
+
+  private lazy val defaultFetchSize = conf.get(KYUUBI_SERVER_THRIFT_RESULTSET_DEFAULT_FETCH_SIZE)
 
   override def initialize(conf: KyuubiConf): Unit = synchronized {
     super.initialize(conf)
@@ -87,10 +90,17 @@ final class KyuubiTBinaryFrontendService(
       val opHandleIdentifier = Handle.toTHandleIdentifier(launchEngineOp.getHandle.identifier)
       respConfiguration.put(
         KYUUBI_SESSION_ENGINE_LAUNCH_HANDLE_GUID,
-        Base64.getMimeEncoder.encodeToString(opHandleIdentifier.getGuid))
+        Base64.getEncoder.encodeToString(opHandleIdentifier.getGuid))
       respConfiguration.put(
         KYUUBI_SESSION_ENGINE_LAUNCH_HANDLE_SECRET,
-        Base64.getMimeEncoder.encodeToString(opHandleIdentifier.getSecret))
+        Base64.getEncoder.encodeToString(opHandleIdentifier.getSecret))
+
+      respConfiguration.put(KYUUBI_SESSION_ENGINE_LAUNCH_SUPPORT_RESULT, true.toString)
+
+      // HIVE-23005(4.0.0), Hive JDBC driver supposes that server always returns this conf
+      respConfiguration.put(
+        "hive.server2.thrift.resultset.default.fetch.size",
+        defaultFetchSize.toString)
 
       resp.setSessionHandle(sessionHandle.toTSessionHandle)
       resp.setConfiguration(respConfiguration)
@@ -111,5 +121,12 @@ final class KyuubiTBinaryFrontendService(
     val resp = new TRenewDelegationTokenResp
     resp.setStatus(notSupportTokenErrorStatus)
     resp
+  }
+
+  override protected def reserveSessionOnDisconnect(sessionHandle: SessionHandle): Unit = {
+    be.sessionManager.getSession(sessionHandle) match {
+      case kyuubiSession: KyuubiSessionImpl => kyuubiSession.client.disconnect()
+      case _ =>
+    }
   }
 }

@@ -17,11 +17,12 @@
 
 package org.apache.kyuubi.engine.spark
 
-import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable
 
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.engine.KyuubiApplicationManager
 import org.apache.kyuubi.operation.log.OperationLog
+import org.apache.kyuubi.util.command.CommandLineUtils._
 
 class SparkBatchProcessBuilder(
     override val proxyUser: String,
@@ -33,11 +34,12 @@ class SparkBatchProcessBuilder(
     batchConf: Map[String, String],
     batchArgs: Seq[String],
     override val extraEngineLog: Option[OperationLog])
-  extends SparkProcessBuilder(proxyUser, conf, batchId, extraEngineLog) {
+// TODO respect doAsEnabled
+  extends SparkProcessBuilder(proxyUser, true, conf, batchId, extraEngineLog) {
   import SparkProcessBuilder._
 
-  override protected val commands: Array[String] = {
-    val buffer = new ArrayBuffer[String]()
+  override protected[kyuubi] lazy val commands: Iterable[String] = {
+    val buffer = new mutable.ListBuffer[String]()
     buffer += executable
     Option(mainClass).foreach { cla =>
       buffer += CLASS
@@ -51,9 +53,11 @@ class SparkBatchProcessBuilder(
     // tag batch application
     KyuubiApplicationManager.tagApplication(batchId, "spark", clusterManager(), batchKyuubiConf)
 
-    (batchKyuubiConf.getAll ++ sparkAppNameConf()).foreach { case (k, v) =>
-      buffer += CONF
-      buffer += s"${convertConfigKey(k)}=$v"
+    (batchKyuubiConf.getAll ++
+      sparkAppNameConf() ++
+      engineLogPathConf() ++
+      appendPodNameConf(batchConf)).map { case (k, v) =>
+      buffer ++= confKeyValue(convertConfigKey(k), v)
     }
 
     setupKerberos(buffer)
@@ -63,7 +67,7 @@ class SparkBatchProcessBuilder(
 
     batchArgs.foreach { arg => buffer += arg }
 
-    buffer.toArray
+    buffer
   }
 
   private def sparkAppNameConf(): Map[String, String] = {
@@ -76,5 +80,13 @@ class SparkBatchProcessBuilder(
 
   override def clusterManager(): Option[String] = {
     batchConf.get(MASTER_KEY).orElse(super.clusterManager())
+  }
+
+  override def kubernetesContext(): Option[String] = {
+    batchConf.get(KUBERNETES_CONTEXT_KEY).orElse(super.kubernetesContext())
+  }
+
+  override def kubernetesNamespace(): Option[String] = {
+    batchConf.get(KUBERNETES_NAMESPACE_KEY).orElse(super.kubernetesNamespace())
   }
 }

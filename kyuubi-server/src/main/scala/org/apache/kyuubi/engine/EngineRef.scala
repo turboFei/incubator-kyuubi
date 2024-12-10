@@ -17,7 +17,7 @@
 
 package org.apache.kyuubi.engine
 
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{Semaphore, TimeUnit}
 
 import scala.collection.JavaConverters._
 import scala.util.Random
@@ -38,26 +38,27 @@ import org.apache.kyuubi.engine.jdbc.JdbcProcessBuilder
 import org.apache.kyuubi.engine.spark.SparkProcessBuilder
 import org.apache.kyuubi.engine.trino.TrinoProcessBuilder
 import org.apache.kyuubi.ha.HighAvailabilityConf.{HA_ENGINE_REF_ID, HA_NAMESPACE}
-import org.apache.kyuubi.ha.client.{DiscoveryClient, DiscoveryClientProvider, DiscoveryPaths}
+import org.apache.kyuubi.ha.client.{DiscoveryClient, DiscoveryClientProvider, DiscoveryPaths, ServiceNodeInfo}
 import org.apache.kyuubi.metrics.MetricsConstants.{ENGINE_FAIL, ENGINE_TIMEOUT, ENGINE_TOTAL}
 import org.apache.kyuubi.metrics.MetricsSystem
 import org.apache.kyuubi.operation.log.OperationLog
 import org.apache.kyuubi.plugin.GroupProvider
-import org.apache.kyuubi.server.KyuubiServer
 
 /**
  * The description and functionality of an engine at server side
  *
  * @param conf Engine configuration
- * @param user Caller of the engine
+ * @param sessionUser Caller of the engine
  * @param engineRefId Id of the corresponding session in which the engine is created
  */
 private[kyuubi] class EngineRef(
     conf: KyuubiConf,
-    user: String,
+    sessionUser: String,
+    doAsEnabled: Boolean,
     groupProvider: GroupProvider,
     engineRefId: String,
-    engineManager: KyuubiApplicationManager)
+    engineManager: KyuubiApplicationManager,
+    startupProcessSemaphore: Option[Semaphore] = None)
   extends Logging {
   // The corresponding ServerSpace where the engine belongs to
   private val serverSpace: String = conf.get(HA_NAMESPACE)
@@ -70,8 +71,8 @@ private[kyuubi] class EngineRef(
   private val engineType: EngineType = EngineType.withName(conf.get(ENGINE_TYPE))
 
   // Server-side engine pool size threshold
-  private val poolThreshold: Int = Option(KyuubiServer.kyuubiServer).map(_.getConf)
-    .getOrElse(KyuubiConf()).get(ENGINE_POOL_SIZE_THRESHOLD)
+  private val poolThreshold: Int =
+    Option(engineManager).map(_.getConf).getOrElse(KyuubiConf()).get(ENGINE_POOL_SIZE_THRESHOLD)
 
   private val clientPoolSize: Int = conf.get(ENGINE_POOL_SIZE)
 
@@ -87,14 +88,17 @@ private[kyuubi] class EngineRef(
 
   private var builder: ProcBuilder = _
 
-  private[kyuubi] def getEngineRefId(): String = engineRefId
+  private[kyuubi] def getEngineRefId: String = engineRefId
 
-  // Launcher of the engine
-  private[kyuubi] val appUser: String = shareLevel match {
+  // user for routing session to the engine
+  private[kyuubi] val routingUser: String = shareLevel match {
     case SERVER => Utils.currentUser
-    case GROUP => groupProvider.primaryGroup(user, conf.getAll.asJava)
-    case _ => user
+    case GROUP => groupProvider.primaryGroup(sessionUser, conf.getAll.asJava)
+    case _ => sessionUser
   }
+
+  // user for launching engine
+  private[kyuubi] val appUser: String = if (doAsEnabled) routingUser else Utils.currentUser
 
   @VisibleForTesting
   private[kyuubi] val subdomain: String = conf.get(ENGINE_SHARE_LEVEL_SUBDOMAIN) match {
@@ -109,7 +113,7 @@ private[kyuubi] class EngineRef(
           val snPath =
             DiscoveryPaths.makePath(
               s"${serverSpace}_${KYUUBI_VERSION}_${shareLevel}_${engineType}_seqNum",
-              appUser,
+              routingUser,
               clientPoolName)
           DiscoveryClientProvider.withDiscoveryClient(conf) { client =>
             client.getAndIncrement(snPath)
@@ -127,7 +131,7 @@ private[kyuubi] class EngineRef(
    */
   @VisibleForTesting
   private[kyuubi] val defaultEngineName: String = {
-    val commonNamePrefix = s"kyuubi_${shareLevel}_${engineType}_${appUser}"
+    val commonNamePrefix = s"kyuubi_${shareLevel}_${engineType}_${routingUser}"
     shareLevel match {
       case CONNECTION => s"${commonNamePrefix}_$engineRefId"
       case _ => s"${commonNamePrefix}_${subdomain}_$engineRefId"
@@ -150,8 +154,8 @@ private[kyuubi] class EngineRef(
   private[kyuubi] lazy val engineSpace: String = {
     val commonParent = s"${serverSpace}_${KYUUBI_VERSION}_${shareLevel}_$engineType"
     shareLevel match {
-      case CONNECTION => DiscoveryPaths.makePath(commonParent, appUser, engineRefId)
-      case _ => DiscoveryPaths.makePath(commonParent, appUser, subdomain)
+      case CONNECTION => DiscoveryPaths.makePath(commonParent, routingUser, engineRefId)
+      case _ => DiscoveryPaths.makePath(commonParent, routingUser, subdomain)
     }
   }
 
@@ -166,7 +170,7 @@ private[kyuubi] class EngineRef(
         val lockPath =
           DiscoveryPaths.makePath(
             s"${serverSpace}_${KYUUBI_VERSION}_${shareLevel}_${engineType}_lock",
-            appUser,
+            routingUser,
             subdomain)
         discoveryClient.tryWithLock(
           lockPath,
@@ -187,32 +191,57 @@ private[kyuubi] class EngineRef(
     builder = engineType match {
       case SPARK_SQL =>
         conf.setIfMissing(SparkProcessBuilder.APP_KEY, defaultEngineName)
-        new SparkProcessBuilder(appUser, conf, engineRefId, extraEngineLog)
+        new SparkProcessBuilder(appUser, doAsEnabled, conf, engineRefId, extraEngineLog)
       case FLINK_SQL =>
-        conf.setIfMissing(FlinkProcessBuilder.YARN_APP_KEY, defaultEngineName)
-        new FlinkProcessBuilder(appUser, conf, engineRefId, extraEngineLog)
+        conf.setIfMissing(FlinkProcessBuilder.APP_KEY, defaultEngineName)
+        new FlinkProcessBuilder(appUser, doAsEnabled, conf, engineRefId, extraEngineLog)
       case TRINO =>
-        new TrinoProcessBuilder(appUser, conf, engineRefId, extraEngineLog)
+        new TrinoProcessBuilder(appUser, doAsEnabled, conf, engineRefId, extraEngineLog)
       case HIVE_SQL =>
-        new HiveProcessBuilder(appUser, conf, engineRefId, extraEngineLog)
+        conf.setIfMissing(HiveProcessBuilder.HIVE_ENGINE_NAME, defaultEngineName)
+        HiveProcessBuilder(
+          appUser,
+          doAsEnabled,
+          conf,
+          engineRefId,
+          extraEngineLog,
+          defaultEngineName)
       case JDBC =>
-        new JdbcProcessBuilder(appUser, conf, engineRefId, extraEngineLog)
+        conf.setIfMissing(JdbcProcessBuilder.JDBC_ENGINE_NAME, defaultEngineName)
+        JdbcProcessBuilder(
+          appUser,
+          doAsEnabled,
+          conf,
+          engineRefId,
+          extraEngineLog,
+          defaultEngineName)
       case CHAT =>
-        new ChatProcessBuilder(appUser, conf, engineRefId, extraEngineLog)
+        new ChatProcessBuilder(appUser, doAsEnabled, conf, engineRefId, extraEngineLog)
     }
 
     MetricsSystem.tracing(_.incCount(ENGINE_TOTAL))
+    var acquiredPermit = false
     try {
+      if (!startupProcessSemaphore.forall(_.tryAcquire(timeout, TimeUnit.MILLISECONDS))) {
+        MetricsSystem.tracing(_.incCount(MetricRegistry.name(ENGINE_TIMEOUT, appUser)))
+        throw KyuubiSQLException(
+          s"Timeout($timeout ms, you can modify ${ENGINE_INIT_TIMEOUT.key} to change it) to" +
+            s" acquires a permit from engine builder semaphore.")
+      }
+      acquiredPermit = true
       val redactedCmd = builder.toString
       info(s"Launching engine:\n$redactedCmd")
-      builder.validateConf
+      builder.validateConf()
       val process = builder.start
       var exitValue: Option[Int] = None
       var lastApplicationInfo: Option[ApplicationInfo] = None
       while (engineRef.isEmpty) {
         if (exitValue.isEmpty && process.waitFor(1, TimeUnit.SECONDS)) {
           exitValue = Some(process.exitValue())
-          if (exitValue != Some(0)) {
+          if (exitValue.contains(0)) {
+            acquiredPermit = false
+            startupProcessSemaphore.foreach(_.release())
+          } else {
             val error = builder.getError
             MetricsSystem.tracing { ms =>
               ms.incCount(MetricRegistry.name(ENGINE_FAIL, appUser))
@@ -223,8 +252,9 @@ private[kyuubi] class EngineRef(
         }
 
         if (started + timeout <= System.currentTimeMillis()) {
-          val killMessage = engineManager.killApplication(builder.clusterManager(), engineRefId)
-          process.destroyForcibly()
+          val killMessage =
+            engineManager.killApplication(builder.appMgrInfo(), engineRefId, Some(appUser))
+          builder.close(true)
           MetricsSystem.tracing(_.incCount(MetricRegistry.name(ENGINE_TIMEOUT, appUser)))
           throw KyuubiSQLException(
             s"Timeout($timeout ms, you can modify ${ENGINE_INIT_TIMEOUT.key} to change it) to" +
@@ -235,15 +265,16 @@ private[kyuubi] class EngineRef(
 
         // even the submit process succeeds, the application might meet failure when initializing,
         // check the engine application state from engine manager and fast fail on engine terminate
-        if (engineRef.isEmpty && exitValue == Some(0)) {
+        if (engineRef.isEmpty && exitValue.contains(0)) {
           Option(engineManager).foreach { engineMgr =>
             if (lastApplicationInfo.isDefined) {
               TimeUnit.SECONDS.sleep(1)
             }
 
             val applicationInfo = engineMgr.getApplicationInfo(
-              builder.clusterManager(),
+              builder.appMgrInfo(),
               engineRefId,
+              Some(appUser),
               Some(started))
 
             applicationInfo.foreach { appInfo =>
@@ -267,9 +298,16 @@ private[kyuubi] class EngineRef(
       }
       engineRef.get
     } finally {
+      if (acquiredPermit) startupProcessSemaphore.foreach(_.release())
+      val waitCompletion = conf.get(KyuubiConf.SESSION_ENGINE_STARTUP_WAIT_COMPLETION)
+      val destroyProcess = !waitCompletion && builder.isClusterMode()
+      if (destroyProcess) {
+        info("Destroy the builder process because waitCompletion is false" +
+          " and the engine is running in cluster mode.")
+      }
       // we must close the process builder whether session open is success or failure since
       // we have a log capture thread in process builder.
-      builder.close()
+      builder.close(destroyProcess)
     }
   }
 
@@ -278,6 +316,7 @@ private[kyuubi] class EngineRef(
    *
    * @param discoveryClient the zookeeper client to get or create engine instance
    * @param extraEngineLog the launch engine operation log, used to inject engine log into it
+   * @return engine host and port
    */
   def getOrCreate(
       discoveryClient: DiscoveryClient,
@@ -288,12 +327,48 @@ private[kyuubi] class EngineRef(
       }
   }
 
+  /**
+   * Deregister the engine from engine space with the given host and port on connection failure.
+   *
+   * @param discoveryClient the zookeeper client to get or create engine instance
+   * @param hostPort the existing engine host and port
+   * @return deregister result and message
+   */
+  def deregister(discoveryClient: DiscoveryClient, hostPort: (String, Int)): (Boolean, String) =
+    tryWithLock(discoveryClient) {
+      // refer the DiscoveryClient::getServerHost implementation
+      discoveryClient.getServiceNodesInfo(engineSpace, Some(1), silent = true) match {
+        case Seq(sn) =>
+          if ((sn.host, sn.port) == hostPort) {
+            val msg = s"Deleting engine node:$sn"
+            info(msg)
+            discoveryClient.delete(s"$engineSpace/${sn.nodeName}")
+            (true, msg)
+          } else {
+            val msg = s"Engine node:$sn is not matched with host&port[$hostPort]"
+            warn(msg)
+            (false, msg)
+          }
+        case _ =>
+          val msg = s"No engine node found in $engineSpace"
+          warn(msg)
+          (false, msg)
+      }
+    }
+
+  def getServiceNode(
+      discoveryClient: DiscoveryClient,
+      hostPort: (String, Int)): Option[ServiceNodeInfo] = {
+    val serviceNodes = discoveryClient.getServiceNodesInfo(engineSpace)
+    serviceNodes.find { sn => (sn.host, sn.port) == hostPort }
+  }
+
   def close(): Unit = {
     if (shareLevel == CONNECTION && builder != null) {
       try {
-        val clusterManager = builder.clusterManager()
+        val appMgrInfo = builder.appMgrInfo()
         builder.close(true)
-        engineManager.killApplication(clusterManager, engineRefId)
+        engineManager.killApplication(appMgrInfo, engineRefId, Some(appUser))
       } catch {
         case e: Exception =>
           warn(s"Error closing engine builder, engineRefId: $engineRefId", e)

@@ -24,15 +24,30 @@ import java.util.*;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
-import org.apache.hive.common.util.HiveStringUtils;
+import org.apache.hive.beeline.common.util.HiveStringUtils;
 import org.apache.kyuubi.util.reflect.DynConstructors;
 import org.apache.kyuubi.util.reflect.DynFields;
 import org.apache.kyuubi.util.reflect.DynMethods;
 
 public class KyuubiBeeLine extends BeeLine {
+
+  static {
+    try {
+      // We use reflection here to handle the case where users remove the
+      // slf4j-to-jul bridge order to route their logs to JUL.
+      Class<?> bridgeClass = Class.forName("org.slf4j.bridge.SLF4JBridgeHandler");
+      bridgeClass.getMethod("removeHandlersForRootLogger").invoke(null);
+      boolean installed = (boolean) bridgeClass.getMethod("isInstalled").invoke(null);
+      if (!installed) {
+        bridgeClass.getMethod("install").invoke(null);
+      }
+    } catch (ReflectiveOperationException cnf) {
+      // can't log anything yet so just fail silently
+    }
+  }
+
   public static final String KYUUBI_BEELINE_DEFAULT_JDBC_DRIVER =
       "org.apache.kyuubi.jdbc.KyuubiHiveDriver";
-  protected KyuubiCommands commands = new KyuubiCommands(this);
   private Driver defaultDriver;
 
   // copied from org.apache.hive.beeline.BeeLine
@@ -50,11 +65,7 @@ public class KyuubiBeeLine extends BeeLine {
   @SuppressWarnings("deprecation")
   public KyuubiBeeLine(boolean isBeeLine) {
     super(isBeeLine);
-    try {
-      DynFields.builder().hiddenImpl(BeeLine.class, "commands").buildChecked(this).set(commands);
-    } catch (Throwable t) {
-      throw new ExceptionInInitializerError("Failed to inject kyuubi commands");
-    }
+    setCommands(new KyuubiCommands(this));
     try {
       defaultDriver =
           DynConstructors.builder()
@@ -64,13 +75,6 @@ public class KyuubiBeeLine extends BeeLine {
     } catch (Throwable t) {
       throw new ExceptionInInitializerError(KYUUBI_BEELINE_DEFAULT_JDBC_DRIVER + "-missing");
     }
-  }
-
-  @Override
-  void usage() {
-    super.usage();
-    output("Usage: java \" + KyuubiBeeLine.class.getCanonicalName()");
-    output("   --python-mode                   Execute python code/script.");
   }
 
   public boolean isPythonMode() {
@@ -282,5 +286,10 @@ public class KyuubiBeeLine extends BeeLine {
   @Override
   boolean dispatch(String line) {
     return super.dispatch(isPythonMode() ? line : HiveStringUtils.removeComments(line));
+  }
+
+  @Override
+  KyuubiCommands getCommands() {
+    return ((KyuubiCommands) super.getCommands());
   }
 }

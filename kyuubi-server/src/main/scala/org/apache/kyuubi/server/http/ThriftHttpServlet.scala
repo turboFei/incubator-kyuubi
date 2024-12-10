@@ -26,18 +26,16 @@ import javax.ws.rs.core.NewCookie
 
 import scala.collection.mutable
 
-import org.apache.hadoop.hive.shims.Utils
-import org.apache.thrift.TProcessor
-import org.apache.thrift.protocol.TProtocolFactory
-import org.apache.thrift.server.TServlet
-
 import org.apache.kyuubi.Logging
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf.FRONTEND_PROXY_HTTP_CLIENT_IP_HEADER
-import org.apache.kyuubi.server.http.authentication.AuthenticationFilter
-import org.apache.kyuubi.server.http.authentication.AuthenticationHandler.AUTHORIZATION_HEADER
-import org.apache.kyuubi.server.http.util.{CookieSigner, HttpAuthUtils, SessionManager}
+import org.apache.kyuubi.server.http.authentication.{AuthenticationAuditLogger, AuthenticationFilter}
+import org.apache.kyuubi.server.http.util.{CookieSigner, HttpAuthUtils}
+import org.apache.kyuubi.server.http.util.HttpAuthUtils.AUTHORIZATION_HEADER
 import org.apache.kyuubi.service.authentication.KyuubiAuthenticationFactory
+import org.apache.kyuubi.shaded.thrift.TProcessor
+import org.apache.kyuubi.shaded.thrift.protocol.TProtocolFactory
+import org.apache.kyuubi.shaded.thrift.server.TServlet
 
 class ThriftHttpServlet(
     processor: TProcessor,
@@ -57,6 +55,8 @@ class ThriftHttpServlet(
   private var isHttpOnlyCookie = false
   private val X_FORWARDED_FOR_HEADER = "X-Forwarded-For"
   private val authenticationFilter = new AuthenticationFilter(conf)
+  private val XSRF_HEADER_DEFAULT = "X-XSRF-HEADER"
+  private val XSRF_METHODS_TO_IGNORE_DEFAULT = Set("GET", "OPTIONS", "HEAD", "TRACE")
 
   override def init(): Unit = {
     isCookieAuthEnabled = conf.get(KyuubiConf.FRONTEND_THRIFT_HTTP_COOKIE_AUTH_ENABLED)
@@ -80,9 +80,10 @@ class ThriftHttpServlet(
   override def doPost(request: HttpServletRequest, response: HttpServletResponse): Unit = {
     var clientUserName: String = null
     var requireNewCookie: Boolean = false
+    var doAuth: Boolean = false
     try {
       if (conf.get(KyuubiConf.FRONTEND_THRIFT_HTTP_XSRF_FILTER_ENABLED)) {
-        val continueProcessing = Utils.doXsrfFilter(request, response, null, null)
+        val continueProcessing = doXsrfFilter(request, response)
         if (!continueProcessing) {
           warn("Request did not have valid XSRF header, rejecting.")
           return
@@ -102,41 +103,28 @@ class ThriftHttpServlet(
         }
       }
 
+      AuthenticationFilter.HTTP_CLIENT_IP_ADDRESS.set(request.getRemoteAddr)
+      AuthenticationFilter.HTTP_PROXY_HEADER_CLIENT_IP_ADDRESS.set(
+        request.getHeader(conf.get(FRONTEND_PROXY_HTTP_CLIENT_IP_HEADER)))
+      Option(request.getHeader(X_FORWARDED_FOR_HEADER)).map(_.split(",").toList).foreach(
+        AuthenticationFilter.HTTP_FORWARDED_ADDRESSES.set)
+
       // If the cookie based authentication is not enabled or the request does not have a valid
       // cookie, use authentication depending on the server setup.
       if (clientUserName == null) {
+        doAuth = true
         clientUserName = authenticate(request, response)
       }
 
       require(clientUserName != null, "No valid authorization provided")
-      debug("Client username: " + clientUserName)
-
       // Set the thread local username to be used for doAs if true
-      SessionManager.setUserName(clientUserName)
-
+      AuthenticationFilter.HTTP_CLIENT_USER_NAME.set(clientUserName)
       // find proxy user if any from query param
-      val doAsQueryParam = getDoAsQueryParam(request.getQueryString)
-      if (doAsQueryParam != null) SessionManager.setProxyUserName(doAsQueryParam)
-
-      val clientIpAddress = request.getRemoteAddr
-      debug("Client IP Address: " + clientIpAddress)
-      SessionManager.setIpAddress(clientIpAddress)
-
-      Option(request.getHeader(conf.get(FRONTEND_PROXY_HTTP_CLIENT_IP_HEADER))).foreach {
-        ipAddress =>
-          debug("Proxy Http Header Client IP Address: " + ipAddress)
-          SessionManager.setProxyHttpHeaderIpAddress(ipAddress)
-      }
-
-      val forwarded_for = request.getHeader(X_FORWARDED_FOR_HEADER)
-      if (forwarded_for != null) {
-        debug(X_FORWARDED_FOR_HEADER + ":" + forwarded_for)
-        val forwardedAddresses = forwarded_for.split(",").toList
-        SessionManager.setForwardedAddresses(forwardedAddresses)
-      } else SessionManager.setForwardedAddresses(List.empty[String])
+      AuthenticationFilter.HTTP_CLIENT_PROXY_USER_NAME.set(
+        getDoAsQueryParam(request.getQueryString))
 
       // Generate new cookie and add it to the response
-      if (requireNewCookie && !authFactory.isNoSaslEnabled) {
+      if (requireNewCookie && !authFactory.saslDisabled) {
         val cookieToken = HttpAuthUtils.createCookieToken(clientUserName)
         val hs2Cookie = createCookie(signer.signCookie(cookieToken))
         if (isHttpOnlyCookie) response.setHeader("SET-COOKIE", getHttpOnlyCookieHeader(hs2Cookie))
@@ -157,12 +145,13 @@ class ThriftHttpServlet(
         error("Error: ", e)
         throw e
     } finally {
-      // Clear the thread locals
-      SessionManager.clearUserName()
-      SessionManager.clearIpAddress()
-      SessionManager.clearProxyHttpHeaderIpAddress()
-      SessionManager.clearProxyUserName()
-      SessionManager.clearForwardedAddresses()
+      if (doAuth) AuthenticationAuditLogger.audit(request, response)
+      AuthenticationFilter.HTTP_CLIENT_USER_NAME.remove()
+      AuthenticationFilter.HTTP_CLIENT_IP_ADDRESS.remove()
+      AuthenticationFilter.HTTP_PROXY_HEADER_CLIENT_IP_ADDRESS.remove()
+      AuthenticationFilter.HTTP_AUTH_TYPE.remove()
+      AuthenticationFilter.HTTP_CLIENT_PROXY_USER_NAME.remove()
+      AuthenticationFilter.HTTP_FORWARDED_ADDRESSES.remove()
     }
   }
 
@@ -288,8 +277,10 @@ class ThriftHttpServlet(
 
   private def authenticate(request: HttpServletRequest, response: HttpServletResponse): String = {
     val authorization = request.getHeader(AUTHORIZATION_HEADER)
-    authenticationFilter.getMatchedHandler(authorization).map(
-      _.authenticate(request, response)).orNull
+    authenticationFilter.getMatchedHandler(authorization).map { authHandler =>
+      AuthenticationFilter.HTTP_AUTH_TYPE.set(authHandler.authScheme.toString)
+      authHandler.authenticate(request, response)
+    }.orNull
   }
 
   private def getDoAsQueryParam(queryString: String): String = {
@@ -302,5 +293,23 @@ class ThriftHttpServlet(
     })
 
     null
+  }
+
+  private def doXsrfFilter(
+      httpRequest: HttpServletRequest,
+      response: HttpServletResponse): Boolean = {
+    if (XSRF_METHODS_TO_IGNORE_DEFAULT.contains(httpRequest.getMethod)
+      || httpRequest.getHeader(XSRF_HEADER_DEFAULT) != null) {
+      true
+    } else {
+      response.sendError(
+        HttpServletResponse.SC_BAD_REQUEST,
+        "Missing Required Header for Vulnerability Protection")
+      // scalastyle:off println
+      response.getWriter.println(
+        "XSRF filter denial, requests must contain header : " + XSRF_HEADER_DEFAULT)
+      // scalastyle:on println
+      false
+    }
   }
 }

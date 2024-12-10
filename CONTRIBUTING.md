@@ -60,4 +60,10 @@ TBD, please be patient for the surprise.
 
 ## IDE Setup Guide
 
-[IntelliJ IDEA Setup Guide](https://kyuubi.readthedocs.io/en/master/develop_tools/idea_setup.html)
+[IntelliJ IDEA Setup Guide](https://kyuubi.readthedocs.io/en/master/contributing/code/idea_setup.html)
+
+## Contributor Avatars
+
+<a href="https://github.com/apache/kyuubi/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=apache/kyuubi&max=1024" />
+</a>

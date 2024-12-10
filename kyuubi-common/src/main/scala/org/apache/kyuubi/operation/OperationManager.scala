@@ -19,8 +19,6 @@ package org.apache.kyuubi.operation
 
 import scala.collection.JavaConverters._
 
-import org.apache.hive.service.rpc.thrift._
-
 import org.apache.kyuubi.KyuubiSQLException
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiReservedKeys._
@@ -29,6 +27,7 @@ import org.apache.kyuubi.operation.OperationState._
 import org.apache.kyuubi.operation.log.LogDivertAppender
 import org.apache.kyuubi.service.AbstractService
 import org.apache.kyuubi.session.Session
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift._
 
 /**
  * The [[OperationManager]] manages all the operations during their lifecycle.
@@ -137,18 +136,22 @@ abstract class OperationManager(name: String) extends AbstractService(name) {
   final def getOperationNextRowSet(
       opHandle: OperationHandle,
       order: FetchOrientation,
-      maxRows: Int): TRowSet = {
+      maxRows: Int): TFetchResultsResp = {
     getOperation(opHandle).getNextRowSet(order, maxRows)
   }
 
   def getOperationLogRowSet(
       opHandle: OperationHandle,
       order: FetchOrientation,
-      maxRows: Int): TRowSet = {
+      maxRows: Int): TFetchResultsResp = {
     val operationLog = getOperation(opHandle).getOperationLog
-    operationLog.map(_.read(order, maxRows)).getOrElse {
+    val rowSet = operationLog.map(_.read(order, maxRows)).getOrElse {
       throw KyuubiSQLException(s"$opHandle failed to generate operation log")
     }
+    val resp = new TFetchResultsResp(new TStatus(TStatusCode.SUCCESS_STATUS))
+    resp.setResults(rowSet)
+    resp.setHasMoreRows(false)
+    resp
   }
 
   final def removeExpiredOperations(handles: Seq[OperationHandle]): Seq[Operation] = synchronized {

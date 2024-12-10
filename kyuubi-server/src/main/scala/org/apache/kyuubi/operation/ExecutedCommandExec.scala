@@ -17,11 +17,10 @@
 
 package org.apache.kyuubi.operation
 
-import org.apache.hive.service.rpc.thrift.{TGetResultSetMetadataResp, TRowSet}
-
 import org.apache.kyuubi.operation.FetchOrientation.FetchOrientation
 import org.apache.kyuubi.operation.log.OperationLog
 import org.apache.kyuubi.session.KyuubiSessionImpl
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift.{TFetchResultsResp, TGetResultSetMetadataResp}
 import org.apache.kyuubi.sql.plan.command.RunnableCommand
 import org.apache.kyuubi.sql.schema.SchemaHelper
 
@@ -49,7 +48,7 @@ class ExecutedCommandExec(
     OperationLog.removeCurrentOperationLog()
   }
 
-  override protected def runInternal(): Unit = session.handleSessionException {
+  override protected def runInternal(): Unit = {
     val asyncOperation: Runnable = () => {
       setState(OperationState.RUNNING)
       try {
@@ -67,11 +66,17 @@ class ExecutedCommandExec(
     if (!shouldRunAsync) getBackgroundHandle.get()
   }
 
-  override def getNextRowSetInternal(order: FetchOrientation, rowSetSize: Int): TRowSet = {
+  override def getNextRowSetInternal(
+      order: FetchOrientation,
+      rowSetSize: Int): TFetchResultsResp = {
     validateDefaultFetchOrientation(order)
     assertState(OperationState.FINISHED)
     setHasResultSet(true)
-    command.getNextRowSet(order, rowSetSize, getProtocolVersion)
+    val rowSet = command.getNextRowSet(order, rowSetSize, getProtocolVersion)
+    val resp = new TFetchResultsResp(OK_STATUS)
+    resp.setResults(rowSet)
+    resp.setHasMoreRows(false)
+    resp
   }
 
   override def getResultSetMetadata: TGetResultSetMetadataResp = {

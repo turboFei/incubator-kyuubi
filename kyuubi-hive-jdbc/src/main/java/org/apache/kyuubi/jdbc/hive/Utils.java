@@ -28,8 +28,10 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.hive.service.rpc.thrift.TStatus;
-import org.apache.hive.service.rpc.thrift.TStatusCode;
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift.TStatus;
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift.TStatusCode;
+import org.apache.kyuubi.util.reflect.DynConstructors;
+import org.apache.kyuubi.util.reflect.DynMethods;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,7 +42,7 @@ public class Utils {
       Arrays.asList("jdbc:hive2://", "jdbc:kyuubi://");
 
   /** If host is provided, without a port. */
-  static final String DEFAULT_PORT = "10000";
+  static final String DEFAULT_PORT = "10009";
   // To parse the intermediate URI as a Java URI, we'll give a dummy authority(dummyhost:00000).
   // Later, we'll substitute the dummy authority for a resolved authority.
   static final String dummyAuthorityString = "dummyhost:00000";
@@ -57,6 +59,11 @@ public class Utils {
   public static final String HIVE_SERVER2_RETRY_KEY = "hive.server2.retryserver";
   public static final String HIVE_SERVER2_RETRY_TRUE = "true";
   public static final String HIVE_SERVER2_RETRY_FALSE = "false";
+
+  public static final String HADOOP_CONFIGURATION_CLASS = "org.apache.hadoop.conf.Configuration";
+
+  public static final String HADOOP_SECURITY_CREDENTIAL_PATH =
+      "hadoop.security.credential.provider.path";
 
   public static final Pattern KYUUBI_OPERATION_HINT_PATTERN =
       Pattern.compile("^__kyuubi_operation_result_(.*)__=(.*)", Pattern.CASE_INSENSITIVE);
@@ -99,25 +106,47 @@ public class Utils {
    */
   static List<String> splitSqlStatement(String sql) {
     List<String> parts = new ArrayList<>();
-    int apCount = 0;
+    boolean inSingleQuote = false;
+    boolean inDoubleQuote = false;
+    boolean inComment = false;
     int off = 0;
     boolean skip = false;
 
     for (int i = 0; i < sql.length(); i++) {
       char c = sql.charAt(i);
+      if (inComment) {
+        inComment = (c != '\n');
+        continue;
+      }
       if (skip) {
         skip = false;
         continue;
       }
       switch (c) {
         case '\'':
-          apCount++;
+          if (!inDoubleQuote) {
+            inSingleQuote = !inSingleQuote;
+          }
+          break;
+        case '\"':
+          if (!inSingleQuote) {
+            inDoubleQuote = !inDoubleQuote;
+          }
+          break;
+        case '-':
+          if (!inSingleQuote && !inDoubleQuote) {
+            if (i < sql.length() - 1 && sql.charAt(i + 1) == '-') {
+              inComment = true;
+            }
+          }
           break;
         case '\\':
-          skip = true;
+          if (!inSingleQuote && !inDoubleQuote) {
+            skip = true;
+          }
           break;
         case '?':
-          if ((apCount & 1) == 0) {
+          if (!inSingleQuote && !inDoubleQuote) {
             parts.add(sql.substring(off, i));
             off = i + 1;
           }
@@ -201,7 +230,7 @@ public class Utils {
       uri = uri.replace(urlPrefix, urlPrefix + authorityFromClientJdbcURL);
     }
     connParams.setSuppliedURLAuthority(authorityFromClientJdbcURL);
-    uri = uri.replace(authorityFromClientJdbcURL, dummyAuthorityString);
+    uri = uri.replaceFirst(authorityFromClientJdbcURL, dummyAuthorityString);
 
     // Now parse the connection uri with dummy authority
     URI jdbcURI = URI.create(uri.substring(URI_JDBC_PREFIX.length()));
@@ -292,6 +321,13 @@ public class Utils {
         }
       }
     }
+    if (!connParams.getSessionVars().containsKey(CLIENT_PROTOCOL_VERSION)) {
+      if (info.containsKey(CLIENT_PROTOCOL_VERSION)) {
+        connParams
+            .getSessionVars()
+            .put(CLIENT_PROTOCOL_VERSION, info.getProperty(CLIENT_PROTOCOL_VERSION));
+      }
+    }
     // Extract user/password from JDBC connection properties if its not supplied
     // in the connection URL
     if (!connParams.getSessionVars().containsKey(AUTH_USER)) {
@@ -345,8 +381,8 @@ public class Utils {
         if (port <= 0) {
           port = Integer.parseInt(Utils.DEFAULT_PORT);
         }
-        connParams.setHost(jdbcBaseURI.getHost());
-        connParams.setPort(jdbcBaseURI.getPort());
+        connParams.setHost(host);
+        connParams.setPort(port);
       }
       // We check for invalid host, port while configuring connParams with configureConnParams()
       authorityStr = connParams.getHost() + ":" + connParams.getPort();
@@ -551,7 +587,10 @@ public class Utils {
     if (KYUUBI_CLIENT_VERSION == null) {
       try {
         Properties prop = new Properties();
-        prop.load(Utils.class.getClassLoader().getResourceAsStream("version.properties"));
+        prop.load(
+            Utils.class
+                .getClassLoader()
+                .getResourceAsStream("org/apache/kyuubi/version.properties"));
         KYUUBI_CLIENT_VERSION = prop.getProperty(KYUUBI_CLIENT_VERSION_KEY, "unknown");
       } catch (Exception e) {
         LOG.error("Error getting kyuubi client version", e);
@@ -559,5 +598,70 @@ public class Utils {
       }
     }
     return KYUUBI_CLIENT_VERSION;
+  }
+
+  /**
+   * Method to get the password from the credential provider
+   *
+   * @param configuration Hadoop configuration
+   * @param providerPath provider path
+   * @param key alias name
+   * @return password
+   */
+  private static String getPasswordFromCredentialProvider(
+      Object configuration, String providerPath, String key) {
+    try {
+      if (providerPath != null) {
+        DynMethods.builder("set")
+            .impl(Class.forName(HADOOP_CONFIGURATION_CLASS), String.class, String.class)
+            .buildChecked()
+            .invoke(configuration, HADOOP_SECURITY_CREDENTIAL_PATH, providerPath);
+
+        char[] password =
+            DynMethods.builder("getPassword")
+                .impl(Class.forName(HADOOP_CONFIGURATION_CLASS), String.class)
+                .buildChecked()
+                .invoke(configuration, key);
+        if (password != null) {
+          return new String(password);
+        }
+      }
+    } catch (ClassNotFoundException exception) {
+      throw new RuntimeException(exception);
+    } catch (NoSuchMethodException exception) {
+      LOG.warn("Could not retrieve password for " + key, exception);
+      throw new RuntimeException(exception);
+    }
+    return null;
+  }
+
+  /**
+   * Method to get the password from the configuration map if available. Otherwise, get it from the
+   * Hadoop CredentialProvider if Hadoop classes are available
+   *
+   * @param confMap configuration map
+   * @param key param
+   * @return password
+   */
+  public static String getPassword(Map<String, String> confMap, String key) {
+    String password = confMap.get(key);
+    boolean hadoopCredentialProviderAvailable = false;
+    Object hadoopConfiguration = null;
+    if (password == null) {
+      try {
+        hadoopConfiguration =
+            DynConstructors.builder().impl(HADOOP_CONFIGURATION_CLASS).build().newInstance();
+        hadoopCredentialProviderAvailable = true;
+      } catch (Exception exception) {
+        LOG.warn("Hadoop credential provider is unavailable", exception);
+        throw new RuntimeException(exception);
+      }
+    }
+    if (password == null && hadoopCredentialProviderAvailable) {
+      password =
+          getPasswordFromCredentialProvider(
+              hadoopConfiguration, confMap.get(JdbcConnectionParams.SSL_STORE_PASSWORD_PATH), key);
+    }
+    return password;
   }
 }

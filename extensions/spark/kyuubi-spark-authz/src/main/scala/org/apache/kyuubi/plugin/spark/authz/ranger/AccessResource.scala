@@ -17,6 +17,9 @@
 
 package org.apache.kyuubi.plugin.spark.authz.ranger
 
+import java.io.File
+import java.util
+
 import scala.language.implicitConversions
 
 import org.apache.ranger.plugin.policyengine.RangerAccessResourceImpl
@@ -57,9 +60,19 @@ object AccessResource {
         resource.setValue("database", firstLevelResource)
         resource.setValue("table", secondLevelResource)
         resource.setValue("column", thirdLevelResource)
-      case TABLE | VIEW => // fixme spark have added index support
+      case TABLE | VIEW | INDEX =>
         resource.setValue("database", firstLevelResource)
         resource.setValue("table", secondLevelResource)
+      case URI =>
+        val objectList = new util.ArrayList[String]
+        Option(firstLevelResource)
+          .filter(_.nonEmpty)
+          .foreach { path =>
+            val s = path.stripSuffix(File.separator)
+            objectList.add(s)
+            objectList.add(s + File.separator)
+          }
+        resource.setValue("url", objectList)
     }
     resource.setServiceDef(SparkRangerAdminPlugin.getServiceDef)
     owner.foreach(resource.setOwnerUser)

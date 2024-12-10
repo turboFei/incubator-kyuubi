@@ -20,13 +20,22 @@ import router from '@/router'
 import { store } from '@/pinia'
 import i18n from '@/locales'
 import ElementPlus from 'element-plus'
-import '@/styles/element/index.scss'
-import './styles/index.scss'
+import '@/assets/styles/element/index.scss'
+import '@/assets/styles/index.scss'
 import App from './App.vue'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
+import LoginModal from '@/components/login/index.vue'
+import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'
 
 const app = createApp(App)
 for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
   app.component(key, component)
 }
-app.use(router).use(store).use(i18n).use(ElementPlus).mount('#app')
+store.use(piniaPluginPersistedstate)
+app
+  .component('LoginModal', LoginModal)
+  .use(router)
+  .use(store)
+  .use(i18n)
+  .use(ElementPlus)
+  .mount('#app')

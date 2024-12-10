@@ -20,14 +20,14 @@ import java.sql.{Connection, DatabaseMetaData}
 
 import scala.util.{Failure, Success, Try}
 
-import org.apache.hive.service.rpc.thrift.{TGetInfoType, TGetInfoValue, TProtocolVersion}
-
 import org.apache.kyuubi.KyuubiSQLException
-import org.apache.kyuubi.config.KyuubiConf.ENGINE_JDBC_SESSION_INITIALIZE_SQL
+import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.KyuubiConf._
 import org.apache.kyuubi.config.KyuubiReservedKeys.KYUUBI_SESSION_HANDLE_KEY
 import org.apache.kyuubi.engine.jdbc.connection.ConnectionProvider
 import org.apache.kyuubi.engine.jdbc.util.KyuubiJdbcUtils
 import org.apache.kyuubi.session.{AbstractSession, SessionHandle, SessionManager}
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift.{TGetInfoType, TGetInfoValue, TProtocolVersion}
 
 class JdbcSessionImpl(
     protocol: TProtocolVersion,
@@ -45,18 +45,28 @@ class JdbcSessionImpl(
 
   private var databaseMetaData: DatabaseMetaData = _
 
-  private val kyuubiConf = sessionManager.getConf
+  val sessionConf: KyuubiConf = normalizeConf
+
+  private def normalizeConf: KyuubiConf = {
+    val kyuubiConf = sessionManager.getConf.clone
+    if (kyuubiConf.get(ENGINE_JDBC_CONNECTION_PROPAGATECREDENTIAL)) {
+      kyuubiConf.set(ENGINE_JDBC_CONNECTION_USER, user)
+      kyuubiConf.set(ENGINE_JDBC_CONNECTION_PASSWORD, password)
+    }
+    conf.foreach { case (k, v) => kyuubiConf.set(k, v) }
+    kyuubiConf
+  }
 
   override def open(): Unit = {
     info(s"Starting to open jdbc session.")
     if (sessionConnection == null) {
-      sessionConnection = ConnectionProvider.create(kyuubiConf)
+      sessionConnection = ConnectionProvider.create(sessionConf)
       databaseMetaData = sessionConnection.getMetaData
     }
     KyuubiJdbcUtils.initializeJdbcSession(
-      kyuubiConf,
+      sessionConf,
       sessionConnection,
-      kyuubiConf.get(ENGINE_JDBC_SESSION_INITIALIZE_SQL))
+      sessionConf.get(ENGINE_JDBC_SESSION_INITIALIZE_SQL))
     super.open()
     info(s"The jdbc session is started.")
   }

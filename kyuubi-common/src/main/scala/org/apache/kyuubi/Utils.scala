@@ -18,11 +18,12 @@
 package org.apache.kyuubi
 
 import java.io._
-import java.net.{Inet4Address, InetAddress, NetworkInterface}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths, StandardCopyOption}
+import java.security.PrivilegedAction
 import java.text.SimpleDateFormat
 import java.util.{Date, Properties, TimeZone, UUID}
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.locks.Lock
 
@@ -31,13 +32,14 @@ import scala.sys.process._
 import scala.util.control.NonFatal
 import scala.util.matching.Regex
 
-import org.apache.commons.lang3.SystemUtils
 import org.apache.commons.lang3.time.DateFormatUtils
 import org.apache.hadoop.security.UserGroupInformation
 import org.apache.hadoop.util.ShutdownHookManager
 
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.internal.Tests.IS_TESTING
+import org.apache.kyuubi.util.TempFileCleanupUtils
+import org.apache.kyuubi.util.command.CommandLineUtils._
 
 object Utils extends Logging {
 
@@ -136,12 +138,27 @@ object Utils extends Logging {
   /**
    * Delete a directory recursively.
    */
-  def deleteDirectoryRecursively(f: File): Boolean = {
-    if (f.isDirectory) f.listFiles match {
-      case files: Array[File] => files.foreach(deleteDirectoryRecursively)
-      case _ =>
+  def deleteDirectoryRecursively(f: File, ignoreException: Boolean = true): Unit = {
+    if (f == null || !f.exists()) {
+      return
     }
-    f.delete()
+
+    if (f.isDirectory) {
+      val files = f.listFiles
+      if (files != null && files.nonEmpty) {
+        files.foreach(deleteDirectoryRecursively(_, ignoreException))
+      }
+    }
+    try {
+      f.delete()
+    } catch {
+      case e: Exception =>
+        if (ignoreException) {
+          warn(s"Ignoring the exception in deleting file, path: ${f.toPath}", e)
+        } else {
+          throw e
+        }
+    }
   }
 
   /**
@@ -152,8 +169,19 @@ object Utils extends Logging {
       prefix: String = "kyuubi",
       root: String = System.getProperty("java.io.tmpdir")): Path = {
     val dir = createDirectory(root, prefix)
-    dir.toFile.deleteOnExit()
+    TempFileCleanupUtils.deleteOnExit(dir)
     dir
+  }
+
+  /**
+   * List the files recursively in a directory.
+   */
+  def listFilesRecursively(file: File): Seq[File] = {
+    if (!file.isDirectory) {
+      file :: Nil
+    } else {
+      file.listFiles().flatMap(listFilesRecursively)
+    }
   }
 
   /**
@@ -188,9 +216,8 @@ object Utils extends Logging {
       } finally {
         source.close()
       }
-      val file = filePath.toFile
-      file.deleteOnExit()
-      file
+      TempFileCleanupUtils.deleteOnExit(filePath)
+      filePath.toFile
     } catch {
       case e: Exception =>
         error(
@@ -202,30 +229,13 @@ object Utils extends Logging {
 
   def currentUser: String = UserGroupInformation.getCurrentUser.getShortUserName
 
-  private val shortVersionRegex = """^(\d+\.\d+\.\d+)(.*)?$""".r
-
-  /**
-   * Given a Kyuubi/Spark/Hive version string, return the short version string.
-   * E.g., for 3.0.0-SNAPSHOT, return '3.0.0'.
-   */
-  def shortVersion(version: String): String = {
-    shortVersionRegex.findFirstMatchIn(version) match {
-      case Some(m) => m.group(1)
-      case None =>
-        throw new IllegalArgumentException(s"Tried to parse '$version' as a project" +
-          s" version string, but it could not find the major/minor/maintenance version numbers.")
-    }
+  def doAs[T](
+      proxyUser: String,
+      realUser: UserGroupInformation = UserGroupInformation.getCurrentUser)(f: () => T): T = {
+    UserGroupInformation.createProxyUser(proxyUser, realUser).doAs(new PrivilegedAction[T] {
+      override def run(): T = f()
+    })
   }
-
-  /**
-   * Whether the underlying operating system is Windows.
-   */
-  val isWindows: Boolean = SystemUtils.IS_OS_WINDOWS
-
-  /**
-   * Whether the underlying operating system is MacOS.
-   */
-  val isMac: Boolean = SystemUtils.IS_OS_MAC
 
   /**
    * Indicates whether Kyuubi is currently running unit tests.
@@ -250,34 +260,6 @@ object Utils extends Logging {
    */
   def addShutdownHook(hook: Runnable, priority: Int = DEFAULT_SHUTDOWN_PRIORITY): Unit = {
     ShutdownHookManager.get().addShutdownHook(hook, priority)
-  }
-
-  /**
-   * This block of code is based on Spark's Utils.findLocalInetAddress()
-   */
-  def findLocalInetAddress: InetAddress = {
-    val address = InetAddress.getLocalHost
-    if (address.isLoopbackAddress) {
-      val activeNetworkIFs = NetworkInterface.getNetworkInterfaces.asScala.toSeq
-      val reOrderedNetworkIFs = if (isWindows) activeNetworkIFs else activeNetworkIFs.reverse
-
-      for (ni <- reOrderedNetworkIFs) {
-        val addresses = ni.getInetAddresses.asScala
-          .filterNot(addr => addr.isLinkLocalAddress || addr.isLoopbackAddress).toSeq
-        if (addresses.nonEmpty) {
-          val addr = addresses.find(_.isInstanceOf[Inet4Address]).getOrElse(addresses.head)
-          // because of Inet6Address.toHostName may add interface at the end if it knows about it
-          val strippedAddress = InetAddress.getByAddress(addr.getAddress)
-          // We've found an address that looks reasonable!
-          warn(s"${address.getHostName} was resolved to a loopback address: " +
-            s"${address.getHostAddress}, using ${strippedAddress.getHostAddress}")
-          return strippedAddress
-        }
-      }
-      warn(s"${address.getHostName} was resolved to a loopback address: ${address.getHostAddress}" +
-        " but we couldn't find any external IP address!")
-    }
-    address
   }
 
   /**
@@ -307,15 +289,11 @@ object Utils extends Logging {
     }
   }
 
-  def getCodeSourceLocation(clazz: Class[_]): String = {
-    new File(clazz.getProtectionDomain.getCodeSource.getLocation.toURI).getPath
-  }
-
   def fromCommandLineArgs(args: Array[String], conf: KyuubiConf): Unit = {
     require(args.length % 2 == 0, s"Illegal size of arguments.")
     for (i <- args.indices by 2) {
       require(
-        args(i) == "--conf",
+        args(i) == CONF,
         s"Unrecognized main arguments prefix ${args(i)}," +
           s"the argument format is '--conf k=v'.")
 
@@ -326,25 +304,24 @@ object Utils extends Logging {
     }
   }
 
-  val REDACTION_REPLACEMENT_TEXT = "*********(redacted)"
+  def redactCommandLineArgs(conf: KyuubiConf, commands: Iterable[String]): Iterable[String] = {
+    conf.get(SERVER_SECRET_REDACTION_PATTERN) match {
+      case Some(redactionPattern) =>
+        var nextKV = false
+        commands.map {
+          case PATTERN_FOR_KEY_VALUE_ARG(key, value) if nextKV =>
+            val (_, newValue) = redact(redactionPattern, Seq((key, value))).head
+            nextKV = false
+            genKeyValuePair(key, newValue)
 
-  private val PATTERN_FOR_KEY_VALUE_ARG = "(.+?)=(.+)".r
+          case cmd if cmd == CONF =>
+            nextKV = true
+            cmd
 
-  def redactCommandLineArgs(conf: KyuubiConf, commands: Array[String]): Array[String] = {
-    val redactionPattern = conf.get(SERVER_SECRET_REDACTION_PATTERN)
-    var nextKV = false
-    commands.map {
-      case PATTERN_FOR_KEY_VALUE_ARG(key, value) if nextKV =>
-        val (_, newValue) = redact(redactionPattern, Seq((key, value))).head
-        nextKV = false
-        s"$key=$newValue"
-
-      case cmd if cmd == "--conf" =>
-        nextKV = true
-        cmd
-
-      case cmd =>
-        cmd
+          case cmd =>
+            cmd
+        }
+      case _ => commands
     }
   }
 
@@ -417,4 +394,26 @@ object Utils extends Logging {
       lock.unlock()
     }
   }
+
+  /**
+   * Try killing the process gracefully first, then forcibly if process does not exit in
+   * graceful period.
+   *
+   * @param process the being killed process
+   * @param gracefulPeriod the graceful killing period, in milliseconds
+   * @return the exit code if process exit normally, None if the process finally was killed
+   *         forcibly
+   */
+  def terminateProcess(process: java.lang.Process, gracefulPeriod: Long): Option[Int] = {
+    process.destroy()
+    if (process.waitFor(gracefulPeriod, TimeUnit.MILLISECONDS)) {
+      Some(process.exitValue())
+    } else {
+      warn(s"Process does not exit after $gracefulPeriod ms, try to forcibly kill. " +
+        "Staging files generated by the process may be retained!")
+      process.destroyForcibly()
+      None
+    }
+  }
+
 }

@@ -31,12 +31,12 @@ import org.apache.arrow.vector.VectorLoader;
 import org.apache.arrow.vector.ipc.ReadChannel;
 import org.apache.arrow.vector.ipc.message.ArrowRecordBatch;
 import org.apache.arrow.vector.ipc.message.MessageSerializer;
-import org.apache.hive.service.rpc.thrift.*;
 import org.apache.kyuubi.jdbc.hive.arrow.ArrowColumnVector;
 import org.apache.kyuubi.jdbc.hive.arrow.ArrowColumnarBatch;
 import org.apache.kyuubi.jdbc.hive.arrow.ArrowColumnarBatchRow;
 import org.apache.kyuubi.jdbc.hive.arrow.ArrowUtils;
 import org.apache.kyuubi.jdbc.hive.common.HiveDecimal;
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -250,9 +250,6 @@ public class KyuubiArrowQueryResultSet extends KyuubiArrowBasedResultSet {
       metadataResp = client.GetResultSetMetadata(metadataReq);
       Utils.verifySuccess(metadataResp.getStatus());
 
-      StringBuilder namesSb = new StringBuilder();
-      StringBuilder typesSb = new StringBuilder();
-
       TTableSchema schema = metadataResp.getSchema();
       if (schema == null || !schema.isSetColumns()) {
         // TODO: should probably throw an exception here.
@@ -262,10 +259,6 @@ public class KyuubiArrowQueryResultSet extends KyuubiArrowBasedResultSet {
 
       List<TColumnDesc> columns = schema.getColumns();
       for (int pos = 0; pos < schema.getColumnsSize(); pos++) {
-        if (pos != 0) {
-          namesSb.append(",");
-          typesSb.append(",");
-        }
         String columnName = columns.get(pos).getColumnName();
         columnNames.add(columnName);
         normalizedColumnNames.add(columnName.toLowerCase());

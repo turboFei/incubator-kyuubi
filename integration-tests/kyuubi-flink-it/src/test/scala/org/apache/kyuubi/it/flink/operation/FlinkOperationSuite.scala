@@ -17,13 +17,12 @@
 
 package org.apache.kyuubi.it.flink.operation
 
-import org.apache.hive.service.rpc.thrift.{TGetInfoReq, TGetInfoType}
-
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf._
 import org.apache.kyuubi.it.flink.WithKyuubiServerAndFlinkMiniCluster
 import org.apache.kyuubi.operation.HiveJDBCTestHelper
 import org.apache.kyuubi.operation.meta.ResultSetSchemaConstant.TABLE_CAT
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift.{TGetInfoReq, TGetInfoType}
 
 class FlinkOperationSuite extends WithKyuubiServerAndFlinkMiniCluster
   with HiveJDBCTestHelper {
@@ -31,7 +30,7 @@ class FlinkOperationSuite extends WithKyuubiServerAndFlinkMiniCluster
   override val conf: KyuubiConf = KyuubiConf()
     .set(s"$KYUUBI_ENGINE_ENV_PREFIX.$KYUUBI_HOME", kyuubiHome)
     .set(ENGINE_TYPE, "FLINK_SQL")
-    .set("flink.parallelism.default", "6")
+    .set("flink.parallelism.default", "2")
 
   override protected def jdbcUrl: String = getJdbcUrl
 
@@ -72,7 +71,7 @@ class FlinkOperationSuite extends WithKyuubiServerAndFlinkMiniCluster
       var success = false
       while (resultSet.next() && !success) {
         if (resultSet.getString(1) == "parallelism.default" &&
-          resultSet.getString(2) == "6") {
+          resultSet.getString(2) == "2") {
           success = true
         }
       }
@@ -98,6 +97,8 @@ class FlinkOperationSuite extends WithKyuubiServerAndFlinkMiniCluster
         req.setSessionHandle(handle)
         req.setInfoType(TGetInfoType.CLI_DBMS_NAME)
         assert(client.GetInfo(req).getInfoValue.getStringValue === "Apache Flink")
+        req.setInfoType(TGetInfoType.CLI_ODBC_KEYWORDS)
+        assert(client.GetInfo(req).getInfoValue.getStringValue === "Unimplemented")
       }
     }
   }

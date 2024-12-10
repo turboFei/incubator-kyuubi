@@ -61,7 +61,7 @@ These properties are defined by Spark and Kyuubi will pass them to `spark-submit
 
 **Note:** None of these would take effect if the application for a particular user already exists.
 
-- Specify it in the JDBC connection URL, e.g. `jdbc:hive2://localhost:10009/;#spark.master=yarn;spark.yarn.queue=thequeue`
+- Specify it in the JDBC connection URL, e.g. `jdbc:kyuubi://localhost:10009/;#spark.master=yarn;spark.yarn.queue=thequeue`
 - Specify it in `$KYUUBI_HOME/conf/kyuubi-defaults.conf`
 - Specify it in `$SPARK_HOME/conf/spark-defaults.conf`
 
@@ -154,7 +154,7 @@ The related Flink configurations are listed below (see more details at [Flink Co
 | yarn.appmaster.vcores          | 1       | The number of virtual cores (vcores) used by the JobManager (YARN application master). |
 | jobmanager.memory.process.size | (none)  | Total size of the memory of the JobManager process.                                    |
 
-```bash
+Note that Flink application mode doesn't support HA for multiple jobs as for now, this also applies to Kyuubi's Flink SQL engine. If JobManager fails and restarts, the submitted jobs would not be recovered and should be re-submitted.
 
 #### Environment
 

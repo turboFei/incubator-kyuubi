@@ -20,6 +20,8 @@ package org.apache.kyuubi.engine.flink.operation
 import java.util
 
 import scala.collection.JavaConverters._
+import scala.concurrent.duration.{Duration, DurationLong}
+import scala.language.postfixOps
 
 import org.apache.kyuubi.KyuubiSQLException
 import org.apache.kyuubi.config.KyuubiConf._
@@ -34,6 +36,9 @@ class FlinkSQLOperationManager extends OperationManager("FlinkSQLOperationManage
   private lazy val operationModeDefault = getConf.get(OPERATION_PLAN_ONLY_MODE)
 
   private lazy val resultMaxRowsDefault = getConf.get(ENGINE_FLINK_MAX_ROWS)
+
+  private lazy val resultFetchTimeoutDefault = getConf.get(ENGINE_FLINK_FETCH_TIMEOUT)
+    .map(_ milliseconds).getOrElse(Duration.Inf)
 
   private lazy val operationConvertCatalogDatabaseDefault =
     getConf.get(ENGINE_OPERATION_CONVERT_CATALOG_DATABASE_ENABLED)
@@ -66,14 +71,34 @@ class FlinkSQLOperationManager extends OperationManager("FlinkSQLOperationManage
       flinkSession.normalizedConf.getOrElse(
         ENGINE_FLINK_MAX_ROWS.key,
         resultMaxRowsDefault.toString).toInt
+
+    val resultFetchTimeout =
+      flinkSession.normalizedConf
+        .get(ENGINE_FLINK_FETCH_TIMEOUT.key)
+        .map(ENGINE_FLINK_FETCH_TIMEOUT.valueConverter)
+        .map(_.get milliseconds)
+        .getOrElse(resultFetchTimeoutDefault)
+
     val op = mode match {
       case NoneMode =>
         // FLINK-24427 seals calcite classes which required to access in async mode, considering
         // there is no much benefit in async mode, here we just ignore `runAsync` and always run
         // statement in sync mode as a workaround
-        new ExecuteStatement(session, statement, false, queryTimeout, resultMaxRows)
+        new ExecuteStatement(
+          session,
+          statement,
+          false,
+          queryTimeout,
+          resultMaxRows,
+          resultFetchTimeout)
       case mode =>
-        new PlanOnlyStatement(session, statement, mode)
+        new PlanOnlyStatement(
+          session,
+          statement,
+          mode,
+          queryTimeout,
+          resultMaxRows,
+          resultFetchTimeout)
     }
     addOperation(op)
   }

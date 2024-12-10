@@ -61,7 +61,7 @@ private[authz] object AuthZUtils {
 
   def hasResolvedPermanentView(plan: LogicalPlan): Boolean = {
     plan match {
-      case view: View if view.resolved && isSparkV31OrGreater =>
+      case view: View if view.resolved =>
         !getField[Boolean](view, "isTempView")
       case _ =>
         false
@@ -83,17 +83,22 @@ private[authz] object AuthZUtils {
     }
   }
 
-  private lazy val sparkSemanticVersion: SemanticVersion = SemanticVersion(SPARK_VERSION)
-  lazy val isSparkV31OrGreater: Boolean = isSparkVersionAtLeast("3.1")
-  lazy val isSparkV32OrGreater: Boolean = isSparkVersionAtLeast("3.2")
-  lazy val isSparkV33OrGreater: Boolean = isSparkVersionAtLeast("3.3")
+  lazy val SPARK_RUNTIME_VERSION: SemanticVersion = SemanticVersion(SPARK_VERSION)
+  lazy val isSparkV32OrGreater: Boolean = SPARK_RUNTIME_VERSION >= "3.2"
+  lazy val isSparkV33OrGreater: Boolean = SPARK_RUNTIME_VERSION >= "3.3"
+  lazy val isSparkV34OrGreater: Boolean = SPARK_RUNTIME_VERSION >= "3.4"
+  lazy val isSparkV35OrGreater: Boolean = SPARK_RUNTIME_VERSION >= "3.5"
+  lazy val isSparkV40OrGreater: Boolean = SPARK_RUNTIME_VERSION >= "4.0"
 
-  def isSparkVersionAtMost(targetVersionString: String): Boolean = {
-    sparkSemanticVersion.isVersionAtMost(targetVersionString)
-  }
+  lazy val SCALA_RUNTIME_VERSION: SemanticVersion =
+    SemanticVersion(scala.util.Properties.versionNumberString)
+  lazy val isScalaV213: Boolean = SCALA_RUNTIME_VERSION >= "2.13"
 
-  def isSparkVersionAtLeast(targetVersionString: String): Boolean = {
-    sparkSemanticVersion.isVersionAtLeast(targetVersionString)
+  def derbyJdbcDriverClass: String = if (isSparkV40OrGreater) {
+    // SPARK-46257 (Spark 4.0.0) moves to Derby 10.16
+    "org.apache.derby.iapi.jdbc.AutoloadedDriver"
+  } else {
+    "org.apache.derby.jdbc.AutoloadedDriver"
   }
 
   def quoteIfNeeded(part: String): String = {

@@ -21,20 +21,22 @@ import java.io.IOException
 
 import io.trino.client.Column
 import io.trino.client.StatementClient
-import org.apache.hive.service.rpc.thrift.{TGetResultSetMetadataResp, TRowSet}
 
 import org.apache.kyuubi.KyuubiSQLException
 import org.apache.kyuubi.Utils
+import org.apache.kyuubi.config.KyuubiConf.SESSION_PROGRESS_ENABLE
 import org.apache.kyuubi.engine.trino.TrinoContext
-import org.apache.kyuubi.engine.trino.schema.RowSet
-import org.apache.kyuubi.engine.trino.schema.SchemaHelper
+import org.apache.kyuubi.engine.trino.TrinoProgressMonitor
+import org.apache.kyuubi.engine.trino.schema.{SchemaHelper, TrinoTRowSetGenerator}
 import org.apache.kyuubi.engine.trino.session.TrinoSessionImpl
 import org.apache.kyuubi.operation.AbstractOperation
 import org.apache.kyuubi.operation.FetchIterator
 import org.apache.kyuubi.operation.FetchOrientation.{FETCH_FIRST, FETCH_NEXT, FETCH_PRIOR, FetchOrientation}
 import org.apache.kyuubi.operation.OperationState
+import org.apache.kyuubi.operation.OperationStatus
 import org.apache.kyuubi.operation.log.OperationLog
 import org.apache.kyuubi.session.Session
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift.{TFetchResultsResp, TGetResultSetMetadataResp, TProgressUpdateResp}
 
 abstract class TrinoOperation(session: Session) extends AbstractOperation(session) {
 
@@ -46,6 +48,24 @@ abstract class TrinoOperation(session: Session) extends AbstractOperation(sessio
 
   protected var iter: FetchIterator[List[Any]] = _
 
+  protected def supportProgress: Boolean = false
+
+  private val progressEnable: Boolean = session.sessionManager.getConf.get(SESSION_PROGRESS_ENABLE)
+
+  override def getStatus: OperationStatus = {
+    if (progressEnable && supportProgress) {
+      val progressMonitor = new TrinoProgressMonitor(trino)
+      setOperationJobProgress(new TProgressUpdateResp(
+        progressMonitor.headers,
+        progressMonitor.rows,
+        progressMonitor.progressedPercentage,
+        progressMonitor.executionStatus,
+        progressMonitor.footerSummary,
+        startTime))
+    }
+    super.getStatus
+  }
+
   override def getResultSetMetadata: TGetResultSetMetadataResp = {
     val tTableSchema = SchemaHelper.toTTableSchema(schema)
     val resp = new TGetResultSetMetadataResp
@@ -54,7 +74,9 @@ abstract class TrinoOperation(session: Session) extends AbstractOperation(sessio
     resp
   }
 
-  override def getNextRowSetInternal(order: FetchOrientation, rowSetSize: Int): TRowSet = {
+  override def getNextRowSetInternal(
+      order: FetchOrientation,
+      rowSetSize: Int): TFetchResultsResp = {
     validateDefaultFetchOrientation(order)
     assertState(OperationState.FINISHED)
     setHasResultSet(true)
@@ -64,9 +86,13 @@ abstract class TrinoOperation(session: Session) extends AbstractOperation(sessio
       case FETCH_FIRST => iter.fetchAbsolute(0)
     }
     val taken = iter.take(rowSetSize)
-    val resultRowSet = RowSet.toTRowSet(taken.toList, schema, getProtocolVersion)
+    val resultRowSet =
+      new TrinoTRowSetGenerator().toTRowSet(taken.toSeq, schema, getProtocolVersion)
     resultRowSet.setStartRowOffset(iter.getPosition)
-    resultRowSet
+    val resp = new TFetchResultsResp(OK_STATUS)
+    resp.setResults(resultRowSet)
+    resp.setHasMoreRows(false)
+    resp
   }
 
   override protected def beforeRun(): Unit = {

@@ -28,30 +28,21 @@ import org.apache.kyuubi.{KyuubiFunSuite, Utils}
 import org.apache.kyuubi.spark.connector.common.GoldenFileUtils._
 import org.apache.kyuubi.spark.connector.common.LocalSparkSession.withSparkSession
 
-// scalastyle:off line.size.limit
 /**
  * To run this test suite:
  * {{{
- *   build/mvn clean install \
- *     -pl extensions/spark/kyuubi-spark-connector-tpch -am \
- *     -Dmaven.plugin.scalatest.exclude.tags="" \
- *     -Dtest=none -DwildcardSuites=org.apache.kyuubi.spark.connector.tpch.TPCHQuerySuite
+ *   KYUUBI_UPDATE=0 dev/gen/gen_tpch_queries.sh
  * }}}
  *
  * To re-generate golden files for this suite:
  * {{{
- *   KYUUBI_UPDATE=1 build/mvn clean install \
- *     -pl extensions/spark/kyuubi-spark-connector-tpch -am \
- *     -Dmaven.plugin.scalatest.exclude.tags="" \
- *     -Dtest=none -DwildcardSuites=org.apache.kyuubi.spark.connector.tpch.TPCHQuerySuite
+ *   dev/gen/gen_tpch_queries.sh
  * }}}
  */
-// scalastyle:on line.size.limit
-
 @Slow
 class TPCHQuerySuite extends KyuubiFunSuite {
 
-  val queries: Set[String] = (1 to 22).map(i => s"q$i").toSet
+  val queries: List[String] = (1 to 22).map(i => s"q$i").toList
 
   test("run query on tiny") {
     val viewSuffix = "view"
@@ -68,20 +59,15 @@ class TPCHQuerySuite extends KyuubiFunSuite {
         in.close()
         queryName -> queryContent
       }.foreach { case (name, sql) =>
-        try {
-          val result = spark.sql(sql).collect()
-          val schema = spark.sql(sql).schema
-          val schemaDDL = LICENSE_HEADER + schema.toDDL + "\n"
-          spark.createDataFrame(result.toList.asJava, schema).createTempView(s"$name$viewSuffix")
-          val sumHashResult = LICENSE_HEADER + spark.sql(
-            s"select sum(hash(*)) from $name$viewSuffix").collect().head.get(0) + "\n"
-          val tuple = generateGoldenFiles("kyuubi/tpch", name, schemaDDL, sumHashResult)
-          assert(schemaDDL == tuple._1)
-          assert(sumHashResult == tuple._2)
-        } catch {
-          case cause: Throwable =>
-            fail(name, cause)
-        }
+        val result = spark.sql(sql).collect()
+        val schema = spark.sql(sql).schema
+        val schemaDDL = LICENSE_HEADER + schema.toDDL + "\n"
+        spark.createDataFrame(result.toList.asJava, schema).createTempView(s"$name$viewSuffix")
+        val sumHashResult = LICENSE_HEADER + spark.sql(
+          s"select sum(hash(*)) from $name$viewSuffix").collect().head.get(0) + "\n"
+        val tuple = generateGoldenFiles("kyuubi/tpch", name, schemaDDL, sumHashResult)
+        assert(schemaDDL == tuple._1, s"query $name schema not match")
+        assert(sumHashResult == tuple._2, s"query $name result not match")
       }
     }
   }

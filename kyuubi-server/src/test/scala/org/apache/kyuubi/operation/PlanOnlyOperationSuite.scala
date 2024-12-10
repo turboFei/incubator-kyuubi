@@ -187,7 +187,7 @@ class PlanOnlyOperationSuite extends WithKyuubiServer with HiveJDBCTestHelper {
     }
   }
 
-  test("kyuubi #3214: Plan only mode with an incorrect value") {
+  test("KYUUBI #3214: Plan only mode with an incorrect value") {
     withSessionConf()(Map(KyuubiConf.OPERATION_PLAN_ONLY_MODE.key -> "parse"))(Map.empty) {
       withJdbcStatement() { statement =>
         statement.executeQuery(s"set ${KyuubiConf.OPERATION_PLAN_ONLY_MODE.key}=parser")
@@ -196,13 +196,71 @@ class PlanOnlyOperationSuite extends WithKyuubiServer with HiveJDBCTestHelper {
         statement.executeQuery(s"set ${KyuubiConf.OPERATION_PLAN_ONLY_MODE.key}=parse")
         val result = statement.executeQuery("select 1")
         assert(result.next())
-        assert(result.getString(1).contains("Project [unresolvedalias(1, None)]"))
+        val plan = result.getString(1)
+        assert {
+          plan.contains("Project [unresolvedalias(1, None)]") ||
+          plan.contains("Project [unresolvedalias(1)]")
+        }
       }
     }
   }
 
+  test("kyuubi #3444: Plan only mode with lineage mode") {
+
+    val ddl = "create table if not exists t0(a int) using parquet"
+    val dql = "select * from t0"
+    withSessionConf()(Map(KyuubiConf.OPERATION_PLAN_ONLY_MODE.key -> NoneMode.name))() {
+      withJdbcStatement("t0") { statement =>
+        statement.execute(ddl)
+        statement.execute("SET kyuubi.operation.plan.only.mode=lineage")
+        val lineageParserClassName = "org.apache.kyuubi.plugin.lineage.LineageParserProvider"
+        try {
+          val resultSet = statement.executeQuery(dql)
+          assert(resultSet.next())
+          val actualResult =
+            """
+              |{"inputTables":["spark_catalog.default.t0"],"outputTables":[],
+              |"columnLineage":[{"column":"a","originalColumns":["spark_catalog.default.t0.a"]}]}
+              |""".stripMargin.split("\n").mkString("")
+          assert(resultSet.getString(1) == actualResult)
+        } catch {
+          case e: Throwable =>
+            assert(e.getMessage.contains(s"'$lineageParserClassName' not found"))
+        } finally {
+          statement.execute("SET kyuubi.operation.plan.only.mode=none")
+        }
+      }
+    }
+  }
+
+  test("KYUUBI #6574: Skip eagerly execute command in physical/execution plan only mode") {
+    withJdbcStatement() { statement =>
+      val table = "test_plan_only"
+      val createTableCommand = s"create table $table(i int) using parquet"
+
+      statement.execute(s"SET ${KyuubiConf.OPERATION_PLAN_ONLY_MODE.key}=${PhysicalMode.name}")
+      val physicalPlan = getOperationPlanWithStatement(statement, createTableCommand)
+      assert(physicalPlan.startsWith("Execute CreateDataSourceTableCommand")
+        && physicalPlan.contains(table))
+
+      statement.execute(s"SET ${KyuubiConf.OPERATION_PLAN_ONLY_MODE.key}=${ExecutionMode.name}")
+      val executionPlan = getOperationPlanWithStatement(statement, createTableCommand)
+      assert(executionPlan.startsWith("Execute CreateDataSourceTableCommand")
+        && physicalPlan.contains(table))
+
+      statement.execute(s"SET ${KyuubiConf.OPERATION_PLAN_ONLY_MODE.key}=${NoneMode.name}")
+      val e = intercept[KyuubiSQLException](statement.executeQuery(s"select * from $table"))
+      assert(e.getMessage.contains("TABLE_OR_VIEW_NOT_FOUND")
+        || e.getMessage.contains("Table or view not found"))
+    }
+  }
+
   private def getOperationPlanWithStatement(statement: Statement): String = {
-    val resultSet = statement.executeQuery("select 1 where true")
+    getOperationPlanWithStatement(statement, "select 1 where true")
+  }
+
+  private def getOperationPlanWithStatement(statement: Statement, sql: String): String = {
+    val resultSet = statement.executeQuery(sql)
     assert(resultSet.next())
     resultSet.getString(1)
   }

@@ -46,5 +46,13 @@ You can run `dev/reformat` to format all Java and Scala code.
 
 Kyuubi uses settings.md to explain available configurations.
 
-You can run `KYUUBI_UPDATE=1 build/mvn clean test -pl kyuubi-server -am -Pflink-provided,spark-provided,hive-provided -DwildcardSuites=org.apache.kyuubi.config.AllKyuubiConfiguration`
-to append descriptions of new configurations to settings.md.
+You can run `dev/gen/gen_all_config_docs.sh` to append and update descriptions of new configurations to `settings.md`.
+
+## Generative Tooling Usage
+
+In general, the ASF allows contributions co-authored using generative AI tools. However, there are several considerations when you submit a patch containing generated content.
+
+Foremost, you are required to disclose usage of such tool. Furthermore, you are responsible for ensuring that the terms and conditions of the tool in question are
+compatible with usage in an Open Source project and inclusion of the generated content doesn't pose a risk of copyright violation.
+
+Please refer to [The ASF Generative Tooling Guidance](https://www.apache.org/legal/generative-tooling.html) for more detailed information.

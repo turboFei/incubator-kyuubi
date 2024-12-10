@@ -21,7 +21,6 @@ import java.util.UUID
 
 import scala.collection.JavaConverters.asScalaBufferConverter
 
-import org.apache.hive.service.rpc.thrift.TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V2
 import org.mockito.Mockito.lenient
 import org.scalatestplus.mockito.MockitoSugar.mock
 
@@ -33,6 +32,7 @@ import org.apache.kyuubi.ha.HighAvailabilityConf
 import org.apache.kyuubi.ha.client.{DiscoveryPaths, ServiceDiscovery}
 import org.apache.kyuubi.ha.client.DiscoveryClientProvider.withDiscoveryClient
 import org.apache.kyuubi.plugin.PluginLoader
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift.TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V2
 
 class AdminRestApiSuite extends RestClientTestHelper {
   test("refresh kyuubi server hadoop conf") {
@@ -53,7 +53,8 @@ class AdminRestApiSuite extends RestClientTestHelper {
     conf.set(KyuubiConf.AUTHENTICATION_METHOD, Seq("LDAP", "CUSTOM"))
     conf.set(KyuubiConf.GROUP_PROVIDER, "hadoop")
     val user = ldapUser
-    val engine = new EngineRef(conf.clone, user, PluginLoader.loadGroupProvider(conf), id, null)
+    val engine =
+      new EngineRef(conf.clone, user, true, PluginLoader.loadGroupProvider(conf), id, null)
 
     val engineSpace = DiscoveryPaths.makePath(
       s"kyuubi_test_${KYUUBI_VERSION}_USER_SPARK_SQL",
@@ -84,8 +85,9 @@ class AdminRestApiSuite extends RestClientTestHelper {
     assert(engines(0).getNamespace == engineSpace)
     assert(engines(0).getAttributes.get(KyuubiReservedKeys.KYUUBI_ENGINE_ID).startsWith("local-"))
 
-    val result = adminRestApi.deleteEngine("spark_sql", "user", "default", "")
-    assert(result == s"Engine ${engineSpace} is deleted successfully.")
+    // kill engine to release memory quickly
+    val result = adminRestApi.deleteEngine("spark_sql", "user", "default", "", true)
+    assert(result startsWith s"Engine ${engineSpace} refId=${id} is deleted successfully.")
 
     engines = adminRestApi.listEngines("spark_sql", "user", "default", "").asScala
     assert(engines.isEmpty)

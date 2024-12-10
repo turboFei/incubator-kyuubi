@@ -17,11 +17,10 @@
 
 package org.apache.kyuubi.service
 
-import org.apache.hive.service.rpc.thrift._
-
 import org.apache.kyuubi.operation.{OperationHandle, OperationStatus}
 import org.apache.kyuubi.operation.FetchOrientation.FetchOrientation
 import org.apache.kyuubi.session.{SessionHandle, SessionManager}
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift._
 
 /**
  * A [[BackendService]] in Kyuubi architecture is responsible for talking to the SQL engine
@@ -101,7 +100,7 @@ trait BackendService {
       operationHandle: OperationHandle,
       orientation: FetchOrientation,
       maxRows: Int,
-      fetchLog: Boolean): TRowSet
+      fetchLog: Boolean): TFetchResultsResp
 
   def sessionManager: SessionManager
 }

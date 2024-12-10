@@ -19,19 +19,21 @@ package org.apache.spark.kyuubi
 
 import java.util.Properties
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
+
+import scala.collection.JavaConverters._
 
 import org.apache.spark.scheduler._
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.execution.ui.SparkListenerSQLExecutionEnd
+import org.apache.spark.ui.UIUtils.formatDuration
 
 import org.apache.kyuubi.Logging
-import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf.{ENGINE_SPARK_SHOW_PROGRESS, ENGINE_SPARK_SHOW_PROGRESS_TIME_FORMAT, ENGINE_SPARK_SHOW_PROGRESS_UPDATE_INTERVAL}
 import org.apache.kyuubi.config.KyuubiReservedKeys.KYUUBI_STATEMENT_ID_KEY
-import org.apache.kyuubi.engine.spark.KyuubiSparkUtil.SPARK_SQL_EXECUTION_ID_KEY
+import org.apache.kyuubi.engine.spark.KyuubiSparkUtil.{getSessionConf, SPARK_SQL_EXECUTION_ID_KEY}
 import org.apache.kyuubi.engine.spark.operation.ExecuteStatement
 import org.apache.kyuubi.operation.Operation
-import org.apache.kyuubi.operation.log.OperationLog
 
 /**
  * A [[SparkListener]] based on spark's DeveloperApi [[StatsReportListener]], used to appending
@@ -44,44 +46,41 @@ class SQLOperationListener(
     spark: SparkSession) extends StatsReportListener with Logging {
 
   private val operationId: String = operation.getHandle.identifier.toString
-  private lazy val activeJobs = new java.util.HashSet[Int]()
-  private lazy val activeStages = new ConcurrentHashMap[StageAttempt, StageInfo]()
+  private lazy val activeJobs = new ConcurrentHashMap[Int, SparkJobInfo]()
+  private lazy val activeStages = new ConcurrentHashMap[SparkStageAttempt, SparkStageInfo]()
   private var executionId: Option[Long] = None
 
-  private val conf: KyuubiConf = operation.getSession.sessionManager.getConf
   private lazy val consoleProgressBar =
-    if (conf.get(ENGINE_SPARK_SHOW_PROGRESS)) {
+    if (getSessionConf(ENGINE_SPARK_SHOW_PROGRESS, spark)) {
       Some(new SparkConsoleProgressBar(
         operation,
+        activeJobs,
         activeStages,
-        conf.get(ENGINE_SPARK_SHOW_PROGRESS_UPDATE_INTERVAL),
-        conf.get(ENGINE_SPARK_SHOW_PROGRESS_TIME_FORMAT)))
+        getSessionConf(ENGINE_SPARK_SHOW_PROGRESS_UPDATE_INTERVAL, spark),
+        getSessionConf(ENGINE_SPARK_SHOW_PROGRESS_TIME_FORMAT, spark)))
     } else {
       None
     }
 
+  private val operationRunTime = new AtomicLong(0)
+  private val operationCpuTime = new AtomicLong(0)
+
+  def getOperationRunTime: Long = operationRunTime.get()
+
+  def getOperationCpuTime: Long = operationCpuTime.get()
+
   def getExecutionId: Option[Long] = executionId
 
-  // For broadcast, Spark will introduce a new runId as SPARK_JOB_GROUP_ID, see:
-  // https://github.com/apache/spark/pull/24595, So we will miss these logs.
-  // TODO: Fix this until the below ticket resolved
-  // https://issues.apache.org/jira/browse/SPARK-34064
+  // Prior SPARK-43952 (3.5.0), broadcast jobs uses a different group id, so we will
+  // miss those logs. See more details in SPARK-20774 (3.0.0)
   private def sameGroupId(properties: Properties): Boolean = {
     properties != null && properties.getProperty(KYUUBI_STATEMENT_ID_KEY) == operationId
   }
 
-  private def withOperationLog(f: => Unit): Unit = {
-    try {
-      operation.getOperationLog.foreach(OperationLog.setCurrentOperationLog)
-      f
-    } finally {
-      OperationLog.removeCurrentOperationLog()
-    }
-  }
-
-  override def onJobStart(jobStart: SparkListenerJobStart): Unit = activeJobs.synchronized {
+  override def onJobStart(jobStart: SparkListenerJobStart): Unit = {
     if (sameGroupId(jobStart.properties)) {
       val jobId = jobStart.jobId
+      val stageIds = jobStart.stageInfos.map(_.stageId).toSet
       val stageSize = jobStart.stageInfos.size
       if (executionId.isEmpty) {
         executionId = Option(jobStart.properties.getProperty(SPARK_SQL_EXECUTION_ID_KEY))
@@ -93,22 +92,24 @@ class SQLOperationListener(
           case _ =>
         }
       }
-      withOperationLog {
-        activeJobs.add(jobId)
+      activeJobs.put(
+        jobId,
+        new SparkJobInfo(stageSize, stageIds))
+      operation.withOperationLog {
         info(s"Query [$operationId]: Job $jobId started with $stageSize stages," +
           s" ${activeJobs.size()} active jobs running")
       }
     }
   }
 
-  override def onJobEnd(jobEnd: SparkListenerJobEnd): Unit = activeJobs.synchronized {
+  override def onJobEnd(jobEnd: SparkListenerJobEnd): Unit = {
     val jobId = jobEnd.jobId
-    if (activeJobs.remove(jobId)) {
+    if (activeJobs.remove(jobId) != null) {
       val hint = jobEnd.jobResult match {
         case JobSucceeded => "succeeded"
         case _ => "failed" // TODO: Handle JobFailed(exception: Exception)
       }
-      withOperationLog {
+      operation.withOperationLog {
         info(s"Query [$operationId]: Job $jobId $hint, ${activeJobs.size()} active jobs running")
       }
     }
@@ -120,11 +121,11 @@ class SQLOperationListener(
         val stageInfo = stageSubmitted.stageInfo
         val stageId = stageInfo.stageId
         val attemptNumber = stageInfo.attemptNumber()
-        val stageAttempt = StageAttempt(stageId, attemptNumber)
+        val stageAttempt = SparkStageAttempt(stageId, attemptNumber)
         activeStages.put(
           stageAttempt,
-          new StageInfo(stageId, stageInfo.numTasks))
-        withOperationLog {
+          new SparkStageInfo(stageId, stageInfo.numTasks))
+        operation.withOperationLog {
           info(s"Query [$operationId]: Stage $stageId.$attemptNumber started " +
             s"with ${stageInfo.numTasks} tasks, ${activeStages.size()} active stages running")
         }
@@ -134,28 +135,46 @@ class SQLOperationListener(
 
   override def onStageCompleted(stageCompleted: SparkListenerStageCompleted): Unit = {
     val stageInfo = stageCompleted.stageInfo
-    val stageAttempt = StageAttempt(stageInfo.stageId, stageInfo.attemptNumber())
+    val stageId = stageInfo.stageId
+    val stageAttempt = SparkStageAttempt(stageInfo.stageId, stageInfo.attemptNumber())
     activeStages.synchronized {
       if (activeStages.remove(stageAttempt) != null) {
-        withOperationLog(super.onStageCompleted(stageCompleted))
+        stageInfo.getStatusString match {
+          case "succeeded" =>
+            activeJobs.asScala.foreach { case (_, jobInfo) =>
+              if (jobInfo.stageIds.contains(stageId)) {
+                jobInfo.numCompleteStages.getAndIncrement()
+              }
+            }
+          case _ => // do nothing, failed stage not counted to numCompleteStages
+        }
+        val taskMetrics = stageInfo.taskMetrics
+        if (taskMetrics != null) {
+          info(s"stageId=${stageCompleted.stageInfo.stageId}, " +
+            s"stageRunTime=${formatDuration(taskMetrics.executorRunTime)}, " +
+            s"stageCpuTime=${formatDuration(taskMetrics.executorCpuTime / 1000000)}")
+          operationRunTime.getAndAdd(taskMetrics.executorRunTime)
+          operationCpuTime.getAndAdd(taskMetrics.executorCpuTime)
+        }
+        operation.withOperationLog(super.onStageCompleted(stageCompleted))
       }
     }
   }
 
   override def onTaskStart(taskStart: SparkListenerTaskStart): Unit = activeStages.synchronized {
-    val stageAttempt = StageAttempt(taskStart.stageId, taskStart.stageAttemptId)
+    val stageAttempt = SparkStageAttempt(taskStart.stageId, taskStart.stageAttemptId)
     if (activeStages.containsKey(stageAttempt)) {
-      activeStages.get(stageAttempt).numActiveTasks += 1
+      activeStages.get(stageAttempt).numActiveTasks.getAndIncrement()
       super.onTaskStart(taskStart)
     }
   }
 
   override def onTaskEnd(taskEnd: SparkListenerTaskEnd): Unit = activeStages.synchronized {
-    val stageAttempt = StageAttempt(taskEnd.stageId, taskEnd.stageAttemptId)
+    val stageAttempt = SparkStageAttempt(taskEnd.stageId, taskEnd.stageAttemptId)
     if (activeStages.containsKey(stageAttempt)) {
-      activeStages.get(stageAttempt).numActiveTasks -= 1
+      activeStages.get(stageAttempt).numActiveTasks.getAndDecrement()
       if (taskEnd.reason == org.apache.spark.Success) {
-        activeStages.get(stageAttempt).numCompleteTasks += 1
+        activeStages.get(stageAttempt).numCompleteTasks.getAndIncrement()
       }
       super.onTaskEnd(taskEnd)
     }

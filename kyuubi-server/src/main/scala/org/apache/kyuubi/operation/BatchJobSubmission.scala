@@ -17,16 +17,13 @@
 
 package org.apache.kyuubi.operation
 
-import java.io.IOException
-import java.nio.file.{Files, Paths}
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 import com.codahale.metrics.MetricRegistry
 import com.google.common.annotations.VisibleForTesting
-import org.apache.hive.service.rpc.thrift._
 
-import org.apache.kyuubi.{KyuubiException, KyuubiSQLException}
+import org.apache.kyuubi.{KyuubiException, KyuubiSQLException, Utils}
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.engine.{ApplicationInfo, ApplicationState, KillResponse, ProcBuilder}
 import org.apache.kyuubi.engine.spark.SparkBatchProcessBuilder
@@ -37,6 +34,7 @@ import org.apache.kyuubi.operation.OperationState.{isTerminal, CANCELED, Operati
 import org.apache.kyuubi.operation.log.OperationLog
 import org.apache.kyuubi.server.metadata.api.Metadata
 import org.apache.kyuubi.session.KyuubiBatchSession
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift._
 
 /**
  * The state of batch operation is special. In general, the lifecycle of state is:
@@ -58,10 +56,11 @@ class BatchJobSubmission(
     className: String,
     batchConf: Map[String, String],
     batchArgs: Seq[String],
-    recoveryMetadata: Option[Metadata],
-    override val shouldRunAsync: Boolean)
+    metadata: Option[Metadata])
   extends KyuubiApplicationOperation(session) {
   import BatchJobSubmission._
+
+  override def shouldRunAsync: Boolean = true
 
   private val _operationLog = OperationLog.createOperationLog(session, getHandle)
 
@@ -75,7 +74,7 @@ class BatchJobSubmission(
   private var killMessage: KillResponse = (false, "UNKNOWN")
   def getKillMessage: KillResponse = killMessage
 
-  @volatile private var _appStartTime = recoveryMetadata.map(_.engineOpenTime).getOrElse(0L)
+  @volatile private var _appStartTime = metadata.map(_.engineOpenTime).getOrElse(0L)
   def appStartTime: Long = _appStartTime
   def appStarted: Boolean = _appStartTime > 0
 
@@ -83,23 +82,25 @@ class BatchJobSubmission(
 
   @VisibleForTesting
   private[kyuubi] val builder: ProcBuilder = {
-    Option(batchType).map(_.toUpperCase(Locale.ROOT)) match {
-      case Some("SPARK") | Some("PYSPARK") =>
-        new SparkBatchProcessBuilder(
-          session.user,
-          session.sessionConf,
-          batchId,
-          batchName,
-          Option(resource),
-          className,
-          batchConf,
-          batchArgs,
-          getOperationLog)
-
-      case _ =>
-        throw new UnsupportedOperationException(s"Batch type $batchType unsupported")
+    val mainClass = Option(batchType).map(_.toUpperCase(Locale.ROOT)) match {
+      case Some("SPARK") => className
+      case Some("PYSPARK") => null
+      case _ => throw new UnsupportedOperationException(s"Batch type $batchType unsupported")
     }
+    new SparkBatchProcessBuilder(
+      session.user,
+      session.sessionConf,
+      batchId,
+      batchName,
+      Option(resource),
+      mainClass,
+      batchConf,
+      batchArgs,
+      getOperationLog)
   }
+
+  def startupProcessAlive: Boolean =
+    builder.processLaunched && Option(builder.process).exists(_.isAlive)
 
   override def currentApplicationInfo(): Option[ApplicationInfo] = {
     if (isTerminal(state) && _applicationInfo.map(_.state).exists(ApplicationState.isTerminated)) {
@@ -107,8 +108,9 @@ class BatchJobSubmission(
     }
     val applicationInfo =
       applicationManager.getApplicationInfo(
-        builder.clusterManager(),
+        builder.appMgrInfo(),
         batchId,
+        Some(session.user),
         Some(_submitTime))
     applicationId(applicationInfo).foreach { _ =>
       if (_appStartTime <= 0) {
@@ -123,13 +125,19 @@ class BatchJobSubmission(
   }
 
   private[kyuubi] def killBatchApplication(): KillResponse = {
-    applicationManager.killApplication(builder.clusterManager(), batchId)
+    val (killed, msg) =
+      applicationManager.killApplication(builder.appMgrInfo(), batchId, Some(session.user))
+    withOperationLog(warn(s"Kill batch response: killed: $killed, msg: $msg."))
+    (killed, msg)
   }
 
   private val applicationCheckInterval =
     session.sessionConf.get(KyuubiConf.BATCH_APPLICATION_CHECK_INTERVAL)
   private val applicationStarvationTimeout =
     session.sessionConf.get(KyuubiConf.BATCH_APPLICATION_STARVATION_TIMEOUT)
+
+  private val applicationStartupDestroyTimeout =
+    session.sessionConf.get(KyuubiConf.SESSION_ENGINE_STARTUP_DESTROY_TIMEOUT)
 
   private def updateBatchMetadata(): Unit = {
     val endTime = if (isTerminalState(state)) lastAccessTime else 0L
@@ -146,10 +154,20 @@ class BatchJobSubmission(
         engineId = appInfo.id,
         engineName = appInfo.name,
         engineUrl = appInfo.url.orNull,
-        engineState = appInfo.state.toString,
+        engineState = getAppState(state, appInfo.state).toString,
         engineError = appInfo.error,
         endTime = endTime)
       session.sessionManager.updateMetadata(metadataToUpdate)
+    }
+  }
+
+  private def getAppState(
+      opState: OperationState,
+      appState: ApplicationState.ApplicationState): ApplicationState.ApplicationState = {
+    if (opState == OperationState.ERROR && !ApplicationState.isTerminated(appState)) {
+      ApplicationState.UNKNOWN
+    } else {
+      appState
     }
   }
 
@@ -159,8 +177,16 @@ class BatchJobSubmission(
   private def setStateIfNotCanceled(newState: OperationState): Unit = withLockRequired {
     if (state != CANCELED) {
       setState(newState)
-      applicationId(_applicationInfo).foreach { appId =>
-        session.getSessionEvent.foreach(_.engineId = appId)
+      _applicationInfo.foreach { app =>
+        Option(app.id).filter(_.nonEmpty).foreach { appId =>
+          session.getSessionEvent.foreach(_.engineId = appId)
+        }
+        Option(app.name).filter(_.nonEmpty).foreach { appName =>
+          session.getSessionEvent.foreach(_.engineName = appName)
+        }
+        app.url.filter(_.nonEmpty).foreach { appUrl =>
+          session.getSessionEvent.foreach(_.engineUrl = appUrl)
+        }
       }
       if (newState == RUNNING) {
         session.onEngineOpened()
@@ -178,24 +204,27 @@ class BatchJobSubmission(
     OperationLog.removeCurrentOperationLog()
   }
 
-  override protected def runInternal(): Unit = session.handleSessionException {
+  override protected def runInternal(): Unit = {
     val asyncOperation: Runnable = () => {
       try {
-        recoveryMetadata match {
+        metadata match {
           case Some(metadata) if metadata.peerInstanceClosed =>
             setState(OperationState.CANCELED)
           case Some(metadata) if metadata.state == OperationState.PENDING.toString =>
-            // In recovery mode, only submit batch job when previous state is PENDING
-            // and fail to fetch the status including appId from resource manager.
-            // Otherwise, monitor the submitted batch application.
+            // case 1: new batch job created using batch impl v2
+            // case 2: batch job from recovery, do submission only when previous state is
+            // PENDING and fail to fetch the status by appId from resource manager, which
+            // is similar with case 1; otherwise, monitor the submitted batch application.
             _applicationInfo = currentApplicationInfo()
             applicationId(_applicationInfo) match {
-              case Some(appId) => monitorBatchJob(appId)
               case None => submitAndMonitorBatchJob()
+              case Some(appId) => monitorBatchJob(appId)
             }
           case Some(metadata) =>
+            // batch job from recovery which was submitted
             monitorBatchJob(metadata.engineId)
           case None =>
+            // brand-new job created using batch impl v1
             submitAndMonitorBatchJob()
         }
         setStateIfNotCanceled(OperationState.FINISHED)
@@ -216,7 +245,6 @@ class BatchJobSubmission(
         updateBatchMetadata()
       }
     }
-    if (!shouldRunAsync) getBackgroundHandle.get()
   }
 
   private def submitAndMonitorBatchJob(): Unit = {
@@ -246,7 +274,7 @@ class BatchJobSubmission(
       }
 
       if (applicationFailed(_applicationInfo)) {
-        process.destroyForcibly()
+        Utils.terminateProcess(process, applicationStartupDestroyTimeout)
         throw new KyuubiException(s"Batch job failed: ${_applicationInfo}")
       } else {
         process.waitFor()
@@ -268,7 +296,15 @@ class BatchJobSubmission(
         }
       }
     } finally {
-      builder.close()
+      val waitCompletion = batchConf.get(KyuubiConf.SESSION_ENGINE_STARTUP_WAIT_COMPLETION.key)
+        .map(_.toBoolean).getOrElse(
+          session.sessionConf.get(KyuubiConf.SESSION_ENGINE_STARTUP_WAIT_COMPLETION))
+      val destroyProcess = !waitCompletion && builder.isClusterMode()
+      if (destroyProcess) {
+        info("Destroy the builder process because waitCompletion is false" +
+          " and the engine is running in cluster mode.")
+      }
+      builder.close(destroyProcess)
       updateApplicationInfoMetadataIfNeeded()
       cleanupUploadedResourceIfNeeded()
     }
@@ -284,19 +320,19 @@ class BatchJobSubmission(
     }
     if (_applicationInfo.isEmpty) {
       info(s"The $batchType batch[$batchId] job: $appId not found, assume that it has finished.")
-    } else if (applicationFailed(_applicationInfo)) {
+      return
+    }
+    if (applicationFailed(_applicationInfo)) {
       throw new KyuubiException(s"$batchType batch[$batchId] job failed: ${_applicationInfo}")
-    } else {
-      updateBatchMetadata()
-      // TODO: add limit for max batch job submission lifetime
-      while (_applicationInfo.isDefined && !applicationTerminated(_applicationInfo)) {
-        Thread.sleep(applicationCheckInterval)
-        updateApplicationInfoMetadataIfNeeded()
-      }
-
-      if (applicationFailed(_applicationInfo)) {
-        throw new KyuubiException(s"$batchType batch[$batchId] job failed: ${_applicationInfo}")
-      }
+    }
+    updateBatchMetadata()
+    // TODO: add limit for max batch job submission lifetime
+    while (_applicationInfo.isDefined && !applicationTerminated(_applicationInfo)) {
+      Thread.sleep(applicationCheckInterval)
+      updateApplicationInfoMetadataIfNeeded()
+    }
+    if (applicationFailed(_applicationInfo)) {
+      throw new KyuubiException(s"$batchType batch[$batchId] job failed: ${_applicationInfo}")
     }
   }
 
@@ -322,27 +358,21 @@ class BatchJobSubmission(
     }
   }
 
-  override def close(): Unit = withLockRequired {
+  override def close(): Unit = withLockRequired(withClosingOperationLog {
     if (!isClosedOrCanceled) {
-      try {
-        getOperationLog.foreach(_.close())
-      } catch {
-        case e: IOException => error(e.getMessage, e)
-      }
-
       MetricsSystem.tracing(_.decCount(MetricRegistry.name(OPERATION_OPEN, opType)))
 
       // fast fail
       if (isTerminalState(state)) {
         killMessage = (false, s"batch $batchId is already terminal so can not kill it.")
-        builder.close()
+        builder.close(true)
         cleanupUploadedResourceIfNeeded()
         return
       }
 
       try {
         killMessage = killBatchApplication()
-        builder.close()
+        builder.close(true)
         cleanupUploadedResourceIfNeeded()
       } finally {
         if (state == OperationState.INITIALIZED) {
@@ -360,12 +390,26 @@ class BatchJobSubmission(
             // we can not change state safely
             killMessage = (false, s"batch $batchId is already terminal so can not kill it.")
           } else if (!isTerminalState(state)) {
-            // failed to kill, the kill message is enough
+            _applicationInfo = currentApplicationInfo()
+            _applicationInfo.map(_.state) match {
+              case Some(ApplicationState.FINISHED) =>
+                setState(OperationState.FINISHED)
+                updateBatchMetadata()
+              case Some(ApplicationState.FAILED) =>
+                setState(OperationState.ERROR)
+                updateBatchMetadata()
+              case Some(ApplicationState.UNKNOWN) |
+                  Some(ApplicationState.NOT_FOUND) |
+                  Some(ApplicationState.KILLED) =>
+                setState(OperationState.CANCELED)
+                updateBatchMetadata()
+              case _ => // failed to kill, the kill message is enough
+            }
           }
         }
       }
     }
-  }
+  })
 
   override def cancel(): Unit = {
     throw new IllegalStateException("Use close instead.")
@@ -377,11 +421,15 @@ class BatchJobSubmission(
 
   private def cleanupUploadedResourceIfNeeded(): Unit = {
     if (session.isResourceUploaded) {
-      try {
-        Files.deleteIfExists(Paths.get(resource))
-      } catch {
-        case e: Throwable => error(s"Error deleting the uploaded resource: $resource", e)
-      }
+      Utils.deleteDirectoryRecursively(session.resourceUploadFolderPath.toFile)
+    }
+  }
+
+  def getPendingElapsedTime: Long = {
+    if (state == OperationState.PENDING) {
+      System.currentTimeMillis() - createTime
+    } else {
+      0L
     }
   }
 }

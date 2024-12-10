@@ -18,6 +18,7 @@
 package org.apache.kyuubi.util
 
 import java.io.File
+import java.util.Locale
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.google.common.base.Charsets
@@ -32,6 +33,10 @@ import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf._
 
 object KubernetesUtils extends Logging {
+  // Kubernetes pod name max length - '-exec-' - Int.MAX_VALUE.length
+  // 253 - 10 - 6
+  final val EXECUTOR_POD_NAME_PREFIX_MAX_LENGTH = 237
+  final val DRIVER_POD_NAME_MAX_LENGTH = 253
 
   def buildKubernetesClient(conf: KyuubiConf): Option[KubernetesClient] = {
     val master = conf.get(KUBERNETES_MASTER)
@@ -113,5 +118,57 @@ object KubernetesUtils extends Logging {
   def requireNandDefined(opt1: Option[_], opt2: Option[_], errMessage: String): Unit = {
     opt1.foreach { _ => require(opt2.isEmpty, errMessage) }
     opt2.foreach { _ => require(opt1.isEmpty, errMessage) }
+  }
+
+  private def getResourceNamePrefix(appName: String, engineRefId: Option[String]): String = {
+    engineRefId.map(refId => s"$appName-$refId").getOrElse(appName)
+      .trim
+      .toLowerCase(Locale.ROOT)
+      .replaceAll("[^a-z0-9\\-]", "-")
+      .replaceAll("-+", "-")
+      .replaceAll("^-", "")
+      .replaceAll("^[0-9]", "x")
+  }
+
+  def generateDriverPodName(
+      appName: String,
+      engineRefId: String,
+      forciblyRewrite: Boolean): String = {
+    val resourceNamePrefix = if (appName.contains(engineRefId)) {
+      getResourceNamePrefix(appName, None)
+    } else {
+      getResourceNamePrefix(appName, Some(engineRefId))
+    }
+    val resolvedResourceName = if (resourceNamePrefix.startsWith("kyuubi-")) {
+      s"$resourceNamePrefix-driver"
+    } else {
+      s"kyuubi-$resourceNamePrefix-driver"
+    }
+    if (forciblyRewrite || resolvedResourceName.length > DRIVER_POD_NAME_MAX_LENGTH) {
+      s"kyuubi-$engineRefId-driver"
+    } else {
+      resolvedResourceName
+    }
+  }
+
+  def generateExecutorPodNamePrefix(
+      appName: String,
+      engineRefId: String,
+      forciblyRewrite: Boolean): String = {
+    val resourceNamePrefix = if (appName.contains(engineRefId)) {
+      getResourceNamePrefix(appName, None)
+    } else {
+      getResourceNamePrefix(appName, Some(engineRefId))
+    }
+    val resolvedResourceName = if (resourceNamePrefix.startsWith("kyuubi-")) {
+      s"$resourceNamePrefix"
+    } else {
+      s"kyuubi-$resourceNamePrefix"
+    }
+    if (forciblyRewrite || resolvedResourceName.length > EXECUTOR_POD_NAME_PREFIX_MAX_LENGTH) {
+      s"kyuubi-$engineRefId"
+    } else {
+      resolvedResourceName
+    }
   }
 }

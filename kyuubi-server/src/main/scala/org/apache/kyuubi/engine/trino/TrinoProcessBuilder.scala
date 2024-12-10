@@ -19,12 +19,11 @@ package org.apache.kyuubi.engine.trino
 
 import java.io.File
 import java.nio.file.Paths
-import java.util
 
-import scala.collection.JavaConverters._
-import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable
 
 import com.google.common.annotations.VisibleForTesting
+import org.apache.commons.lang3.StringUtils
 
 import org.apache.kyuubi.{Logging, SCALA_COMPILE_VERSION, Utils}
 import org.apache.kyuubi.config.KyuubiConf
@@ -32,24 +31,26 @@ import org.apache.kyuubi.config.KyuubiConf._
 import org.apache.kyuubi.config.KyuubiReservedKeys.KYUUBI_SESSION_USER_KEY
 import org.apache.kyuubi.engine.{KyuubiApplicationManager, ProcBuilder}
 import org.apache.kyuubi.operation.log.OperationLog
+import org.apache.kyuubi.util.command.CommandLineUtils._
 
 class TrinoProcessBuilder(
     override val proxyUser: String,
+    override val doAsEnabled: Boolean,
     override val conf: KyuubiConf,
     val engineRefId: String,
     val extraEngineLog: Option[OperationLog] = None)
   extends ProcBuilder with Logging {
 
   @VisibleForTesting
-  def this(proxyUser: String, conf: KyuubiConf) {
-    this(proxyUser, conf, "")
+  def this(proxyUser: String, doAsEnabled: Boolean, conf: KyuubiConf) {
+    this(proxyUser, doAsEnabled, conf, "")
   }
 
   override protected def module: String = "kyuubi-trino-engine"
 
   override protected def mainClass: String = "org.apache.kyuubi.engine.trino.TrinoSqlEngine"
 
-  override protected val commands: Array[String] = {
+  override protected val commands: Iterable[String] = {
     KyuubiApplicationManager.tagApplication(engineRefId, shortName, clusterManager(), conf)
     require(
       conf.get(ENGINE_TRINO_CONNECTION_URL).nonEmpty,
@@ -57,18 +58,17 @@ class TrinoProcessBuilder(
     require(
       conf.get(ENGINE_TRINO_CONNECTION_CATALOG).nonEmpty,
       s"Trino default catalog can not be null! Please set ${ENGINE_TRINO_CONNECTION_CATALOG.key}")
-    val buffer = new ArrayBuffer[String]()
+    val buffer = new mutable.ListBuffer[String]()
     buffer += executable
 
     val memory = conf.get(ENGINE_TRINO_MEMORY)
     buffer += s"-Xmx$memory"
-    val javaOptions = conf.get(ENGINE_TRINO_JAVA_OPTIONS)
+    val javaOptions = conf.get(ENGINE_TRINO_JAVA_OPTIONS).filter(StringUtils.isNotBlank(_))
     if (javaOptions.isDefined) {
-      buffer += javaOptions.get
+      buffer ++= parseOptionString(javaOptions.get)
     }
 
-    buffer += "-cp"
-    val classpathEntries = new util.LinkedHashSet[String]
+    val classpathEntries = new mutable.LinkedHashSet[String]
     // trino engine runtime jar
     mainResource.foreach(classpathEntries.add)
 
@@ -89,24 +89,36 @@ class TrinoProcessBuilder(
     val extraCp = conf.get(ENGINE_TRINO_EXTRA_CLASSPATH)
     extraCp.foreach(classpathEntries.add)
 
-    buffer += classpathEntries.asScala.mkString(File.pathSeparator)
+    buffer ++= genClasspathOption(classpathEntries)
+
     buffer += mainClass
 
     // TODO: How shall we deal with proxyUser,
     // user.name
     // kyuubi.session.user
     // or just leave it, because we can handle it at operation layer
-    buffer += "--conf"
-    buffer += s"$KYUUBI_SESSION_USER_KEY=$proxyUser"
+    buffer ++= confKeyValue(KYUUBI_SESSION_USER_KEY, proxyUser)
 
-    for ((k, v) <- conf.getAll) {
-      buffer += "--conf"
-      buffer += s"$k=$v"
-    }
-    buffer.toArray
+    buffer ++= confKeyValues(conf.getAll)
+
+    buffer
   }
 
   override def shortName: String = "trino"
 
-  override def toString: String = Utils.redactCommandLineArgs(conf, commands).mkString("\n")
+  override def toString: String = {
+    if (commands == null) {
+      super.toString
+    } else {
+      redactConfValues(
+        Utils.redactCommandLineArgs(conf, commands),
+        Set(
+          ENGINE_TRINO_CONNECTION_PASSWORD.key,
+          ENGINE_TRINO_CONNECTION_KEYSTORE_PASSWORD.key,
+          ENGINE_TRINO_CONNECTION_TRUSTSTORE_PASSWORD.key)).map {
+        case arg if arg.startsWith("-") => s"\\\n\t$arg"
+        case arg => arg
+      }.mkString(" ")
+    }
+  }
 }

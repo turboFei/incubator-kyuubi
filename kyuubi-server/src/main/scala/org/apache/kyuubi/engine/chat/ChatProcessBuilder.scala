@@ -19,31 +19,31 @@ package org.apache.kyuubi.engine.chat
 
 import java.io.File
 import java.nio.file.{Files, Paths}
-import java.util
 
-import scala.collection.JavaConverters._
-import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable
 
 import com.google.common.annotations.VisibleForTesting
+import org.apache.commons.lang3.StringUtils
 
 import org.apache.kyuubi.{Logging, SCALA_COMPILE_VERSION, Utils}
-import org.apache.kyuubi.Utils.REDACTION_REPLACEMENT_TEXT
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf._
 import org.apache.kyuubi.config.KyuubiReservedKeys.KYUUBI_SESSION_USER_KEY
 import org.apache.kyuubi.engine.ProcBuilder
 import org.apache.kyuubi.operation.log.OperationLog
+import org.apache.kyuubi.util.command.CommandLineUtils._
 
 class ChatProcessBuilder(
     override val proxyUser: String,
+    override val doAsEnabled: Boolean,
     override val conf: KyuubiConf,
     val engineRefId: String,
     val extraEngineLog: Option[OperationLog] = None)
   extends ProcBuilder with Logging {
 
   @VisibleForTesting
-  def this(proxyUser: String, conf: KyuubiConf) {
-    this(proxyUser, conf, "")
+  def this(proxyUser: String, doAsEnabled: Boolean, conf: KyuubiConf) {
+    this(proxyUser, doAsEnabled, conf, "")
   }
 
   /**
@@ -59,18 +59,17 @@ class ChatProcessBuilder(
    */
   override protected def mainClass: String = "org.apache.kyuubi.engine.chat.ChatEngine"
 
-  override protected val commands: Array[String] = {
-    val buffer = new ArrayBuffer[String]()
+  override protected val commands: Iterable[String] = {
+    val buffer = new mutable.ListBuffer[String]()
     buffer += executable
 
     val memory = conf.get(ENGINE_CHAT_MEMORY)
     buffer += s"-Xmx$memory"
 
-    val javaOptions = conf.get(ENGINE_CHAT_JAVA_OPTIONS)
+    val javaOptions = conf.get(ENGINE_CHAT_JAVA_OPTIONS).filter(StringUtils.isNotBlank(_))
     javaOptions.foreach(buffer += _)
 
-    buffer += "-cp"
-    val classpathEntries = new util.LinkedHashSet[String]
+    val classpathEntries = new mutable.LinkedHashSet[String]
     mainResource.foreach(classpathEntries.add)
     mainResource.foreach { path =>
       val parent = Paths.get(path).getParent
@@ -88,27 +87,25 @@ class ChatProcessBuilder(
 
     val extraCp = conf.get(ENGINE_CHAT_EXTRA_CLASSPATH)
     extraCp.foreach(classpathEntries.add)
-    buffer += classpathEntries.asScala.mkString(File.pathSeparator)
+    buffer ++= genClasspathOption(classpathEntries)
+
     buffer += mainClass
 
-    buffer += "--conf"
-    buffer += s"$KYUUBI_SESSION_USER_KEY=$proxyUser"
+    buffer ++= confKeyValue(KYUUBI_SESSION_USER_KEY, proxyUser)
 
-    conf.getAll.foreach { case (k, v) =>
-      buffer += "--conf"
-      buffer += s"$k=$v"
-    }
-    buffer.toArray
+    buffer ++= confKeyValues(conf.getAll)
+
+    buffer
   }
 
   override def toString: String = {
     if (commands == null) {
-      super.toString()
+      super.toString
     } else {
-      Utils.redactCommandLineArgs(conf, commands).map {
+      redactConfValues(
+        Utils.redactCommandLineArgs(conf, commands),
+        Set(ENGINE_CHAT_GPT_API_KEY.key)).map {
         case arg if arg.startsWith("-") || arg == mainClass => s"\\\n\t$arg"
-        case arg if arg.contains(ENGINE_CHAT_GPT_API_KEY.key) =>
-          s"${ENGINE_CHAT_GPT_API_KEY.key}=$REDACTION_REPLACEMENT_TEXT"
         case arg => arg
       }.mkString(" ")
     }

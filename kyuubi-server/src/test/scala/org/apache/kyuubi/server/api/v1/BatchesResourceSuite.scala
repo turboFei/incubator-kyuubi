@@ -19,53 +19,89 @@ package org.apache.kyuubi.server.api.v1
 
 import java.net.InetAddress
 import java.nio.file.Paths
-import java.util.{Base64, UUID}
+import java.util.UUID
 import javax.ws.rs.client.Entity
 import javax.ws.rs.core.{MediaType, Response}
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.duration.DurationInt
 
-import org.apache.hive.service.rpc.thrift.TProtocolVersion
 import org.glassfish.jersey.media.multipart.FormDataMultiPart
 import org.glassfish.jersey.media.multipart.file.FileDataBodyPart
 
-import org.apache.kyuubi.{BatchTestHelper, KyuubiFunSuite, RestFrontendTestHelper}
+import org.apache.kyuubi.{BatchTestHelper, KyuubiFunSuite, RestFrontendTestHelper, Utils}
 import org.apache.kyuubi.client.api.v1.dto._
 import org.apache.kyuubi.client.util.BatchUtils
 import org.apache.kyuubi.client.util.BatchUtils._
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf._
-import org.apache.kyuubi.engine.{ApplicationInfo, KyuubiApplicationManager}
+import org.apache.kyuubi.engine.{ApplicationInfo, ApplicationManagerInfo, KyuubiApplicationManager}
 import org.apache.kyuubi.engine.spark.SparkBatchProcessBuilder
 import org.apache.kyuubi.metrics.{MetricsConstants, MetricsSystem}
 import org.apache.kyuubi.operation.{BatchJobSubmission, OperationState}
 import org.apache.kyuubi.operation.OperationState.OperationState
 import org.apache.kyuubi.server.KyuubiRestFrontendService
-import org.apache.kyuubi.server.http.authentication.AuthenticationHandler.AUTHORIZATION_HEADER
-import org.apache.kyuubi.server.metadata.api.Metadata
-import org.apache.kyuubi.service.authentication.KyuubiAuthenticationFactory
+import org.apache.kyuubi.server.http.util.HttpAuthUtils.{basicAuthorizationHeader, AUTHORIZATION_HEADER}
+import org.apache.kyuubi.server.metadata.api.{Metadata, MetadataFilter}
+import org.apache.kyuubi.service.authentication.{AnonymousAuthenticationProviderImpl, AuthUtils}
 import org.apache.kyuubi.session.{KyuubiBatchSession, KyuubiSessionManager, SessionHandle, SessionType}
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift.TProtocolVersion
 
-class BatchesResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper with BatchTestHelper {
-  override protected lazy val conf: KyuubiConf = KyuubiConf()
-    .set(KyuubiConf.ENGINE_SECURITY_ENABLED, true)
-    .set(KyuubiConf.ENGINE_SECURITY_SECRET_PROVIDER, "simple")
-    .set(KyuubiConf.SIMPLE_SECURITY_SECRET_PROVIDER_PROVIDER_SECRET, "ENGINE____SECRET")
-    .set(
-      KyuubiConf.SESSION_LOCAL_DIR_ALLOW_LIST,
-      Seq(Paths.get(sparkBatchTestResource.get).getParent.toString))
+class BatchesV1ResourceSuite extends BatchesResourceSuiteBase {
+  override def batchVersion: String = "1"
+
+  override def customConf: Map[String, String] = Map.empty
+}
+
+class BatchesV2ResourceSuite extends BatchesResourceSuiteBase {
+  override def batchVersion: String = "2"
+
+  override def customConf: Map[String, String] = Map(
+    METADATA_REQUEST_ASYNC_RETRY_ENABLED.key -> "false",
+    BATCH_SUBMITTER_ENABLED.key -> "true")
+
+  override def afterEach(): Unit = {
+    val sessionManager = fe.be.sessionManager.asInstanceOf[KyuubiSessionManager]
+    val batchService = fe.asInstanceOf[KyuubiRestFrontendService].batchService.get
+    sessionManager.getBatchesFromMetadataStore(MetadataFilter(), 0, Int.MaxValue)
+      .foreach { batch => batchService.cancelUnscheduledBatch(batch.getId) }
+    super.afterEach()
+    sessionManager.allSessions().foreach { session =>
+      Utils.tryLogNonFatalError { sessionManager.closeSession(session.handle) }
+    }
+  }
+}
+
+abstract class BatchesResourceSuiteBase extends KyuubiFunSuite
+  with RestFrontendTestHelper
+  with BatchTestHelper {
+
+  def batchVersion: String
+
+  def customConf: Map[String, String]
+
+  override protected lazy val conf: KyuubiConf = {
+    val testResourceDir = Paths.get(sparkBatchTestResource.get).getParent
+    val kyuubiConf = KyuubiConf()
+      .set(AUTHENTICATION_METHOD, Seq("CUSTOM"))
+      .set(AUTHENTICATION_CUSTOM_CLASS, classOf[AnonymousAuthenticationProviderImpl].getName)
+      .set(SERVER_ADMINISTRATORS, Set("admin"))
+      .set(BATCH_IMPL_VERSION, batchVersion)
+      .set(SESSION_LOCAL_DIR_ALLOW_LIST, Set(testResourceDir.toString))
+    customConf.foreach { case (k, v) => kyuubiConf.set(k, v) }
+    kyuubiConf
+  }
 
   override def afterEach(): Unit = {
     val sessionManager = fe.be.sessionManager.asInstanceOf[KyuubiSessionManager]
     sessionManager.allSessions().foreach { session =>
       sessionManager.closeSession(session.handle)
     }
-    sessionManager.getBatchesFromMetadataStore(null, null, null, 0, 0, 0, Int.MaxValue).foreach {
-      batch =>
-        sessionManager.applicationManager.killApplication(None, batch.getId)
-        sessionManager.cleanupMetadata(batch.getId)
+    sessionManager.getBatchesFromMetadataStore(MetadataFilter(), 0, Int.MaxValue).foreach { batch =>
+      sessionManager.applicationManager.killApplication(ApplicationManagerInfo(None), batch.getId)
+      sessionManager.cleanupMetadata(batch.getId)
     }
   }
 
@@ -74,31 +110,52 @@ class BatchesResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper wi
 
     val response = webTarget.path("api/v1/batches")
       .request(MediaType.APPLICATION_JSON_TYPE)
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("anonymous"))
       .post(Entity.entity(requestObj, MediaType.APPLICATION_JSON_TYPE))
-    assert(200 == response.getStatus)
+    assert(response.getStatus === 200)
     var batch = response.readEntity(classOf[Batch])
-    assert(batch.getKyuubiInstance === fe.connectionUrl)
+    batchVersion match {
+      case "1" =>
+        assert(batch.getKyuubiInstance === fe.connectionUrl)
+      case "2" if batch.getState === "INITIALIZED" =>
+        assert(batch.getKyuubiInstance === null)
+      case "2" if batch.getState === "PENDING" => // batch picked by BatchService
+        assert(batch.getKyuubiInstance === fe.connectionUrl)
+      case _ =>
+        fail(s"unexpected batch info, version: $batchVersion state: ${batch.getState}")
+    }
     assert(batch.getBatchType === "SPARK")
     assert(batch.getName === sparkBatchTestAppName)
     assert(batch.getCreateTime > 0)
     assert(batch.getEndTime === 0)
 
     requestObj.setConf((requestObj.getConf.asScala ++
-      Map(KyuubiAuthenticationFactory.HS2_PROXY_USER -> "root")).asJava)
+      Map(AuthUtils.HS2_PROXY_USER -> "root")).asJava)
     val proxyUserRequest = requestObj
     val proxyUserResponse = webTarget.path("api/v1/batches")
       .request(MediaType.APPLICATION_JSON_TYPE)
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("anonymous"))
       .post(Entity.entity(proxyUserRequest, MediaType.APPLICATION_JSON_TYPE))
-    assert(405 == proxyUserResponse.getStatus)
+    assert(proxyUserResponse.getStatus === 403)
     var errorMessage = "Failed to validate proxy privilege of anonymous for root"
     assert(proxyUserResponse.readEntity(classOf[String]).contains(errorMessage))
 
-    var getBatchResponse = webTarget.path(s"api/v1/batches/${batch.getId()}")
+    var getBatchResponse = webTarget.path(s"api/v1/batches/${batch.getId}")
       .request(MediaType.APPLICATION_JSON_TYPE)
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("anonymous"))
       .get()
-    assert(200 == getBatchResponse.getStatus)
+    assert(getBatchResponse.getStatus === 200)
     batch = getBatchResponse.readEntity(classOf[Batch])
-    assert(batch.getKyuubiInstance === fe.connectionUrl)
+    batchVersion match {
+      case "1" =>
+        assert(batch.getKyuubiInstance === fe.connectionUrl)
+      case "2" if batch.getState === "INITIALIZED" =>
+        assert(batch.getKyuubiInstance === null)
+      case "2" if batch.getState === "PENDING" => // batch picked by BatchService
+        assert(batch.getKyuubiInstance === fe.connectionUrl)
+      case _ =>
+        fail(s"unexpected batch info, version: $batchVersion state: ${batch.getState}")
+    }
     assert(batch.getBatchType === "SPARK")
     assert(batch.getName === sparkBatchTestAppName)
     assert(batch.getCreateTime > 0)
@@ -110,30 +167,33 @@ class BatchesResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper wi
     // invalid batchId
     getBatchResponse = webTarget.path(s"api/v1/batches/invalidBatchId")
       .request(MediaType.APPLICATION_JSON_TYPE)
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("anonymous"))
       .get()
-    assert(404 == getBatchResponse.getStatus)
+    assert(getBatchResponse.getStatus === 404)
 
     // get batch log
     var logResponse: Response = null
     var log: OperationLog = null
     eventually(timeout(10.seconds), interval(1.seconds)) {
-      logResponse = webTarget.path(s"api/v1/batches/${batch.getId()}/localLog")
+      logResponse = webTarget.path(s"api/v1/batches/${batch.getId}/localLog")
         .queryParam("from", "0")
         .queryParam("size", "1")
         .request(MediaType.APPLICATION_JSON_TYPE)
+        .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("anonymous"))
         .get()
       log = logResponse.readEntity(classOf[OperationLog])
-      assert(log.getRowCount == 1)
+      assert(log.getRowCount === 1)
     }
     val head = log.getLogRowSet.asScala.head
 
     val logs = new ArrayBuffer[String]
     logs.append(head)
     eventually(timeout(10.seconds), interval(1.seconds)) {
-      logResponse = webTarget.path(s"api/v1/batches/${batch.getId()}/localLog")
+      logResponse = webTarget.path(s"api/v1/batches/${batch.getId}/localLog")
         .queryParam("from", "-1")
         .queryParam("size", "100")
         .request(MediaType.APPLICATION_JSON_TYPE)
+        .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("anonymous"))
         .get()
       log = logResponse.readEntity(classOf[OperationLog])
       if (log.getRowCount > 0) {
@@ -142,67 +202,61 @@ class BatchesResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper wi
 
       // check both kyuubi log and engine log
       assert(
-        logs.exists(_.contains("/bin/spark-submit")) && logs.exists(
-          _.contains(s"SparkContext: Submitted application: $sparkBatchTestAppName")))
+        logs.exists(_.contains("bin/spark-submit")) &&
+          logs.exists(_.contains(s"Submitted application: $sparkBatchTestAppName")))
     }
 
     // invalid user name
-    val encodeAuthorization =
-      new String(Base64.getEncoder.encode(batch.getId().getBytes()), "UTF-8")
-    var deleteBatchResponse = webTarget.path(s"api/v1/batches/${batch.getId()}")
+    var deleteBatchResponse = webTarget.path(s"api/v1/batches/${batch.getId}")
       .request(MediaType.APPLICATION_JSON_TYPE)
-      .header(AUTHORIZATION_HEADER, s"BASIC $encodeAuthorization")
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader(batch.getId))
       .delete()
-    assert(405 == deleteBatchResponse.getStatus)
-    errorMessage = s"${batch.getId()} is not allowed to close the session belong to anonymous"
+    assert(deleteBatchResponse.getStatus === 403)
+    errorMessage = s"Failed to validate proxy privilege of ${batch.getId} for anonymous"
     assert(deleteBatchResponse.readEntity(classOf[String]).contains(errorMessage))
 
     // invalid batchId
     deleteBatchResponse = webTarget.path(s"api/v1/batches/notValidUUID")
       .request(MediaType.APPLICATION_JSON_TYPE)
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("anonymous"))
       .delete()
-    assert(404 == deleteBatchResponse.getStatus)
+    assert(deleteBatchResponse.getStatus === 404)
 
     // non-existed batch session
     deleteBatchResponse = webTarget.path(s"api/v1/batches/${UUID.randomUUID().toString}")
       .request(MediaType.APPLICATION_JSON_TYPE)
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("anonymous"))
       .delete()
-    assert(404 == deleteBatchResponse.getStatus)
-
-    // invalid proxy user
-    deleteBatchResponse = webTarget.path(s"api/v1/batches/${batch.getId()}")
-      .queryParam("hive.server2.proxy.user", "invalidProxy")
-      .request(MediaType.APPLICATION_JSON_TYPE)
-      .delete()
-    assert(405 == deleteBatchResponse.getStatus)
-    errorMessage = "Failed to validate proxy privilege of anonymous for invalidProxy"
-    assert(deleteBatchResponse.readEntity(classOf[String]).contains(errorMessage))
+    assert(deleteBatchResponse.getStatus === 404)
 
     // check close batch session
-    deleteBatchResponse = webTarget.path(s"api/v1/batches/${batch.getId()}")
+    deleteBatchResponse = webTarget.path(s"api/v1/batches/${batch.getId}")
       .request(MediaType.APPLICATION_JSON_TYPE)
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("anonymous"))
       .delete()
-    assert(200 == deleteBatchResponse.getStatus)
+    assert(deleteBatchResponse.getStatus === 200)
     val closeBatchResponse = deleteBatchResponse.readEntity(classOf[CloseBatchResponse])
 
     // check state after close batch session
-    getBatchResponse = webTarget.path(s"api/v1/batches/${batch.getId()}")
+    getBatchResponse = webTarget.path(s"api/v1/batches/${batch.getId}")
       .request(MediaType.APPLICATION_JSON_TYPE)
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("anonymous"))
       .get()
-    assert(200 == getBatchResponse.getStatus)
+    assert(getBatchResponse.getStatus === 200)
     batch = getBatchResponse.readEntity(classOf[Batch])
-    assert(batch.getId == batch.getId())
+    assert(batch.getId === batch.getId)
     if (closeBatchResponse.isSuccess) {
-      assert(batch.getState == "CANCELED")
+      assert(batch.getState === "CANCELED")
     } else {
       assert(batch.getState != "CANCELED")
     }
 
     // close the closed batch session
-    deleteBatchResponse = webTarget.path(s"api/v1/batches/${batch.getId()}")
+    deleteBatchResponse = webTarget.path(s"api/v1/batches/${batch.getId}")
       .request(MediaType.APPLICATION_JSON_TYPE)
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("anonymous"))
       .delete()
-    assert(200 == deleteBatchResponse.getStatus)
+    assert(deleteBatchResponse.getStatus === 200)
     assert(!deleteBatchResponse.readEntity(classOf[CloseBatchResponse]).isSuccess)
   }
 
@@ -216,18 +270,40 @@ class BatchesResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper wi
 
     val response = webTarget.path("api/v1/batches")
       .request(MediaType.APPLICATION_JSON)
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("anonymous"))
       .post(Entity.entity(multipart, MediaType.MULTIPART_FORM_DATA))
-    assert(200 == response.getStatus)
+    assert(response.getStatus === 200)
     val batch = response.readEntity(classOf[Batch])
-    assert(batch.getKyuubiInstance === fe.connectionUrl)
+    batchVersion match {
+      case "1" =>
+        assert(batch.getKyuubiInstance === fe.connectionUrl)
+      case "2" if batch.getState === "INITIALIZED" =>
+        assert(batch.getKyuubiInstance === null)
+      case "2" if batch.getState === "PENDING" => // batch picked by BatchService
+        assert(batch.getKyuubiInstance === fe.connectionUrl)
+      case _ =>
+        fail(s"unexpected batch info, version: $batchVersion state: ${batch.getState}")
+    }
     assert(batch.getBatchType === "SPARK")
     assert(batch.getName === sparkBatchTestAppName)
     assert(batch.getCreateTime > 0)
     assert(batch.getEndTime === 0)
 
-    webTarget.path(s"api/v1/batches/${batch.getId()}").request(
-      MediaType.APPLICATION_JSON_TYPE).delete()
-    eventually(timeout(3.seconds)) {
+    // wait for batch be scheduled
+    eventually(timeout(5.seconds), interval(200.millis)) {
+      val resp = webTarget.path(s"api/v1/batches/${batch.getId}")
+        .request(MediaType.APPLICATION_JSON_TYPE)
+        .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("anonymous"))
+        .get()
+      val batchState = resp.readEntity(classOf[Batch]).getState
+      assert(batchState === "PENDING" || batchState === "RUNNING")
+    }
+
+    webTarget.path(s"api/v1/batches/${batch.getId}")
+      .request(MediaType.APPLICATION_JSON_TYPE)
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("anonymous"))
+      .delete()
+    eventually(timeout(5.seconds), interval(200.millis)) {
       assert(KyuubiApplicationManager.uploadWorkDir.toFile.listFiles().isEmpty)
     }
   }
@@ -240,15 +316,17 @@ class BatchesResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper wi
 
     val resp1 = webTarget.path("api/v1/batches")
       .request(MediaType.APPLICATION_JSON_TYPE)
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("anonymous"))
       .post(Entity.entity(reqObj, MediaType.APPLICATION_JSON_TYPE))
-    assert(200 == resp1.getStatus)
+    assert(resp1.getStatus === 200)
     val batch1 = resp1.readEntity(classOf[Batch])
     assert(batch1.getId === batchId)
 
     val resp2 = webTarget.path("api/v1/batches")
       .request(MediaType.APPLICATION_JSON_TYPE)
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("anonymous"))
       .post(Entity.entity(reqObj, MediaType.APPLICATION_JSON_TYPE))
-    assert(200 == resp2.getStatus)
+    assert(resp2.getStatus === 200)
     val batch2 = resp2.readEntity(classOf[Batch])
     assert(batch2.getId === batchId)
 
@@ -270,22 +348,23 @@ class BatchesResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper wi
       .queryParam("from", "0")
       .queryParam("size", "2")
       .request(MediaType.APPLICATION_JSON_TYPE)
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("anonymous"))
       .get()
 
-    assert(response.getStatus == 200)
+    assert(response.getStatus === 200)
     val getBatchListResponse = response.readEntity(classOf[GetBatchesResponse])
-    assert(getBatchListResponse.getBatches.isEmpty && getBatchListResponse.getTotal == 0)
+    assert(getBatchListResponse.getBatches.isEmpty && getBatchListResponse.getTotal === 0)
 
     sessionManager.openBatchSession(
       "kyuubi",
       "kyuubi",
       InetAddress.getLocalHost.getCanonicalHostName,
-      Map(KYUUBI_BATCH_ID_KEY -> UUID.randomUUID().toString),
       newBatchRequest(
         "spark",
         sparkBatchTestResource.get,
         "",
-        ""))
+        "",
+        Map(KYUUBI_BATCH_ID_KEY -> UUID.randomUUID().toString)))
     sessionManager.openSession(
       TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V11,
       "",
@@ -302,80 +381,85 @@ class BatchesResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper wi
       "kyuubi",
       "kyuubi",
       InetAddress.getLocalHost.getCanonicalHostName,
-      Map(KYUUBI_BATCH_ID_KEY -> UUID.randomUUID().toString),
       newBatchRequest(
         "spark",
         sparkBatchTestResource.get,
         "",
-        ""))
+        "",
+        Map(KYUUBI_BATCH_ID_KEY -> UUID.randomUUID().toString)))
     sessionManager.openBatchSession(
       "kyuubi",
       "kyuubi",
       InetAddress.getLocalHost.getCanonicalHostName,
-      Map(KYUUBI_BATCH_ID_KEY -> UUID.randomUUID().toString),
       newBatchRequest(
         "spark",
         sparkBatchTestResource.get,
         "",
-        ""))
+        "",
+        Map(KYUUBI_BATCH_ID_KEY -> UUID.randomUUID().toString)))
 
     val response2 = webTarget.path("api/v1/batches")
       .queryParam("batchType", "spark")
       .queryParam("from", "0")
       .queryParam("size", "2")
       .request(MediaType.APPLICATION_JSON_TYPE)
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("anonymous"))
       .get()
 
-    assert(response2.getStatus == 200)
+    assert(response2.getStatus === 200)
 
     val getBatchListResponse2 = response2.readEntity(classOf[GetBatchesResponse])
-    assert(getBatchListResponse2.getTotal == 2)
+    assert(getBatchListResponse2.getTotal === 2)
 
     val response3 = webTarget.path("api/v1/batches")
       .queryParam("batchType", "spark")
       .queryParam("from", "2")
       .queryParam("size", "2")
       .request(MediaType.APPLICATION_JSON_TYPE)
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("anonymous"))
       .get()
 
-    assert(response3.getStatus == 200)
+    assert(response3.getStatus === 200)
 
     val getBatchListResponse3 = response3.readEntity(classOf[GetBatchesResponse])
-    assert(getBatchListResponse3.getTotal == 1)
+    assert(getBatchListResponse3.getTotal === 1)
 
     val response4 = webTarget.path("api/v1/batches")
       .queryParam("batchType", "spark")
       .queryParam("from", "3")
       .queryParam("size", "2")
       .request(MediaType.APPLICATION_JSON_TYPE)
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("anonymous"))
       .get()
 
-    assert(response4.getStatus == 200)
+    assert(response4.getStatus === 200)
     val getBatchListResponse4 = response4.readEntity(classOf[GetBatchesResponse])
-    assert(getBatchListResponse4.getBatches.isEmpty && getBatchListResponse4.getTotal == 0)
+    assert(getBatchListResponse4.getBatches.isEmpty && getBatchListResponse4.getTotal === 0)
 
     val response5 = webTarget.path("api/v1/batches")
       .queryParam("batchType", "mock")
       .queryParam("from", "2")
       .queryParam("size", "2")
       .request(MediaType.APPLICATION_JSON_TYPE)
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("anonymous"))
       .get()
 
-    assert(response5.getStatus == 200)
+    assert(response5.getStatus === 200)
 
     val getBatchListResponse5 = response5.readEntity(classOf[GetBatchesResponse])
-    assert(getBatchListResponse5.getTotal == 0)
+    assert(getBatchListResponse5.getTotal === 0)
 
     // TODO add more test when add more batchType
     val response6 = webTarget.path("api/v1/batches")
       .queryParam("from", "2")
       .queryParam("size", "2")
       .request(MediaType.APPLICATION_JSON_TYPE)
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("anonymous"))
       .get()
 
-    assert(response6.getStatus == 200)
+    assert(response6.getStatus === 200)
     val getBatchListResponse6 = response6.readEntity(classOf[GetBatchesResponse])
-    assert(getBatchListResponse6.getTotal == 1)
+    assert(getBatchListResponse6.getTotal === 1)
     sessionManager.allSessions().foreach(_.close())
 
     val queryCreateTime = System.currentTimeMillis()
@@ -385,8 +469,29 @@ class BatchesResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper wi
       .queryParam("from", "2")
       .queryParam("size", "2")
       .request(MediaType.APPLICATION_JSON_TYPE)
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("anonymous"))
       .get()
     assert(response7.getStatus === 500)
+
+    val response8 = webTarget.path("api/v1/batches")
+      .queryParam("from", "0")
+      .queryParam("size", "1")
+      .queryParam("desc", "false")
+      .request(MediaType.APPLICATION_JSON_TYPE)
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("anonymous"))
+      .get()
+    val firstBatch = response8.readEntity(classOf[GetBatchesResponse]).getBatches.get(0)
+
+    val response9 = webTarget.path("api/v1/batches")
+      .queryParam("from", "0")
+      .queryParam("size", "1")
+      .queryParam("desc", "true")
+      .queryParam("createTime", "1")
+      .request(MediaType.APPLICATION_JSON_TYPE)
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("anonymous"))
+      .get()
+    val lastBatch = response9.readEntity(classOf[GetBatchesResponse]).getBatches.get(0)
+    assert(firstBatch.getCreateTime < lastBatch.getCreateTime)
   }
 
   test("negative request") {
@@ -415,8 +520,9 @@ class BatchesResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper wi
         "resource is a required parameter")).foreach { case (req, msg) =>
       val response = webTarget.path("api/v1/batches")
         .request(MediaType.APPLICATION_JSON_TYPE)
+        .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("anonymous"))
         .post(Entity.entity(req, MediaType.APPLICATION_JSON_TYPE))
-      assert(500 == response.getStatus)
+      assert(response.getStatus === 500)
       assert(response.readEntity(classOf[String]).contains(msg))
     }
 
@@ -428,8 +534,9 @@ class BatchesResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper wi
         "Invalid batchId: 3ea7ddbe-0c35-45da-85ad-3186770181a7")).foreach { case (batchId, msg) =>
       val response = webTarget.path(s"api/v1/batches/$batchId")
         .request(MediaType.APPLICATION_JSON_TYPE)
+        .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("anonymous"))
         .get
-      assert(404 == response.getStatus)
+      assert(response.getStatus === 404)
       assert(response.readEntity(classOf[String]).contains(msg))
     }
   }
@@ -438,7 +545,7 @@ class BatchesResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper wi
     val sessionManager = fe.be.sessionManager.asInstanceOf[KyuubiSessionManager]
     val kyuubiInstance = fe.connectionUrl
 
-    assert(sessionManager.getOpenSessionCount == 0)
+    assert(sessionManager.getActiveUserSessionCount === 0)
     val batchId1 = UUID.randomUUID().toString
     val batchId2 = UUID.randomUUID().toString
 
@@ -481,7 +588,8 @@ class BatchesResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper wi
 
     var applicationStatus: Option[ApplicationInfo] = None
     eventually(timeout(5.seconds)) {
-      applicationStatus = sessionManager.applicationManager.getApplicationInfo(None, batchId2)
+      applicationStatus =
+        sessionManager.applicationManager.getApplicationInfo(ApplicationManagerInfo(None), batchId2)
       assert(applicationStatus.isDefined)
     }
 
@@ -497,7 +605,7 @@ class BatchesResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper wi
 
     val restFe = fe.asInstanceOf[KyuubiRestFrontendService]
     restFe.recoverBatchSessions()
-    assert(sessionManager.getOpenSessionCount == 2)
+    assert(sessionManager.getActiveUserSessionCount === 2)
 
     val sessionHandle1 = SessionHandle.fromUUID(batchId1)
     val sessionHandle2 = SessionHandle.fromUUID(batchId2)
@@ -517,13 +625,9 @@ class BatchesResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper wi
     }
 
     assert(sessionManager.getBatchesFromMetadataStore(
-      "SPARK",
-      null,
-      null,
+      MetadataFilter(engineType = "SPARK"),
       0,
-      0,
-      0,
-      Int.MaxValue).size == 2)
+      Int.MaxValue).size === 2)
   }
 
   test("get local log internal redirection") {
@@ -547,17 +651,28 @@ class BatchesResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper wi
       .queryParam("from", "0")
       .queryParam("size", "1")
       .request(MediaType.APPLICATION_JSON_TYPE)
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("anonymous"))
       .get()
-    assert(logResponse.getStatus == 404)
-    assert(logResponse.readEntity(classOf[String]).contains("No local log found"))
+    batchVersion match {
+      case "1" =>
+        assert(logResponse.getStatus === 404)
+        assert(logResponse.readEntity(classOf[String]).contains("No local log found"))
+      case "2" =>
+        assert(logResponse.getStatus === 200)
+        assert(logResponse.readEntity(classOf[String]).contains(
+          s"Batch ${metadata.identifier} is waiting for submitting"))
+      case _ =>
+        fail(s"unexpected batch version: $batchVersion")
+    }
 
     // get local batch log that is not existing
     logResponse = webTarget.path(s"api/v1/batches/${UUID.randomUUID.toString}/localLog")
       .queryParam("from", "0")
       .queryParam("size", "1")
       .request(MediaType.APPLICATION_JSON_TYPE)
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("anonymous"))
       .get()
-    assert(logResponse.getStatus == 404)
+    assert(logResponse.getStatus === 404)
     assert(logResponse.readEntity(classOf[String]).contains("Invalid batchId"))
 
     val metadata2 = metadata.copy(
@@ -570,8 +685,9 @@ class BatchesResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper wi
       .queryParam("from", "0")
       .queryParam("size", "1")
       .request(MediaType.APPLICATION_JSON_TYPE)
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("anonymous"))
       .get()
-    assert(logResponse.getStatus == 500)
+    assert(logResponse.getStatus === 500)
     assert(logResponse.readEntity(classOf[String]).contains(
       s"Api request failed for http://${metadata2.kyuubiInstance}"))
   }
@@ -592,23 +708,20 @@ class BatchesResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper wi
       engineType = "SPARK")
     sessionManager.insertMetadata(metadata)
 
-    val encodeAuthorization =
-      new String(Base64.getEncoder.encode("kyuubi".getBytes()), "UTF-8")
-
     // delete the batch in the same kyuubi instance but not found in-memory
     var deleteResp = webTarget.path(s"api/v1/batches/${metadata.identifier}")
       .request(MediaType.APPLICATION_JSON_TYPE)
-      .header(AUTHORIZATION_HEADER, s"BASIC $encodeAuthorization")
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("kyuubi"))
       .delete()
-    assert(deleteResp.getStatus == 200)
+    assert(deleteResp.getStatus === 200)
     assert(!deleteResp.readEntity(classOf[CloseBatchResponse]).isSuccess)
 
     // delete batch that is not existing
     deleteResp = webTarget.path(s"api/v1/batches/${UUID.randomUUID.toString}")
       .request(MediaType.APPLICATION_JSON_TYPE)
-      .header(AUTHORIZATION_HEADER, s"BASIC $encodeAuthorization")
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("kyuubi"))
       .delete()
-    assert(deleteResp.getStatus == 404)
+    assert(deleteResp.getStatus === 404)
     assert(deleteResp.readEntity(classOf[String]).contains("Invalid batchId:"))
 
     val metadata2 = metadata.copy(
@@ -619,9 +732,9 @@ class BatchesResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper wi
     // delete batch that need make redirection
     deleteResp = webTarget.path(s"api/v1/batches/${metadata2.identifier}")
       .request(MediaType.APPLICATION_JSON_TYPE)
-      .header(AUTHORIZATION_HEADER, s"BASIC $encodeAuthorization")
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("kyuubi"))
       .delete()
-    assert(deleteResp.getStatus == 200)
+    assert(deleteResp.getStatus === 200)
     assert(deleteResp.readEntity(classOf[CloseBatchResponse]).getMsg.contains(
       s"Api request failed for http://${metadata2.kyuubiInstance}"))
   }
@@ -634,12 +747,15 @@ class BatchesResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper wi
 
     val response = webTarget.path("api/v1/batches")
       .request(MediaType.APPLICATION_JSON_TYPE)
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("anonymous"))
       .header(conf.get(FRONTEND_PROXY_HTTP_CLIENT_IP_HEADER), realClientIp)
       .post(Entity.entity(requestObj, MediaType.APPLICATION_JSON_TYPE))
-    assert(200 == response.getStatus)
+    assert(response.getStatus === 200)
     val batch = response.readEntity(classOf[Batch])
-    val batchSession = sessionManager.getBatchSession(SessionHandle.fromUUID(batch.getId))
-    assert(batchSession.map(_.ipAddress).contains(realClientIp))
+    eventually(timeout(10.seconds)) {
+      val batchSession = sessionManager.getBatchSession(SessionHandle.fromUUID(batch.getId))
+      assert(batchSession.map(_.ipAddress).contains(realClientIp))
+    }
   }
 
   test("expose the metrics with operation type and current state") {
@@ -649,42 +765,53 @@ class BatchesResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper wi
       assert(getBatchJobSubmissionStateCounter(OperationState.RUNNING) === 0)
     }
 
-    val originalTerminateCounter = getBatchJobSubmissionStateCounter(OperationState.CANCELED) +
-      getBatchJobSubmissionStateCounter(OperationState.FINISHED) +
-      getBatchJobSubmissionStateCounter(OperationState.ERROR)
+    val originalTerminatedCount =
+      getBatchJobSubmissionStateCounter(OperationState.CANCELED) +
+        getBatchJobSubmissionStateCounter(OperationState.FINISHED) +
+        getBatchJobSubmissionStateCounter(OperationState.ERROR)
 
-    val requestObj = newSparkBatchRequest(Map("spark.master" -> "local"))
+    val batchId = UUID.randomUUID().toString
+    val requestObj = newBatchRequest(
+      sparkBatchTestBatchType,
+      sparkBatchTestResource.get,
+      "org.apache.spark.examples.DriverSubmissionTest",
+      "DriverSubmissionTest-" + batchId,
+      Map(
+        "spark.master" -> "local",
+        KYUUBI_BATCH_ID_KEY -> batchId),
+      Seq("120"))
 
-    val response = webTarget.path("api/v1/batches")
-      .request(MediaType.APPLICATION_JSON_TYPE)
-      .post(Entity.entity(requestObj, MediaType.APPLICATION_JSON_TYPE))
-    assert(200 == response.getStatus)
-    var batch = response.readEntity(classOf[Batch])
-
-    assert(getBatchJobSubmissionStateCounter(OperationState.INITIALIZED) +
-      getBatchJobSubmissionStateCounter(OperationState.PENDING) +
-      getBatchJobSubmissionStateCounter(OperationState.RUNNING) === 1)
-
-    while (batch.getState == OperationState.PENDING.toString ||
-      batch.getState == OperationState.RUNNING.toString) {
-      val deleteResp = webTarget.path(s"api/v1/batches/${batch.getId}")
+    eventually(timeout(10.seconds)) {
+      val response = webTarget.path("api/v1/batches")
         .request(MediaType.APPLICATION_JSON_TYPE)
-        .delete()
-      assert(200 == deleteResp.getStatus)
-
-      batch = webTarget.path(s"api/v1/batches/${batch.getId}")
-        .request(MediaType.APPLICATION_JSON_TYPE)
-        .get().readEntity(classOf[Batch])
+        .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("anonymous"))
+        .post(Entity.entity(requestObj, MediaType.APPLICATION_JSON_TYPE))
+      assert(response.getStatus === 200)
+      val batch = response.readEntity(classOf[Batch])
+      assert(batch.getState === OperationState.PENDING.toString ||
+        batch.getState === OperationState.RUNNING.toString)
     }
 
-    assert(getBatchJobSubmissionStateCounter(OperationState.INITIALIZED) === 0)
-    assert(getBatchJobSubmissionStateCounter(OperationState.PENDING) === 0)
-    assert(getBatchJobSubmissionStateCounter(OperationState.RUNNING) === 0)
+    eventually(timeout(20.seconds)) {
+      assert(getBatchJobSubmissionStateCounter(OperationState.RUNNING) === 1)
+    }
 
-    val currentTeminateCount = getBatchJobSubmissionStateCounter(OperationState.CANCELED) +
+    val deleteResp = webTarget.path(s"api/v1/batches/$batchId")
+      .request(MediaType.APPLICATION_JSON_TYPE)
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("anonymous"))
+      .delete()
+    assert(deleteResp.getStatus === 200)
+
+    eventually(timeout(10.seconds)) {
+      assert(getBatchJobSubmissionStateCounter(OperationState.INITIALIZED) === 0)
+      assert(getBatchJobSubmissionStateCounter(OperationState.PENDING) === 0)
+      assert(getBatchJobSubmissionStateCounter(OperationState.RUNNING) === 0)
+    }
+
+    val currentTerminatedCount = getBatchJobSubmissionStateCounter(OperationState.CANCELED) +
       getBatchJobSubmissionStateCounter(OperationState.FINISHED) +
       getBatchJobSubmissionStateCounter(OperationState.ERROR)
-    assert(currentTeminateCount - originalTerminateCounter === 1)
+    assert(currentTerminatedCount - originalTerminatedCount === 1)
   }
 
   private def getBatchJobSubmissionStateCounter(state: OperationState): Long = {
@@ -698,16 +825,86 @@ class BatchesResourceSuite extends KyuubiFunSuite with RestFrontendTestHelper wi
       .be.sessionManager.asInstanceOf[KyuubiSessionManager]
 
     val e = intercept[Exception] {
+      val conf = Map(
+        KYUUBI_BATCH_ID_KEY -> UUID.randomUUID().toString,
+        "spark.jars" -> "disAllowPath")
       sessionManager.openBatchSession(
         "kyuubi",
         "kyuubi",
         InetAddress.getLocalHost.getCanonicalHostName,
-        Map(KYUUBI_BATCH_ID_KEY -> UUID.randomUUID().toString),
-        newSparkBatchRequest(Map("spark.jars" -> "disAllowPath")))
+        newSparkBatchRequest(conf))
     }
-    val sessionHandleRegex = "\\[[\\S]*\\]".r
+    val sessionHandleRegex = "\\[\\S*]".r
     val batchId = sessionHandleRegex.findFirstMatchIn(e.getMessage).get.group(0)
-      .replaceAll("\\[", "").replaceAll("\\]", "")
+      .replaceAll("\\[", "").replaceAll("]", "")
     assert(sessionManager.getBatchMetadata(batchId).map(_.state).contains("CANCELED"))
+  }
+
+  test("get batch list with batch name filter condition") {
+    val sessionManager = server.frontendServices.head
+      .be.sessionManager.asInstanceOf[KyuubiSessionManager]
+    sessionManager.allSessions().foreach(_.close())
+
+    val uniqueName = UUID.randomUUID().toString
+    sessionManager.openBatchSession(
+      "kyuubi",
+      "kyuubi",
+      InetAddress.getLocalHost.getCanonicalHostName,
+      newBatchRequest(
+        "spark",
+        sparkBatchTestResource.get,
+        "",
+        uniqueName,
+        Map(KYUUBI_BATCH_ID_KEY -> UUID.randomUUID().toString)))
+
+    val response = webTarget.path("api/v1/batches")
+      .queryParam("batchName", uniqueName)
+      .request(MediaType.APPLICATION_JSON_TYPE)
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("anonymous"))
+      .get()
+
+    assert(response.getStatus == 200)
+    val getBatchListResponse = response.readEntity(classOf[GetBatchesResponse])
+    assert(getBatchListResponse.getTotal == 1)
+  }
+
+  test("open batch session with proxyUser") {
+    val normalUser = "kyuubi"
+
+    def runOpenBatchExecutor(
+        kyuubiProxyUser: Option[String],
+        hs2ProxyUser: Option[String]): Response = {
+      val conf = mutable.Map("spark.master" -> "local")
+
+      kyuubiProxyUser.map { username =>
+        conf += (PROXY_USER.key -> username)
+      }
+      hs2ProxyUser.map { username =>
+        conf += (AuthUtils.HS2_PROXY_USER -> username)
+      }
+      val proxyUserRequest = newSparkBatchRequest(conf.toMap)
+
+      webTarget.path("api/v1/batches")
+        .request(MediaType.APPLICATION_JSON_TYPE)
+        .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("anonymous"))
+        .post(Entity.entity(proxyUserRequest, MediaType.APPLICATION_JSON_TYPE))
+    }
+
+    // use kyuubi.session.proxy.user
+    val proxyUserResponse1 = runOpenBatchExecutor(Option(normalUser), None)
+    assert(proxyUserResponse1.getStatus === 403)
+    val errorMessage = s"Failed to validate proxy privilege of anonymous for $normalUser"
+    assert(proxyUserResponse1.readEntity(classOf[String]).contains(errorMessage))
+
+    // it should be the same behavior as hive.server2.proxy.user
+    val proxyUserResponse2 = runOpenBatchExecutor(None, Option(normalUser))
+    assert(proxyUserResponse2.getStatus === 403)
+    assert(proxyUserResponse2.readEntity(classOf[String]).contains(errorMessage))
+
+    // when both set, kyuubi.session.proxy.user takes precedence
+    val proxyUserResponse3 =
+      runOpenBatchExecutor(Option(normalUser), Option(s"${normalUser}HiveServer2"))
+    assert(proxyUserResponse3.getStatus === 403)
+    assert(proxyUserResponse3.readEntity(classOf[String]).contains(errorMessage))
   }
 }

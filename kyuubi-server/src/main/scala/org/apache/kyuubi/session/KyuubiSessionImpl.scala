@@ -21,20 +21,22 @@ import java.util.Base64
 
 import scala.collection.JavaConverters._
 
-import org.apache.hive.service.rpc.thrift._
-
 import org.apache.kyuubi.KyuubiSQLException
 import org.apache.kyuubi.client.KyuubiSyncThriftClient
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf._
-import org.apache.kyuubi.config.KyuubiReservedKeys.{KYUUBI_ENGINE_CREDENTIALS_KEY, KYUUBI_SESSION_HANDLE_KEY, KYUUBI_SESSION_SIGN_PUBLICKEY, KYUUBI_SESSION_USER_SIGN}
+import org.apache.kyuubi.config.KyuubiConf.EngineOpenOnFailure._
+import org.apache.kyuubi.config.KyuubiReservedKeys.{KYUUBI_ENGINE_CREDENTIALS_KEY, KYUUBI_ENGINE_REF_ID, KYUUBI_SESSION_HANDLE_KEY, KYUUBI_SESSION_SIGN_PUBLICKEY, KYUUBI_SESSION_USER_SIGN}
 import org.apache.kyuubi.engine.{EngineRef, KyuubiApplicationManager}
 import org.apache.kyuubi.events.{EventBus, KyuubiSessionEvent}
 import org.apache.kyuubi.ha.client.DiscoveryClientProvider._
+import org.apache.kyuubi.ha.client.ServiceNodeInfo
 import org.apache.kyuubi.operation.{Operation, OperationHandle}
 import org.apache.kyuubi.operation.log.OperationLog
 import org.apache.kyuubi.service.authentication.InternalSecurityAccessor
 import org.apache.kyuubi.session.SessionType.SessionType
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift._
+import org.apache.kyuubi.shaded.thrift.transport.TTransportException
 import org.apache.kyuubi.sql.parser.server.KyuubiParser
 import org.apache.kyuubi.sql.plan.command.RunnableCommand
 import org.apache.kyuubi.util.SignUtils
@@ -47,17 +49,18 @@ class KyuubiSessionImpl(
     conf: Map[String, String],
     sessionManager: KyuubiSessionManager,
     sessionConf: KyuubiConf,
+    doAsEnabled: Boolean,
     parser: KyuubiParser)
   extends KyuubiSession(protocol, user, password, ipAddress, conf, sessionManager) {
 
   override val sessionType: SessionType = SessionType.INTERACTIVE
 
   private[kyuubi] val optimizedConf: Map[String, String] = {
-    val confOverlay = sessionManager.sessionConfAdvisor.getConfOverlay(
+    val confOverlay = sessionManager.sessionConfAdvisor.map(_.getConfOverlay(
       user,
-      normalizedConf.asJava)
+      normalizedConf.asJava).asScala).reduce(_ ++ _)
     if (confOverlay != null) {
-      normalizedConf ++ confOverlay.asScala
+      normalizedConf ++ confOverlay
     } else {
       warn(s"the server plugin return null value for user: $user, ignore it")
       normalizedConf
@@ -75,9 +78,11 @@ class KyuubiSessionImpl(
   lazy val engine: EngineRef = new EngineRef(
     sessionConf,
     user,
+    doAsEnabled,
     sessionManager.groupProvider,
-    handle.identifier.toString,
-    sessionManager.applicationManager)
+    optimizedConf.getOrElse(KYUUBI_ENGINE_REF_ID, handle.identifier.toString),
+    sessionManager.applicationManager,
+    sessionManager.engineStartupProcessSemaphore)
   private[kyuubi] val launchEngineOp = sessionManager.operationManager
     .newLaunchEngineOperation(this, sessionConf.get(SESSION_ENGINE_LAUNCH_ASYNC))
 
@@ -98,12 +103,12 @@ class KyuubiSessionImpl(
       sessionManager.getConf)
   }
 
-  private var _client: KyuubiSyncThriftClient = _
+  @volatile private var _client: KyuubiSyncThriftClient = _
   def client: KyuubiSyncThriftClient = _client
 
-  private var _engineSessionHandle: SessionHandle = _
+  @volatile private var _engineSessionHandle: SessionHandle = _
 
-  private var openSessionError: Option[Throwable] = None
+  @volatile private var openSessionError: Option[Throwable] = None
 
   override def open(): Unit = handleSessionException {
     traceMetricsOnOpen()
@@ -113,8 +118,15 @@ class KyuubiSessionImpl(
     // we should call super.open before running launch engine operation
     super.open()
 
+    sessionManager.tempFileService.addPathToExpiration(operationalLogRootDir.get)
+
     runOperation(launchEngineOp)
-    engineLastAlive = System.currentTimeMillis()
+  }
+
+  def getEngineNode: Option[ServiceNodeInfo] = {
+    withDiscoveryClient(sessionConf) { discoveryClient =>
+      engine.getServiceNode(discoveryClient, _client.hostPort)
+    }
   }
 
   private[kyuubi] def openEngineSession(extraEngineLog: Option[OperationLog] = None): Unit =
@@ -140,10 +152,21 @@ class KyuubiSessionImpl(
 
         val maxAttempts = sessionManager.getConf.get(ENGINE_OPEN_MAX_ATTEMPTS)
         val retryWait = sessionManager.getConf.get(ENGINE_OPEN_RETRY_WAIT)
+        val openOnFailure =
+          EngineOpenOnFailure.withName(sessionManager.getConf.get(ENGINE_OPEN_ON_FAILURE))
         var attempt = 0
         var shouldRetry = true
         while (attempt <= maxAttempts && shouldRetry) {
           val (host, port) = engine.getOrCreate(discoveryClient, extraEngineLog)
+
+          def deregisterEngine(): Unit =
+            try {
+              engine.deregister(discoveryClient, (host, port))
+            } catch {
+              case e: Throwable =>
+                warn(s"Error on de-registering engine [${engine.engineSpace} $host:$port]", e)
+            }
+
           try {
             val passwd =
               if (sessionManager.getConf.get(ENGINE_SECURITY_ENABLED)) {
@@ -158,7 +181,7 @@ class KyuubiSessionImpl(
               s" with ${_engineSessionHandle}]")
             shouldRetry = false
           } catch {
-            case e: org.apache.thrift.transport.TTransportException
+            case e: TTransportException
                 if attempt < maxAttempts && e.getCause.isInstanceOf[java.net.ConnectException] &&
                   e.getCause.getMessage.contains("Connection refused") =>
               warn(
@@ -166,6 +189,10 @@ class KyuubiSessionImpl(
                   s" $attempt/$maxAttempts times, retrying",
                 e.getCause)
               Thread.sleep(retryWait)
+              openOnFailure match {
+                case DEREGISTER_IMMEDIATELY => deregisterEngine()
+                case _ =>
+              }
               shouldRetry = true
             case e: Throwable =>
               error(
@@ -173,6 +200,10 @@ class KyuubiSessionImpl(
                   s" for $user session failed",
                 e)
               openSessionError = Some(e)
+              openOnFailure match {
+                case DEREGISTER_IMMEDIATELY | DEREGISTER_AFTER_RETRY => deregisterEngine()
+                case _ =>
+              }
               throw e
           } finally {
             attempt += 1
@@ -192,6 +223,8 @@ class KyuubiSessionImpl(
         sessionEvent.openedTime = System.currentTimeMillis()
         sessionEvent.remoteSessionId = _engineSessionHandle.identifier.toString
         _client.engineId.foreach(e => sessionEvent.engineId = e)
+        _client.engineName.foreach(e => sessionEvent.engineName = e)
+        _client.engineUrl.foreach(e => sessionEvent.engineUrl = e)
         EventBus.post(sessionEvent)
       }
     }
@@ -285,40 +318,9 @@ class KyuubiSessionImpl(
     }
   }
 
-  @volatile private var engineLastAlive: Long = _
-  val engineAliveTimeout = sessionConf.get(KyuubiConf.ENGINE_ALIVE_TIMEOUT)
-  val aliveProbeEnabled = sessionConf.get(KyuubiConf.ENGINE_ALIVE_PROBE_ENABLED)
-  var engineAliveMaxFailCount = 3
-  var engineAliveFailCount = 0
-
-  def checkEngineAlive(): Boolean = {
-    try {
-      if (!aliveProbeEnabled) return true
-      getInfo(TGetInfoType.CLI_DBMS_VER)
-      engineLastAlive = System.currentTimeMillis()
-      engineAliveFailCount = 0
-      true
-    } catch {
-      case e: Throwable =>
-        val now = System.currentTimeMillis()
-        engineAliveFailCount = engineAliveFailCount + 1
-        if (now - engineLastAlive > engineAliveTimeout &&
-          engineAliveFailCount >= engineAliveMaxFailCount) {
-          error(s"The engineRef[${engine.getEngineRefId}] is marked as not alive "
-            + s"due to a lack of recent successful alive probes. "
-            + s"The time since last successful probe: "
-            + s"${now - engineLastAlive} ms exceeds the timeout of $engineAliveTimeout ms. "
-            + s"The engine has failed $engineAliveFailCount times, "
-            + s"surpassing the maximum failure count of $engineAliveMaxFailCount.")
-          false
-        } else {
-          warn(
-            s"The engineRef[${engine.getEngineRefId}] alive probe fails, " +
-              s"${now - engineLastAlive} ms exceeds timeout $engineAliveTimeout ms, " +
-              s"and has failed $engineAliveFailCount times.",
-            e)
-          true
-        }
-    }
+  def checkEngineConnectionAlive(): Boolean = {
+    if (client == null) return true // client has not been initialized
+    if (client.engineConnectionClosed) return false
+    !client.remoteEngineBroken
   }
 }

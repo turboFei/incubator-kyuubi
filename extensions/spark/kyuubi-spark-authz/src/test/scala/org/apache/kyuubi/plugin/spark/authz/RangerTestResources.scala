@@ -28,6 +28,7 @@ object RangerTestUsers {
   val createOnlyUser = "create_only_user"
   val defaultTableOwner = "default_table_owner"
   val permViewOnlyUser = "user_perm_view_only"
+  val table2OnlyUser = "user_table2_only"
 
   // non-authorized users
   val invisibleUser = "i_am_invisible"
@@ -40,6 +41,9 @@ object RangerTestNamespace {
   val defaultDb = "default"
   val sparkCatalog = "spark_catalog"
   val icebergNamespace = "iceberg_ns"
+  val hudiNamespace = "hudi_ns"
+  val paimonNamespace = "paimon_ns"
+  val deltaNamespace = "delta_ns"
   val namespace1 = "ns1"
   val namespace2 = "ns2"
 }

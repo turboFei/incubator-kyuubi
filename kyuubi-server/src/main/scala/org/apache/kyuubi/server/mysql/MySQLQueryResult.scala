@@ -19,9 +19,8 @@ package org.apache.kyuubi.server.mysql
 
 import scala.collection.JavaConverters._
 
-import org.apache.hive.service.rpc.thrift._
-
 import org.apache.kyuubi.server.mysql.constant.MySQLDataType
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift._
 
 object MySQLQueryResult {
 
@@ -42,7 +41,7 @@ trait MySQLQueryResult {
 
   def toColDefinePackets: Seq[MySQLPacket]
 
-  def toRowPackets: Seq[MySQLPacket]
+  def toRowPackets: Iterable[MySQLPacket]
 
   def toPackets: Seq[MySQLPacket] = {
     val buf = Seq.newBuilder[MySQLPacket]
@@ -77,7 +76,7 @@ class MySQLSimpleQueryResult(
         decimals = decimals)
     }
 
-  override def toRowPackets: Seq[MySQLPacket] =
+  override def toRowPackets: Iterable[MySQLPacket] =
     rows.zipWithIndex.map { case (row, i) =>
       val sequenceId = colCount + 3 + i
       MySQLTextResultSetRowPacket(sequenceId = sequenceId, row = row)
@@ -94,8 +93,9 @@ class MySQLThriftQueryResult(
 
   override def toColDefinePackets: Seq[MySQLPacket] = schema.getColumns.asScala
     .zipWithIndex.map { case (tCol, i) => tColDescToMySQL(tCol, 2 + i) }
+    .toSeq
 
-  override def toRowPackets: Seq[MySQLPacket] = rows.getRows.asScala
+  override def toRowPackets: Iterable[MySQLPacket] = rows.getRows.asScala
     .zipWithIndex.map { case (tRow, i) => tRowToMySQL(tRow, colCount + 3 + i) }
 
   private def tColDescToMySQL(

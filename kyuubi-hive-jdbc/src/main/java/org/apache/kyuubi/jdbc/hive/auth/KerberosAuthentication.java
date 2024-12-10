@@ -28,6 +28,7 @@ import com.google.common.collect.ImmutableSet;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.InetAddress;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Map;
@@ -37,6 +38,7 @@ import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.auth.login.Configuration;
 import javax.security.auth.login.LoginContext;
 import javax.security.auth.login.LoginException;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,8 +50,8 @@ public class KerberosAuthentication {
   private KerberosPrincipal principal = null;
   private final Configuration configuration;
 
-  KerberosAuthentication() {
-    this.configuration = createLoginFromTgtCacheConfiguration();
+  KerberosAuthentication(String ticketCache) {
+    this.configuration = createLoginFromTgtCacheConfiguration(ticketCache);
   }
 
   KerberosAuthentication(String principal, String keytabLocation) {
@@ -96,14 +98,19 @@ public class KerberosAuthentication {
     }
   }
 
-  private static Configuration createLoginFromTgtCacheConfiguration() {
+  private static Configuration createLoginFromTgtCacheConfiguration(String ticketCache) {
     ImmutableMap.Builder<String, String> optionsBuilder =
         ImmutableMap.<String, String>builder()
             .put("useTicketCache", "true")
             .put("renewTGT", "true");
 
-    String ticketCache = System.getenv("KRB5CCNAME");
-    if (ticketCache != null) {
+    if (StringUtils.isBlank(ticketCache)) {
+      ticketCache = System.getenv("KRB5CCNAME");
+    }
+    if (StringUtils.isNotBlank(ticketCache)) {
+      if (!Files.exists(Paths.get(ticketCache))) {
+        LOG.warn("TicketCache {} does not exist", ticketCache);
+      }
       optionsBuilder.put("ticketCache", ticketCache);
     }
     return createConfiguration(optionsBuilder);

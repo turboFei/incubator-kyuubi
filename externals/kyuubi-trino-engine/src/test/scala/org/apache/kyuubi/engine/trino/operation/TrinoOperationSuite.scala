@@ -22,13 +22,13 @@ import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.Set
 
 import io.trino.client.ClientStandardTypes._
-import org.apache.hive.service.rpc.thrift._
 
 import org.apache.kyuubi.KyuubiSQLException
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf._
 import org.apache.kyuubi.engine.trino.{TrinoQueryTests, TrinoStatement, WithTrinoEngine}
 import org.apache.kyuubi.operation.meta.ResultSetSchemaConstant._
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift._
 
 class TrinoOperationSuite extends WithTrinoEngine with TrinoQueryTests {
   override def withKyuubiConf: Map[String, String] = Map(
@@ -89,7 +89,9 @@ class TrinoOperationSuite extends WithTrinoEngine with TrinoQueryTests {
         "tdigest",
         "LikePattern",
         "function",
-        "Classifier")
+        "Classifier",
+        "json2016",
+        "JsonPath2016")
       val typeInfos: Set[String] = Set()
       while (typeInfo.next()) {
         assert(expectedTypes.contains(typeInfo.getString(TYPE_NAME)))
@@ -602,7 +604,7 @@ class TrinoOperationSuite extends WithTrinoEngine with TrinoQueryTests {
 
       val tFetchResultsReq3 = new TFetchResultsReq(opHandle, TFetchOrientation.FETCH_PRIOR, 1)
       val tFetchResultsResp3 = client.FetchResults(tFetchResultsReq3)
-      if (kyuubiConf.get(OPERATION_INCREMENTAL_COLLECT)) {
+      if (kyuubiConf.get(ENGINE_TRINO_OPERATION_INCREMENTAL_COLLECT)) {
         assert(tFetchResultsResp3.getStatus.getStatusCode === TStatusCode.ERROR_STATUS)
       } else {
         assert(tFetchResultsResp3.getStatus.getStatusCode === TStatusCode.SUCCESS_STATUS)
@@ -613,7 +615,7 @@ class TrinoOperationSuite extends WithTrinoEngine with TrinoQueryTests {
 
       val tFetchResultsReq4 = new TFetchResultsReq(opHandle, TFetchOrientation.FETCH_FIRST, 3)
       val tFetchResultsResp4 = client.FetchResults(tFetchResultsReq4)
-      if (kyuubiConf.get(OPERATION_INCREMENTAL_COLLECT)) {
+      if (kyuubiConf.get(ENGINE_TRINO_OPERATION_INCREMENTAL_COLLECT)) {
         assert(tFetchResultsResp4.getStatus.getStatusCode === TStatusCode.ERROR_STATUS)
       } else {
         assert(tFetchResultsResp4.getStatus.getStatusCode === TStatusCode.SUCCESS_STATUS)

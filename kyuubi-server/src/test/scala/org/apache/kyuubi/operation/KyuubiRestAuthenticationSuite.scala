@@ -29,46 +29,60 @@ import org.apache.hadoop.security.UserGroupInformation
 import org.apache.kyuubi.RestClientTestHelper
 import org.apache.kyuubi.client.api.v1.dto.{SessionHandle, SessionOpenCount, SessionOpenRequest}
 import org.apache.kyuubi.config.KyuubiConf
-import org.apache.kyuubi.server.http.authentication.AuthenticationHandler.AUTHORIZATION_HEADER
 import org.apache.kyuubi.server.http.authentication.AuthSchemes
-import org.apache.kyuubi.service.authentication.InternalSecurityAccessor
+import org.apache.kyuubi.server.http.util.HttpAuthUtils._
+import org.apache.kyuubi.service.authentication.{AuthTypes, InternalSecurityAccessor, UserDefineAuthenticationProviderImpl, UserDefineTokenAuthenticationProviderImpl}
 import org.apache.kyuubi.session.KyuubiSession
 
 class KyuubiRestAuthenticationSuite extends RestClientTestHelper {
 
   override protected val otherConfigs: Map[String, String] = {
-    // allow to impersonate other users with spnego authentication
     Map(
+      KyuubiConf.ENGINE_SECURITY_ENABLED.key -> "true",
+      KyuubiConf.ENGINE_SECURITY_SECRET_PROVIDER.key -> "simple",
+      KyuubiConf.SIMPLE_SECURITY_SECRET_PROVIDER_PROVIDER_SECRET.key -> "_KYUUBI_REST_",
+      // allow to impersonate other users with spnego authentication
       s"hadoop.proxyuser.$clientPrincipalUser.groups" -> "*",
       s"hadoop.proxyuser.$clientPrincipalUser.hosts" -> "*")
   }
 
+  protected def authMethods = conf.get(KyuubiConf.AUTHENTICATION_METHOD).map(AuthTypes.withName)
+  protected def kerberosAuthEnabled: Boolean = authMethods.contains(AuthTypes.KERBEROS)
+  protected def nonKerberosAuth = authMethods.filterNot(_ == AuthTypes.KERBEROS).headOption
+  protected def ldapAuthEnabled = nonKerberosAuth.contains(AuthTypes.LDAP)
+  protected def customAuthEnabled = nonKerberosAuth.contains(AuthTypes.CUSTOM)
+
+  override def beforeAll(): Unit = {
+    super.beforeAll()
+    InternalSecurityAccessor.initialize(conf, true)
+    assert(kerberosAuthEnabled && (ldapAuthEnabled || customAuthEnabled))
+  }
+
   test("test with LDAP authorization") {
-    val encodeAuthorization = new String(
-      Base64.getEncoder.encode(
-        s"$ldapUser:$ldapUserPasswd".getBytes()),
-      "UTF-8")
+
     val response = webTarget.path("api/v1/sessions/count")
       .request()
-      .header(AUTHORIZATION_HEADER, s"BASIC $encodeAuthorization")
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader(ldapUser, ldapUserPasswd))
       .get()
 
-    assert(HttpServletResponse.SC_OK == response.getStatus)
-    val openedSessionCount = response.readEntity(classOf[SessionOpenCount])
-    assert(openedSessionCount.getOpenSessionCount == 0)
+    if (ldapAuthEnabled) {
+      assert(HttpServletResponse.SC_OK == response.getStatus)
+    } else {
+      assert(HttpServletResponse.SC_FORBIDDEN == response.getStatus)
+    }
   }
 
   test("test with CUSTOM authorization") {
-    val encodeAuthorization = new String(
-      Base64.getEncoder.encode(
-        s"$customUser:$customPasswd".getBytes()),
-      "UTF-8")
     val response = webTarget.path("api/v1/sessions/count")
       .request()
-      .header(AUTHORIZATION_HEADER, s"BASIC $encodeAuthorization")
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader(customUser, customPasswd))
       .get()
 
-    assert(HttpServletResponse.SC_FORBIDDEN == response.getStatus)
+    if (customAuthEnabled) {
+      assert(HttpServletResponse.SC_OK == response.getStatus)
+    } else {
+      assert(HttpServletResponse.SC_FORBIDDEN == response.getStatus)
+    }
   }
 
   test("test without authorization") {
@@ -162,7 +176,7 @@ class KyuubiRestAuthenticationSuite extends RestClientTestHelper {
       "UTF-8")
     var response = webTarget.path("api/v1/sessions/count")
       .request()
-      .header(AUTHORIZATION_HEADER, s"${AuthSchemes.KYUUBI_INTERNAL.toString} $encodeAuthorization")
+      .header(AUTHORIZATION_HEADER, s"${AuthSchemes.KYUUBI_INTERNAL} $encodeAuthorization")
       .get()
 
     assert(HttpServletResponse.SC_OK == response.getStatus)
@@ -175,9 +189,63 @@ class KyuubiRestAuthenticationSuite extends RestClientTestHelper {
       "UTF-8")
     response = webTarget.path("api/v1/sessions/count")
       .request()
-      .header(AUTHORIZATION_HEADER, s"${AuthSchemes.KYUUBI_INTERNAL.toString} $badAuthorization")
+      .header(AUTHORIZATION_HEADER, s"${AuthSchemes.KYUUBI_INTERNAL} $badAuthorization")
       .get()
 
     assert(HttpServletResponse.SC_UNAUTHORIZED == response.getStatus)
+  }
+}
+
+class KyuubiRestCustomAuthenticationTest extends KyuubiRestAuthenticationSuite {
+
+  override protected val otherConfigs: Map[String, String] = Map(
+    KyuubiConf.ENGINE_SECURITY_ENABLED.key -> "true",
+    KyuubiConf.ENGINE_SECURITY_SECRET_PROVIDER.key -> "simple",
+    KyuubiConf.SIMPLE_SECURITY_SECRET_PROVIDER_PROVIDER_SECRET.key -> "_KYUUBI_REST_",
+    // allow to impersonate other users with spnego authentication
+    s"hadoop.proxyuser.$clientPrincipalUser.groups" -> "*",
+    s"hadoop.proxyuser.$clientPrincipalUser.hosts" -> "*",
+    KyuubiConf.AUTHENTICATION_METHOD.key -> "KERBEROS,CUSTOM,LDAP",
+    KyuubiConf.AUTHENTICATION_CUSTOM_BASIC_CLASS.key ->
+      classOf[UserDefineAuthenticationProviderImpl].getCanonicalName,
+    KyuubiConf.AUTHENTICATION_CUSTOM_BEARER_CLASS.key ->
+      classOf[UserDefineAuthenticationProviderImpl].getCanonicalName)
+
+  test("test with valid CUSTOM http bearer authorization") {
+    val response = webTarget.path("api/v1/sessions/count")
+      .request()
+      .header(
+        AUTHORIZATION_HEADER,
+        bearerAuthorizationHeader(UserDefineTokenAuthenticationProviderImpl.VALID_TOKEN))
+      .get()
+
+    assert(HttpServletResponse.SC_OK == response.getStatus)
+  }
+
+  test("test with invalid CUSTOM http bearer authorization") {
+    val response = webTarget.path("api/v1/sessions/count")
+      .request()
+      .header(AUTHORIZATION_HEADER, bearerAuthorizationHeader("bad token"))
+      .get()
+
+    assert(HttpServletResponse.SC_FORBIDDEN == response.getStatus)
+  }
+
+  test("test with valid CUSTOM http basic authorization") {
+    val response = webTarget.path("api/v1/sessions/count")
+      .request()
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("user", "password"))
+      .get()
+
+    assert(HttpServletResponse.SC_OK == response.getStatus)
+  }
+
+  test("test with invalid CUSTOM http basic authorization") {
+    val response = webTarget.path("api/v1/sessions/count")
+      .request()
+      .header(AUTHORIZATION_HEADER, basicAuthorizationHeader("test", "test"))
+      .get()
+
+    assert(HttpServletResponse.SC_FORBIDDEN == response.getStatus)
   }
 }

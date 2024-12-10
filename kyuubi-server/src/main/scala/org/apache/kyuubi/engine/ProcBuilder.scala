@@ -17,22 +17,22 @@
 
 package org.apache.kyuubi.engine
 
-import java.io.{File, FilenameFilter, IOException}
+import java.io.{File, FileFilter, IOException}
 import java.net.URI
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
 
 import scala.collection.JavaConverters._
 
-import com.google.common.annotations.VisibleForTesting
 import com.google.common.collect.EvictingQueue
+import org.apache.commons.lang3.StringUtils
 import org.apache.commons.lang3.StringUtils.containsIgnoreCase
 
 import org.apache.kyuubi._
-import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.{KyuubiConf, KyuubiReservedKeys}
 import org.apache.kyuubi.config.KyuubiConf.KYUUBI_HOME
 import org.apache.kyuubi.operation.log.OperationLog
-import org.apache.kyuubi.util.NamedThreadFactory
+import org.apache.kyuubi.util.{JavaUtils, NamedThreadFactory}
 
 trait ProcBuilder {
 
@@ -56,13 +56,14 @@ trait ProcBuilder {
     }
   }
 
+  protected val engineScalaBinaryVersion: String = SCALA_COMPILE_VERSION
+
   /**
    * The engine jar or other runnable jar containing the main method
    */
   def mainResource: Option[String] = {
     // 1. get the main resource jar for user specified config first
-    // TODO use SPARK_SCALA_VERSION instead of SCALA_COMPILE_VERSION
-    val jarName = s"${module}_$SCALA_COMPILE_VERSION-$KYUUBI_VERSION.jar"
+    val jarName: String = s"${module}_$engineScalaBinaryVersion-$KYUUBI_VERSION.jar"
     conf.getOption(s"kyuubi.session.engine.$shortName.main.resource").filter { userSpecified =>
       // skip check exist if not local file.
       val uri = new URI(userSpecified)
@@ -82,7 +83,7 @@ trait ProcBuilder {
         .find(Files.exists(_)).map(_.toAbsolutePath.toFile.getCanonicalPath)
     }.orElse {
       // 3. get the main resource from dev environment
-      val cwd = Utils.getCodeSourceLocation(getClass).split("kyuubi-server")
+      val cwd = JavaUtils.getCodeSourceLocation(getClass).split("kyuubi-server")
       assert(cwd.length > 1)
       Option(Paths.get(cwd.head, "externals", module, "target", jarName))
         .map(_.toAbsolutePath.toFile.getCanonicalPath)
@@ -98,7 +99,9 @@ trait ProcBuilder {
 
   protected def proxyUser: String
 
-  protected val commands: Array[String]
+  protected def doAsEnabled: Boolean
+
+  protected val commands: Iterable[String]
 
   def conf: KyuubiConf
 
@@ -141,12 +144,12 @@ trait ProcBuilder {
   }
 
   final lazy val processBuilder: ProcessBuilder = {
-    val pb = new ProcessBuilder(commands: _*)
+    val pb = new ProcessBuilder(commands.toStream.asJava)
 
     val envs = pb.environment()
     envs.putAll(env.asJava)
     pb.directory(workingDir.toFile)
-    pb.redirectError(engineLog)
+    pb.redirectErrorStream(true)
     pb.redirectOutput(engineLog)
     extraEngineLog.foreach(_.addExtraLog(engineLog.toPath))
     pb
@@ -155,14 +158,21 @@ trait ProcBuilder {
   @volatile private var error: Throwable = UNCAUGHT_ERROR
 
   private val engineLogMaxLines = conf.get(KyuubiConf.SESSION_ENGINE_STARTUP_MAX_LOG_LINES)
-  private val waitCompletion = conf.get(KyuubiConf.SESSION_ENGINE_STARTUP_WAIT_COMPLETION)
+
+  private val engineStartupDestroyTimeout =
+    conf.get(KyuubiConf.SESSION_ENGINE_STARTUP_DESTROY_TIMEOUT)
+
   protected val lastRowsOfLog: EvictingQueue[String] = EvictingQueue.create(engineLogMaxLines)
   // Visible for test
   @volatile private[kyuubi] var logCaptureThreadReleased: Boolean = true
   private var logCaptureThread: Thread = _
-  private var process: Process = _
-  @VisibleForTesting
-  @volatile private[kyuubi] var processLaunched: Boolean = _
+  @volatile private[kyuubi] var process: Process = _
+  @volatile private[kyuubi] var processLaunched: Boolean = false
+
+  // Set engine application manger info conf
+  conf.set(
+    KyuubiReservedKeys.KYUUBI_ENGINE_APP_MGR_INFO_KEY,
+    ApplicationManagerInfo.serialize(appMgrInfo()))
 
   private[kyuubi] lazy val engineLog: File = ProcBuilder.synchronized {
     val engineLogTimeout = conf.get(KyuubiConf.ENGINE_LOG_TIMEOUT)
@@ -200,7 +210,7 @@ trait ProcBuilder {
     file
   }
 
-  def validateConf: Unit = {}
+  def validateConf(): Unit = {}
 
   final def start: Process = synchronized {
     process = processBuilder.start()
@@ -249,14 +259,15 @@ trait ProcBuilder {
     process
   }
 
-  def close(destroyProcess: Boolean = !waitCompletion): Unit = synchronized {
+  def isClusterMode(): Boolean = false
+
+  def close(destroyProcess: Boolean): Unit = synchronized {
     if (logCaptureThread != null) {
       logCaptureThread.interrupt()
       logCaptureThread = null
     }
     if (destroyProcess && process != null) {
-      info("Destroy the process, since waitCompletion is false.")
-      process.destroyForcibly()
+      Utils.terminateProcess(process, engineStartupDestroyTimeout)
       process = null
     }
   }
@@ -282,13 +293,18 @@ trait ProcBuilder {
 
   override def toString: String = {
     if (commands == null) {
-      super.toString()
+      super.toString
     } else {
       Utils.redactCommandLineArgs(conf, commands).map {
-        case arg if arg.startsWith("--") => s"\\\n\t$arg"
+        case arg if arg.startsWith("-") => s"\\\n\t$arg"
         case arg => arg
       }.mkString(" ")
     }
+  }
+
+  protected lazy val engineHomeDirFilter: FileFilter = file => {
+    val fileName = file.getName
+    file.isDirectory && fileName.contains(s"$shortName-") && !fileName.contains("-engine")
   }
 
   /**
@@ -296,7 +312,7 @@ trait ProcBuilder {
    *
    * Take Spark as an example, we first lookup the SPARK_HOME from user specified environments.
    * If not found, we assume that it is a dev environment and lookup the kyuubi-download's output
-   * directly. If not found again, a `KyuubiSQLException` will be raised.
+   * directory. If not found again, a `KyuubiSQLException` will be raised.
    * In summarize, we walk through
    *   `kyuubi.engineEnv.SPARK_HOME` ->
    *   System.env("SPARK_HOME") ->
@@ -307,24 +323,21 @@ trait ProcBuilder {
    * @return SPARK_HOME, HIVE_HOME, etc.
    */
   protected def getEngineHome(shortName: String): String = {
-    val homeDirFilter: FilenameFilter = (dir: File, name: String) =>
-      dir.isDirectory && name.contains(s"$shortName-") && !name.contains("-engine")
-
     val homeKey = s"${shortName.toUpperCase}_HOME"
     // 1. get from env, e.g. SPARK_HOME, FLINK_HOME
-    env.get(homeKey)
+    env.get(homeKey).filter(StringUtils.isNotBlank)
       .orElse {
         // 2. get from $KYUUBI_HOME/externals/kyuubi-download/target
         env.get(KYUUBI_HOME).flatMap { p =>
           val candidates = Paths.get(p, "externals", "kyuubi-download", "target")
-            .toFile.listFiles(homeDirFilter)
+            .toFile.listFiles(engineHomeDirFilter)
           if (candidates == null) None else candidates.map(_.toPath).headOption
         }.filter(Files.exists(_)).map(_.toAbsolutePath.toFile.getCanonicalPath)
       }.orElse {
         // 3. get from kyuubi-server/../externals/kyuubi-download/target
-        Utils.getCodeSourceLocation(getClass).split("kyuubi-server").flatMap { cwd =>
+        JavaUtils.getCodeSourceLocation(getClass).split("kyuubi-server").flatMap { cwd =>
           val candidates = Paths.get(cwd, "externals", "kyuubi-download", "target")
-            .toFile.listFiles(homeDirFilter)
+            .toFile.listFiles(engineHomeDirFilter)
           if (candidates == null) None else candidates.map(_.toPath).headOption
         }.find(Files.exists(_)).map(_.toAbsolutePath.toFile.getCanonicalPath)
       } match {
@@ -336,15 +349,18 @@ trait ProcBuilder {
   protected def validateEnv(requiredEnv: String): Throwable = {
     KyuubiSQLException(s"$requiredEnv is not set! For more information on installing and " +
       s"configuring $requiredEnv, please visit https://kyuubi.readthedocs.io/en/master/" +
-      s"deployment/settings.html#environments")
+      s"configuration/settings.html#environments")
   }
 
   def clusterManager(): Option[String] = None
 
+  def appMgrInfo(): ApplicationManagerInfo = ApplicationManagerInfo(None)
 }
 
 object ProcBuilder extends Logging {
   private val PROC_BUILD_LOGGER = new NamedThreadFactory("process-logger-capture", daemon = true)
 
   private val UNCAUGHT_ERROR = new RuntimeException("Uncaught error")
+
+  private[engine] val KYUUBI_ENGINE_LOG_PATH_KEY = "kyuubi.engine.engineLog.path"
 }

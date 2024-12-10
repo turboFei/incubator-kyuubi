@@ -32,7 +32,6 @@ object HiveBridgeHelper {
   type HiveMetastoreCatalog = org.apache.spark.sql.hive.HiveMetastoreCatalog
   type HiveExternalCatalog = org.apache.spark.sql.hive.HiveExternalCatalog
   type NextIterator[U] = org.apache.spark.util.NextIterator[U]
-  type FileSinkDesc = org.apache.spark.sql.hive.HiveShim.ShimFileSinkDesc
   type HiveVersion = org.apache.spark.sql.hive.client.HiveVersion
   type InsertIntoHiveTable = org.apache.spark.sql.hive.execution.InsertIntoHiveTable
 
@@ -47,6 +46,7 @@ object HiveBridgeHelper {
   val HadoopTableReader = org.apache.spark.sql.hive.HadoopTableReader
   val SparkHadoopUtil = org.apache.spark.deploy.SparkHadoopUtil
   val Utils = org.apache.spark.util.Utils
+  val CatalogV2Implicits = org.apache.spark.sql.connector.catalog.CatalogV2Implicits
 
   def postExternalCatalogEvent(sc: SparkContext, event: ExternalCatalogEvent): Unit = {
     sc.listenerBus.post(event)
@@ -79,7 +79,7 @@ object HiveBridgeHelper {
             s"Unsupported partition transform: $transform")
       }
 
-      (identityCols, bucketSpec)
+      (identityCols.toSeq, bucketSpec)
     }
   }
 
@@ -96,7 +96,9 @@ object HiveBridgeHelper {
   }
 
   implicit class StructTypeHelper(structType: StructType) {
-    def toAttributes: Seq[AttributeReference] = structType.toAttributes
+    def toAttributes: Seq[AttributeReference] = structType.map { field =>
+      AttributeReference(field.name, field.dataType, field.nullable, field.metadata)()
+    }
   }
 
   def toSQLValue(v: Any, t: DataType): String = Literal.create(v, t) match {

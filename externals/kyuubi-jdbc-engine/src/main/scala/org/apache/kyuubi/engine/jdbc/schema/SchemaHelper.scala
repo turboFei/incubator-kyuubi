@@ -16,11 +16,12 @@
  */
 package org.apache.kyuubi.engine.jdbc.schema
 
+import java.sql.Types
 import java.util.Collections
 
 import scala.collection.JavaConverters._
 
-import org.apache.hive.service.rpc.thrift._
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift._
 
 abstract class SchemaHelper {
 
@@ -40,7 +41,7 @@ abstract class SchemaHelper {
     tColumnDesc
   }
 
-  private def toTTypeDesc(sqlType: Int, precision: Int, scale: Int): TTypeDesc = {
+  protected def toTTypeDesc(sqlType: Int, precision: Int, scale: Int): TTypeDesc = {
     val typeEntry = new TPrimitiveTypeEntry(toTTypeId(sqlType))
     typeEntry.setTypeQualifiers(toTTypeQualifiers(sqlType, precision, scale))
     val tTypeDesc = new TTypeDesc()
@@ -62,6 +63,111 @@ abstract class SchemaHelper {
     ret
   }
 
-  protected def toTTypeId(sqlType: Int): TTypeId
+  protected def toTTypeId(sqlType: Int): TTypeId = sqlType match {
+    case Types.BIT =>
+      bitToTTypeId
 
+    case Types.TINYINT =>
+      tinyIntToTTypeId
+
+    case Types.SMALLINT =>
+      smallIntToTTypeId
+
+    case Types.INTEGER =>
+      integerToTTypeId
+
+    case Types.BIGINT =>
+      bigintToTTypeId
+
+    case Types.REAL =>
+      realToTTypeId
+
+    case Types.DOUBLE =>
+      doubleToTTypeId
+
+    case Types.CHAR =>
+      charToTTypeId
+
+    case Types.VARCHAR =>
+      varcharToTTypeId
+
+    case Types.DATE =>
+      dateToTTypeId
+
+    case Types.TIMESTAMP =>
+      timestampToTTypeId
+
+    case Types.DECIMAL =>
+      decimalToTTypeId
+
+    case Types.FLOAT =>
+      floatToTTypeId
+
+    case Types.BOOLEAN =>
+      booleanToTTypeId
+
+    // TODO add more type support
+    case _ =>
+      defaultToTTypeId
+  }
+
+  protected def bitToTTypeId: TTypeId = {
+    TTypeId.BOOLEAN_TYPE
+  }
+
+  protected def booleanToTTypeId: TTypeId = {
+    TTypeId.BOOLEAN_TYPE
+  }
+
+  protected def tinyIntToTTypeId: TTypeId = {
+    TTypeId.TINYINT_TYPE
+  }
+
+  protected def smallIntToTTypeId: TTypeId = {
+    TTypeId.SMALLINT_TYPE
+  }
+
+  protected def integerToTTypeId: TTypeId = {
+    TTypeId.INT_TYPE
+  }
+
+  protected def bigintToTTypeId: TTypeId = {
+    TTypeId.BIGINT_TYPE
+  }
+
+  protected def realToTTypeId: TTypeId = {
+    TTypeId.FLOAT_TYPE
+  }
+
+  protected def floatToTTypeId: TTypeId = {
+    TTypeId.FLOAT_TYPE
+  }
+
+  protected def doubleToTTypeId: TTypeId = {
+    TTypeId.DOUBLE_TYPE
+  }
+
+  protected def charToTTypeId: TTypeId = {
+    TTypeId.STRING_TYPE
+  }
+
+  protected def varcharToTTypeId: TTypeId = {
+    TTypeId.STRING_TYPE
+  }
+
+  protected def dateToTTypeId: TTypeId = {
+    TTypeId.DATE_TYPE
+  }
+
+  protected def timestampToTTypeId: TTypeId = {
+    TTypeId.TIMESTAMP_TYPE
+  }
+
+  protected def decimalToTTypeId: TTypeId = {
+    TTypeId.DECIMAL_TYPE
+  }
+
+  protected def defaultToTTypeId: TTypeId = {
+    TTypeId.STRING_TYPE
+  }
 }

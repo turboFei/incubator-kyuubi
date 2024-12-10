@@ -17,10 +17,9 @@
 
 package org.apache.kyuubi.session
 
-import org.apache.hive.service.rpc.thrift.{TGetInfoType, TGetInfoValue, TGetResultSetMetadataResp, TProtocolVersion, TRowSet}
-
 import org.apache.kyuubi.operation.FetchOrientation.FetchOrientation
 import org.apache.kyuubi.operation.OperationHandle
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift.{TFetchResultsResp, TGetInfoType, TGetInfoValue, TGetResultSetMetadataResp, TProtocolVersion}
 
 trait Session {
 
@@ -39,6 +38,10 @@ trait Session {
   def lastIdleTime: Long
   def getNoOperationTime: Long
   def sessionIdleTimeoutThreshold: Long
+
+  def getSessionBrokenTime: Long
+  def setSessionBrokenTime(brokenTime: Long): Unit
+  def sessionBrokenTimeoutThreshold: Long
 
   def sessionManager: SessionManager
 
@@ -91,7 +94,9 @@ trait Session {
       operationHandle: OperationHandle,
       orientation: FetchOrientation,
       maxRows: Int,
-      fetchLog: Boolean): TRowSet
+      fetchLog: Boolean): TFetchResultsResp
 
   def closeExpiredOperations(): Unit
+
+  def isForAliveProbe: Boolean
 }

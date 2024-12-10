@@ -127,7 +127,7 @@ abstract class V2CommandsPrivilegesSuite extends PrivilegesBuilderSuite {
       assert(po0.catalog.isEmpty)
       assertEqualsIgnoreCase(reusedDb)(po0.dbname)
       assertEqualsIgnoreCase(reusedTableShort)(po0.objectName)
-      assert(po0.columns.take(2) === Seq("key", "value"))
+      assert(po0.columns === Seq("a", "key", "value"))
       checkTableOwner(po0)
 
       assert(outputs.size === 1)
@@ -161,7 +161,11 @@ abstract class V2CommandsPrivilegesSuite extends PrivilegesBuilderSuite {
       assertEqualsIgnoreCase(namespace)(po.dbname)
       assertEqualsIgnoreCase(table)(po.objectName)
       assert(po.columns.isEmpty)
-      assert(po.owner.isEmpty)
+      if (isSparkV34OrGreater) {
+        checkV2TableOwner(po)
+      } else {
+        assert(po.owner.isEmpty)
+      }
       val accessType = AccessType(po, operationType, isInput = false)
       assert(accessType === AccessType.CREATE)
     }
@@ -182,7 +186,7 @@ abstract class V2CommandsPrivilegesSuite extends PrivilegesBuilderSuite {
       assert(po0.catalog.isEmpty)
       assertEqualsIgnoreCase(reusedDb)(po0.dbname)
       assertEqualsIgnoreCase(reusedTableShort)(po0.objectName)
-      assert(po0.columns.take(2) === Seq("key", "value"))
+      assert(po0.columns === Seq("a", "key", "value"))
       checkTableOwner(po0)
 
       assert(outputs.size === 1)
@@ -193,7 +197,11 @@ abstract class V2CommandsPrivilegesSuite extends PrivilegesBuilderSuite {
       assertEqualsIgnoreCase(namespace)(po.dbname)
       assertEqualsIgnoreCase(table)(po.objectName)
       assert(po.columns.isEmpty)
-      assert(po.owner.isEmpty)
+      if (isSparkV34OrGreater) {
+        checkV2TableOwner(po)
+      } else {
+        assert(po.owner.isEmpty)
+      }
       val accessType = AccessType(po, operationType, isInput = false)
       assert(accessType === AccessType.CREATE)
     }
@@ -670,7 +678,7 @@ abstract class V2CommandsPrivilegesSuite extends PrivilegesBuilderSuite {
     val spec = DB_COMMAND_SPECS(plan1.getClass.getName)
     var db: Database = null
     spec.databaseDescs.find { d =>
-      Try(db = d.extract(plan1)).isSuccess
+      Try { db = d.extract(plan1) }.isSuccess
     }
     withClue(sql1) {
       assert(db.catalog === None)
@@ -730,16 +738,25 @@ abstract class V2CommandsPrivilegesSuite extends PrivilegesBuilderSuite {
       "org.apache.spark.sql.catalyst.plans.logical.SetNamespaceLocation")
     assert(operationType === ALTERDATABASE_LOCATION)
     assert(in.isEmpty)
-    assert(out.size === 1)
-    val po = out.head
-    assert(po.actionType === PrivilegeObjectActionType.OTHER)
-    assert(po.privilegeObjectType === PrivilegeObjectType.DATABASE)
-    assert(po.catalog.get === sparkSessionCatalogName)
-    assertEqualsIgnoreCase(defaultDb)(po.dbname)
-    assertEqualsIgnoreCase(defaultDb)(po.objectName)
-    assert(po.columns.isEmpty)
-    val accessType = ranger.AccessType(po, operationType, isInput = false)
-    assert(accessType === AccessType.ALTER)
+    assert(out.size === 2)
+    val po0 = out.head
+    assert(po0.actionType === PrivilegeObjectActionType.OTHER)
+    assert(po0.privilegeObjectType === PrivilegeObjectType.DATABASE)
+    assert(po0.catalog.get === sparkSessionCatalogName)
+    assertEqualsIgnoreCase(defaultDb)(po0.dbname)
+    assertEqualsIgnoreCase(defaultDb)(po0.objectName)
+    assert(po0.columns.isEmpty)
+    val accessType0 = ranger.AccessType(po0, operationType, isInput = false)
+    assert(accessType0 === AccessType.ALTER)
+
+    val po1 = out.last
+    assert(po1.actionType === PrivilegeObjectActionType.OTHER)
+    assert(po1.catalog.isEmpty)
+    assertEqualsIgnoreCase(defaultDb)(po0.dbname)
+    assertEqualsIgnoreCase(defaultDb)(po0.objectName)
+    assert(po1.columns.isEmpty)
+    val accessType1 = ranger.AccessType(po1, operationType, isInput = false)
+    assert(accessType1 === AccessType.WRITE)
   }
 
   test("DescribeNamespace") {

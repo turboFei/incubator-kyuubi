@@ -31,6 +31,7 @@ import org.apache.spark.sql.types.StructType
 import org.apache.kyuubi.KyuubiSQLException
 import org.apache.kyuubi.engine.spark.KyuubiSparkUtil._
 import org.apache.kyuubi.engine.spark.repl.KyuubiSparkILoop
+import org.apache.kyuubi.engine.spark.util.JsonUtils
 import org.apache.kyuubi.operation.{ArrayFetchIterator, OperationHandle, OperationState}
 import org.apache.kyuubi.operation.log.OperationLog
 import org.apache.kyuubi.session.Session
@@ -60,10 +61,10 @@ class ExecuteScala(
   override protected def supportProgress: Boolean = true
 
   override protected def resultSchema: StructType = {
-    if (result == null || result.schema.isEmpty) {
+    if (result == null) {
       new StructType().add("output", "string")
     } else {
-      result.schema
+      super.resultSchema
     }
   }
 
@@ -119,7 +120,8 @@ class ExecuteScala(
               }
             }
           case Error =>
-            throw KyuubiSQLException(s"Interpret error:\n$statement\n ${repl.getOutput}")
+            throw KyuubiSQLException(s"Interpret error:\n" +
+              s"${JsonUtils.toPrettyJson(Map("code" -> statement, "response" -> repl.getOutput))}")
           case Incomplete =>
             throw KyuubiSQLException(s"Incomplete code:\n$statement")
         }

@@ -28,9 +28,9 @@ import java.sql.Types;
 import java.text.MessageFormat;
 import java.util.HashMap;
 import java.util.Scanner;
-import org.apache.hive.service.rpc.thrift.TCLIService;
-import org.apache.hive.service.rpc.thrift.TSessionHandle;
 import org.apache.kyuubi.jdbc.hive.adapter.SQLPreparedStatement;
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift.TCLIService;
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift.TSessionHandle;
 
 /** KyuubiPreparedStatement. */
 public class KyuubiPreparedStatement extends KyuubiStatement implements SQLPreparedStatement {
@@ -168,7 +168,7 @@ public class KyuubiPreparedStatement extends KyuubiStatement implements SQLPrepa
       // Can't infer a type.
       throw new KyuubiSQLException(
           MessageFormat.format(
-              "Can't infer the SQL type to use for an instance of {0}. Use setObject() with an explicit Types value to specify the type to use.",
+              "Cannot infer the SQL type to use for an instance of {0}. Use setObject() with an explicit Types value to specify the type to use.",
               x.getClass().getName()));
     }
   }

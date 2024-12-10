@@ -21,16 +21,28 @@
     <parent>
         <groupId>org.apache.kyuubi</groupId>
         <artifactId>kyuubi-parent</artifactId>
-        <version>1.8.0-SNAPSHOT</version>
+        <version>1.11.0-SNAPSHOT</version>
         <relativePath>../../pom.xml</relativePath>
     </parent>
 
-    <artifactId>kyuubi-codecov_2.12</artifactId>
+    <artifactId>kyuubi-codecov_${scala.binary.version}</artifactId>
     <packaging>pom</packaging>
     <name>Kyuubi Dev Code Coverage</name>
     <url>https://kyuubi.apache.org/</url>
 
     <dependencies>
+        <dependency>
+            <groupId>org.apache.kyuubi</groupId>
+            <artifactId>kyuubi-util</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.kyuubi</groupId>
+            <artifactId>kyuubi-util-scala_${scala.binary.version}</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <dependency>
             <groupId>org.apache.kyuubi</groupId>
             <artifactId>kyuubi-common_${scala.binary.version}</artifactId>
@@ -111,12 +123,6 @@
 
         <dependency>
             <groupId>org.apache.kyuubi</groupId>
-            <artifactId>kyuubi-spark-authz_${scala.binary.version}</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.apache.kyuubi</groupId>
             <artifactId>kyuubi-spark-connector-tpcds_${scala.binary.version}</artifactId>
             <version>${project.version}</version>
         </dependency>
@@ -130,26 +136,6 @@
 
     <build>
         <plugins>
-            <plugin>
-                <groupId>org.jacoco</groupId>
-                <artifactId>jacoco-maven-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>report-agg</id>
-                        <goals>
-                            <goal>report-aggregate</goal>
-                        </goals>
-                        <phase>verify</phase>
-                        <configuration>
-                            <dataFileIncludes>
-                                <dataFileInclude>**/jacoco*.exec</dataFileInclude>
-                            </dataFileIncludes>
-                            <outputDirectory>${project.reporting.outputDirectory}/jacoco-aggregate-all</outputDirectory>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>
@@ -170,26 +156,6 @@
 
     <profiles>
         <profile>
-            <id>spark-3.1</id>
-            <dependencies>
-                <dependency>
-                    <groupId>org.apache.kyuubi</groupId>
-                    <artifactId>kyuubi-extension-spark-3-1_${scala.binary.version}</artifactId>
-                    <version>${project.version}</version>
-                </dependency>
-            </dependencies>
-        </profile>
-        <profile>
-            <id>spark-3.2</id>
-            <dependencies>
-                <dependency>
-                    <groupId>org.apache.kyuubi</groupId>
-                    <artifactId>kyuubi-extension-spark-3-2_${scala.binary.version}</artifactId>
-                    <version>${project.version}</version>
-                </dependency>
-            </dependencies>
-        </profile>
-        <profile>
             <id>spark-3.3</id>
             <dependencies>
                 <dependency>
@@ -199,7 +165,22 @@
                 </dependency>
                 <dependency>
                     <groupId>org.apache.kyuubi</groupId>
-                    <artifactId>kyuubi-spark-connector-kudu_${scala.binary.version}</artifactId>
+                    <artifactId>kyuubi-spark-connector-hive_${scala.binary.version}</artifactId>
+                    <version>${project.version}</version>
+                </dependency>
+                <dependency>
+                    <groupId>org.apache.kyuubi</groupId>
+                    <artifactId>kyuubi-spark-authz_${scala.binary.version}</artifactId>
+                    <version>${project.version}</version>
+                </dependency>
+            </dependencies>
+        </profile>
+        <profile>
+            <id>spark-3.4</id>
+            <dependencies>
+                <dependency>
+                    <groupId>org.apache.kyuubi</groupId>
+                    <artifactId>kyuubi-extension-spark-3-4_${scala.binary.version}</artifactId>
                     <version>${project.version}</version>
                 </dependency>
                 <dependency>
@@ -207,7 +188,68 @@
                     <artifactId>kyuubi-spark-connector-hive_${scala.binary.version}</artifactId>
                     <version>${project.version}</version>
                 </dependency>
+                <dependency>
+                    <groupId>org.apache.kyuubi</groupId>
+                    <artifactId>kyuubi-spark-authz_${scala.binary.version}</artifactId>
+                    <version>${project.version}</version>
+                </dependency>
             </dependencies>
+        </profile>
+        <profile>
+            <id>spark-3.5</id>
+            <dependencies>
+                <dependency>
+                    <groupId>org.apache.kyuubi</groupId>
+                    <artifactId>kyuubi-extension-spark-3-5_${scala.binary.version}</artifactId>
+                    <version>${project.version}</version>
+                </dependency>
+                <dependency>
+                    <groupId>org.apache.kyuubi</groupId>
+                    <artifactId>kyuubi-spark-connector-hive_${scala.binary.version}</artifactId>
+                    <version>${project.version}</version>
+                </dependency>
+                <dependency>
+                    <groupId>org.apache.kyuubi</groupId>
+                    <artifactId>kyuubi-spark-authz_${scala.binary.version}</artifactId>
+                    <version>${project.version}</version>
+                </dependency>
+            </dependencies>
+        </profile>
+        <profile>
+            <id>spark-4.0</id>
+            <dependencies>
+                <dependency>
+                    <groupId>org.apache.kyuubi</groupId>
+                    <artifactId>kyuubi-spark-connector-hive_${scala.binary.version}</artifactId>
+                    <version>${project.version}</version>
+                </dependency>
+            </dependencies>
+        </profile>
+        <profile>
+            <id>codecov</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.jacoco</groupId>
+                        <artifactId>jacoco-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>report-agg</id>
+                                <goals>
+                                    <goal>report-aggregate</goal>
+                                </goals>
+                                <phase>verify</phase>
+                                <configuration>
+                                    <dataFileIncludes>
+                                        <dataFileInclude>**/jacoco*.exec</dataFileInclude>
+                                    </dataFileIncludes>
+                                    <outputDirectory>${project.reporting.outputDirectory}/jacoco-aggregate-all</outputDirectory>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
         </profile>
     </profiles>
 </project>

@@ -23,15 +23,18 @@ import java.net.URI
 import java.nio.file.{Files, Paths}
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable
 
+import org.apache.commons.lang3.StringUtils
 import org.apache.flink.configuration.{Configuration, RestOptions}
 import org.apache.flink.runtime.minicluster.{MiniCluster, MiniClusterConfiguration}
 
-import org.apache.kyuubi.{KYUUBI_VERSION, KyuubiException, KyuubiFunSuite, SCALA_COMPILE_VERSION, Utils}
+import org.apache.kyuubi.{KYUUBI_VERSION, KyuubiException, KyuubiFunSuite, SCALA_COMPILE_VERSION}
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf._
 import org.apache.kyuubi.ha.HighAvailabilityConf.HA_ADDRESSES
+import org.apache.kyuubi.util.JavaUtils
+import org.apache.kyuubi.util.command.CommandLineUtils._
 import org.apache.kyuubi.zookeeper.EmbeddedZookeeper
 import org.apache.kyuubi.zookeeper.ZookeeperConf.{ZK_CLIENT_PORT, ZK_CLIENT_PORT_ADDRESS}
 
@@ -45,7 +48,7 @@ trait WithFlinkSQLEngineLocal extends KyuubiFunSuite with WithFlinkTestResources
 
   private var zkServer: EmbeddedZookeeper = _
 
-  protected val conf: KyuubiConf = FlinkSQLEngine.kyuubiConf
+  protected val conf: KyuubiConf = new KyuubiConf(false)
 
   protected def engineRefId: String
 
@@ -60,7 +63,6 @@ trait WithFlinkSQLEngineLocal extends KyuubiFunSuite with WithFlinkTestResources
       }
     }
     withKyuubiConf.foreach { case (k, v) =>
-      System.setProperty(k, v)
       conf.set(k, v)
     }
 
@@ -71,7 +73,7 @@ trait WithFlinkSQLEngineLocal extends KyuubiFunSuite with WithFlinkTestResources
     conf.set(HA_ADDRESSES, zkServer.getConnectString)
 
     val envs = scala.collection.mutable.Map[String, String]()
-    val kyuubiExternals = Utils.getCodeSourceLocation(getClass)
+    val kyuubiExternals = JavaUtils.getCodeSourceLocation(getClass)
       .split("externals").head
     val flinkHome = {
       val candidates = Paths.get(kyuubiExternals, "externals", "kyuubi-download", "target")
@@ -112,19 +114,18 @@ trait WithFlinkSQLEngineLocal extends KyuubiFunSuite with WithFlinkTestResources
     processBuilder.environment().putAll(envs.asJava)
 
     conf.set(ENGINE_FLINK_EXTRA_CLASSPATH, udfJar.getAbsolutePath)
-    val command = new ArrayBuffer[String]()
+    val command = new mutable.ListBuffer[String]()
 
     command += envs("JAVA_EXEC")
 
     val memory = conf.get(ENGINE_FLINK_MEMORY)
     command += s"-Xmx$memory"
-    val javaOptions = conf.get(ENGINE_FLINK_JAVA_OPTIONS)
+    val javaOptions = conf.get(ENGINE_FLINK_JAVA_OPTIONS).filter(StringUtils.isNotBlank(_))
     if (javaOptions.isDefined) {
       command += javaOptions.get
     }
 
-    command += "-cp"
-    val classpathEntries = new java.util.LinkedHashSet[String]
+    val classpathEntries = new mutable.LinkedHashSet[String]
     // flink engine runtime jar
     mainResource(envs).foreach(classpathEntries.add)
     // flink sql jars
@@ -164,13 +165,11 @@ trait WithFlinkSQLEngineLocal extends KyuubiFunSuite with WithFlinkTestResources
         classpathEntries.add(s"$devHadoopJars${File.separator}*")
       }
     }
-    command += classpathEntries.asScala.mkString(File.pathSeparator)
+    command ++= genClasspathOption(classpathEntries)
+
     command += "org.apache.kyuubi.engine.flink.FlinkSQLEngine"
 
-    conf.getAll.foreach { case (k, v) =>
-      command += "--conf"
-      command += s"$k=$v"
-    }
+    command ++= confKeyValues(conf.getAll)
 
     processBuilder.command(command.toList.asJava)
     processBuilder.redirectOutput(Redirect.INHERIT)
@@ -219,7 +218,7 @@ trait WithFlinkSQLEngineLocal extends KyuubiFunSuite with WithFlinkTestResources
         .find(Files.exists(_)).map(_.toAbsolutePath.toFile.getCanonicalPath)
     }.orElse {
       // 3. get the main resource from dev environment
-      val cwd = Utils.getCodeSourceLocation(getClass).split("externals")
+      val cwd = JavaUtils.getCodeSourceLocation(getClass).split("externals")
       assert(cwd.length > 1)
       Option(Paths.get(cwd.head, "externals", module, "target", jarName))
         .map(_.toAbsolutePath.toFile.getCanonicalPath)

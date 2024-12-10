@@ -21,11 +21,11 @@
     <parent>
         <groupId>org.apache.kyuubi</groupId>
         <artifactId>kyuubi-parent</artifactId>
-        <version>1.8.0-SNAPSHOT</version>
+        <version>1.11.0-SNAPSHOT</version>
         <relativePath>../../pom.xml</relativePath>
     </parent>
 
-    <artifactId>kyuubi-spark-sql-engine_2.12</artifactId>
+    <artifactId>kyuubi-spark-sql-engine_${scala.binary.version}</artifactId>
     <packaging>jar</packaging>
     <name>Kyuubi Project Engine Spark SQL</name>
     <url>https://kyuubi.apache.org/</url>
@@ -57,6 +57,28 @@
         <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-protobuf</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-util</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>net.bytebuddy</groupId>
+            <artifactId>byte-buddy</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>javax.servlet</groupId>
+            <artifactId>javax.servlet-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+            <scope>provided</scope>
         </dependency>
 
         <dependency>
@@ -98,26 +120,17 @@
 
         <dependency>
             <groupId>org.apache.kyuubi</groupId>
-            <artifactId>kyuubi-common_${scala.binary.version}</artifactId>
+            <artifactId>kyuubi-util-scala_${scala.binary.version}</artifactId>
             <version>${project.version}</version>
             <type>test-jar</type>
             <scope>test</scope>
         </dependency>
 
-        <!--
-          Spark requires `commons-collections` and `commons-io` but got them from transitive
-          dependencies of `hadoop-client`. As we are using Hadoop Shaded Client, we need add
-          them explicitly. See more details at SPARK-33212.
-          -->
         <dependency>
-            <groupId>commons-collections</groupId>
-            <artifactId>commons-collections</artifactId>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>commons-io</groupId>
-            <artifactId>commons-io</artifactId>
+            <groupId>org.apache.kyuubi</groupId>
+            <artifactId>kyuubi-common_${scala.binary.version}</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
             <scope>test</scope>
         </dependency>
 
@@ -142,13 +155,13 @@
 
         <dependency>
             <groupId>org.apache.iceberg</groupId>
-            <artifactId>iceberg-spark-runtime-${spark.binary.version}_${scala.binary.version}</artifactId>
+            <artifactId>${iceberg.artifact}</artifactId>
             <scope>test</scope>
         </dependency>
 
         <dependency>
             <groupId>io.delta</groupId>
-            <artifactId>delta-core_${scala.binary.version}</artifactId>
+            <artifactId>${delta.artifact}</artifactId>
             <scope>test</scope>
         </dependency>
 
@@ -156,6 +169,12 @@
             <groupId>org.apache.kyuubi</groupId>
             <artifactId>kyuubi-zookeeper_${scala.binary.version}</artifactId>
             <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>com.dimafeng</groupId>
+            <artifactId>testcontainers-scala-scalatest_${scala.binary.version}</artifactId>
             <scope>test</scope>
         </dependency>
 
@@ -170,10 +189,48 @@
             <artifactId>flexmark-all</artifactId>
             <scope>test</scope>
         </dependency>
+
+        <dependency>
+            <groupId>org.apache.kyuubi</groupId>
+            <artifactId>kyuubi-spark-lineage_${scala.binary.version}</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
         <plugins>
+            <!-- Include a source dir depending on the Scala version -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>add-scala-sources</id>
+                        <goals>
+                            <goal>add-source</goal>
+                        </goals>
+                        <phase>generate-sources</phase>
+                        <configuration>
+                            <sources>
+                                <source>src/main/scala-${scala.binary.version}</source>
+                            </sources>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>add-scala-test-sources</id>
+                        <goals>
+                            <goal>add-test-source</goal>
+                        </goals>
+                        <phase>generate-test-sources</phase>
+                        <configuration>
+                            <sources>
+                                <source>src/test/scala-${scala.binary.version}</source>
+                            </sources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
@@ -188,15 +245,14 @@
                             <include>com.google.guava:*</include>
                             <include>com.google.j2objc:j2objc-annotations</include>
                             <include>com.google.protobuf:*</include>
+                            <include>dev.failsafe:failsafe</include>
+                            <include>net.bytebuddy:byte-buddy</include>
                             <include>io.etcd:*</include>
                             <include>io.grpc:*</include>
                             <include>io.netty:*</include>
                             <include>io.perfmark:perfmark-api</include>
                             <include>io.vertx:*</include>
-                            <include>net.jodah:failsafe</include>
-                            <include>org.apache.hive:hive-service-rpc</include>
                             <include>org.apache.kyuubi:*</include>
-                            <include>org.apache.thrift:*</include>
                             <include>org.checkerframework:checker-qual</include>
                             <include>org.codehaus.mojo:animal-sniffer-annotations</include>
                         </includes>
@@ -222,24 +278,10 @@
                     </filters>
                     <relocations>
                         <relocation>
-                            <pattern>org.apache.hive.service.rpc.thrift</pattern>
-                            <shadedPattern>${kyuubi.shade.packageName}.org.apache.hive.service.rpc.thrift</shadedPattern>
+                            <pattern>dev.failsafe</pattern>
+                            <shadedPattern>${kyuubi.shade.packageName}.dev.failsafe</shadedPattern>
                             <includes>
-                                <include>org.apache.hive.service.rpc.thrift.**</include>
-                            </includes>
-                        </relocation>
-                        <relocation>
-                            <pattern>com.facebook.fb303</pattern>
-                            <shadedPattern>${kyuubi.shade.packageName}.com.facebook.fb303</shadedPattern>
-                            <includes>
-                                <include>com.facebook.fb303.**</include>
-                            </includes>
-                        </relocation>
-                        <relocation>
-                            <pattern>org.apache.thrift</pattern>
-                            <shadedPattern>${kyuubi.shade.packageName}.org.apache.thrift</shadedPattern>
-                            <includes>
-                                <include>org.apache.thrift.**</include>
+                                <include>dev.failsafe.**</include>
                             </includes>
                         </relocation>
                         <relocation>
@@ -269,13 +311,6 @@
                             <shadedPattern>${kyuubi.shade.packageName}.io.vertx</shadedPattern>
                             <includes>
                                 <include>io.vertx.**</include>
-                            </includes>
-                        </relocation>
-                        <relocation>
-                            <pattern>net.jodah</pattern>
-                            <shadedPattern>${kyuubi.shade.packageName}.net.jodah</shadedPattern>
-                            <includes>
-                                <include>net.jodah.**</include>
                             </includes>
                         </relocation>
                         <relocation>
@@ -355,6 +390,10 @@
                         <relocation>
                             <pattern>com.google.type</pattern>
                             <shadedPattern>${kyuubi.shade.packageName}.com.google.type</shadedPattern>
+                        </relocation>
+                        <relocation>
+                            <pattern>net.bytebuddy</pattern>
+                            <shadedPattern>${kyuubi.shade.packageName}.net.bytebuddy</shadedPattern>
                         </relocation>
                     </relocations>
                     <transformers>

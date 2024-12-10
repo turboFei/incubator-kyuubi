@@ -119,18 +119,6 @@ class BatchCliArgumentsSuite extends KyuubiFunSuite with TestPrematureExit {
     }
   }
 
-  test("delete batch with hs2ProxyUser") {
-    val args = Array(
-      "delete",
-      "batch",
-      "f7fd702c-e54e-11ec-8fea-0242ac120002",
-      "--hs2ProxyUser",
-      "b_user")
-    val opArgs = new ControlCliArguments(args)
-    assert(opArgs.cliConfig.batchOpts.batchId == "f7fd702c-e54e-11ec-8fea-0242ac120002")
-    assert(opArgs.cliConfig.commonOpts.hs2ProxyUser == "b_user")
-  }
-
   test("test list batch option") {
     val args = Array(
       "list",
@@ -146,7 +134,9 @@ class BatchCliArgumentsSuite extends KyuubiFunSuite with TestPrematureExit {
       "--from",
       "2",
       "--size",
-      "5")
+      "5",
+      "--desc",
+      "true")
     val opArgs = new ControlCliArguments(args)
     assert(opArgs.cliConfig.batchOpts.batchType == "spark")
     assert(opArgs.cliConfig.batchOpts.batchUser == "tom")
@@ -156,6 +146,7 @@ class BatchCliArgumentsSuite extends KyuubiFunSuite with TestPrematureExit {
     assert(opArgs.cliConfig.batchOpts.endTime == 0)
     assert(opArgs.cliConfig.batchOpts.from == 2)
     assert(opArgs.cliConfig.batchOpts.size == 5)
+    assert(opArgs.cliConfig.batchOpts.desc)
   }
 
   test("test list batch default option") {
@@ -166,6 +157,7 @@ class BatchCliArgumentsSuite extends KyuubiFunSuite with TestPrematureExit {
     assert(opArgs.cliConfig.batchOpts.batchType == null)
     assert(opArgs.cliConfig.batchOpts.from == -1)
     assert(opArgs.cliConfig.batchOpts.size == 100)
+    assert(!opArgs.cliConfig.batchOpts.desc)
   }
 
   test("test bad list batch option - size") {

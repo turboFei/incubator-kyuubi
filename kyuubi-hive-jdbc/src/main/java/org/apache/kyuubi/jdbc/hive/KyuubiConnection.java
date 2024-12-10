@@ -21,6 +21,7 @@ import static org.apache.kyuubi.jdbc.hive.JdbcConnectionParams.*;
 import static org.apache.kyuubi.jdbc.hive.Utils.HIVE_SERVER2_RETRY_KEY;
 import static org.apache.kyuubi.jdbc.hive.Utils.HIVE_SERVER2_RETRY_TRUE;
 
+import com.google.common.base.Preconditions;
 import java.io.*;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
@@ -42,7 +43,6 @@ import javax.security.auth.Subject;
 import javax.security.sasl.Sasl;
 import org.apache.commons.lang3.ClassUtils;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.hive.service.rpc.thrift.*;
 import org.apache.http.HttpRequestInterceptor;
 import org.apache.http.HttpResponse;
 import org.apache.http.NoHttpResponseException;
@@ -66,11 +66,13 @@ import org.apache.kyuubi.jdbc.hive.cli.FetchType;
 import org.apache.kyuubi.jdbc.hive.cli.RowSet;
 import org.apache.kyuubi.jdbc.hive.cli.RowSetFactory;
 import org.apache.kyuubi.jdbc.hive.logs.KyuubiLoggable;
-import org.apache.thrift.TException;
-import org.apache.thrift.protocol.TBinaryProtocol;
-import org.apache.thrift.transport.THttpClient;
-import org.apache.thrift.transport.TTransport;
-import org.apache.thrift.transport.TTransportException;
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift.*;
+import org.apache.kyuubi.shaded.thrift.TConfiguration;
+import org.apache.kyuubi.shaded.thrift.TException;
+import org.apache.kyuubi.shaded.thrift.protocol.TBinaryProtocol;
+import org.apache.kyuubi.shaded.thrift.transport.THttpClient;
+import org.apache.kyuubi.shaded.thrift.transport.TTransport;
+import org.apache.kyuubi.shaded.thrift.transport.TTransportException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -104,6 +106,7 @@ public class KyuubiConnection implements SQLConnection, KyuubiLoggable {
   private Thread engineLogThread;
   private boolean engineLogInflight = true;
   private volatile boolean launchEngineOpCompleted = false;
+  private boolean launchEngineOpSupportResult = false;
   private String engineId = "";
   private String engineName = "";
   private String engineUrl = "";
@@ -417,7 +420,13 @@ public class KyuubiConnection implements SQLConnection, KyuubiLoggable {
     boolean useSsl = isSslConnection();
     // Create an http client from the configs
     httpClient = getHttpClient(useSsl);
-    transport = new THttpClient(getServerHttpUrl(useSsl), httpClient);
+    int maxMessageSize = getMaxMessageSize();
+    TConfiguration.Builder tConfBuilder = TConfiguration.custom();
+    if (maxMessageSize > 0) {
+      tConfBuilder.setMaxMessageSize(maxMessageSize);
+    }
+    TConfiguration tConf = tConfBuilder.build();
+    transport = new THttpClient(tConf, getServerHttpUrl(useSsl), httpClient);
     return transport;
   }
 
@@ -445,19 +454,33 @@ public class KyuubiConnection implements SQLConnection, KyuubiLoggable {
     if (!isSaslAuthMode()) {
       requestInterceptor = null;
     } else if (isPlainSaslAuthMode()) {
-      /*
-       * Add an interceptor to pass username/password in the header. In https mode, the entire
-       * information is encrypted
-       */
-      requestInterceptor =
-          new HttpBasicAuthInterceptor(
-              getUserName(),
-              getPassword(),
-              cookieStore,
-              cookieName,
-              useSsl,
-              additionalHttpHeaders,
-              customCookies);
+      if (isJwtAuthMode()) {
+        final String signedJwt = getJWT();
+        Preconditions.checkArgument(
+            signedJwt != null && !signedJwt.isEmpty(),
+            "For jwt auth mode," + " a signed jwt must be provided");
+        /*
+         * Add an interceptor to pass jwt token in the header. In https mode, the entire
+         * information is encrypted
+         */
+        requestInterceptor =
+            new HttpJwtAuthRequestInterceptor(
+                signedJwt, cookieStore, cookieName, useSsl, additionalHttpHeaders, customCookies);
+      } else {
+        /*
+         * Add an interceptor to pass username/password in the header. In https mode, the entire
+         * information is encrypted
+         */
+        requestInterceptor =
+            new HttpBasicAuthInterceptor(
+                getUserName(),
+                getPassword(),
+                cookieStore,
+                cookieName,
+                useSsl,
+                additionalHttpHeaders,
+                customCookies);
+      }
     } else {
       // Configure http client for kerberos-based authentication
       Subject subject = createSubject();
@@ -538,7 +561,8 @@ public class KyuubiConnection implements SQLConnection, KyuubiLoggable {
     if (useSsl) {
       String useTwoWaySSL = sessConfMap.get(USE_TWO_WAY_SSL);
       String sslTrustStorePath = sessConfMap.get(SSL_TRUST_STORE);
-      String sslTrustStorePassword = sessConfMap.get(SSL_TRUST_STORE_PASSWORD);
+      String sslTrustStorePassword =
+          Utils.getPassword(sessConfMap, JdbcConnectionParams.SSL_TRUST_STORE_PASSWORD);
       KeyStore sslTrustStore;
       SSLConnectionSocketFactory socketFactory;
       SSLContext sslContext;
@@ -558,7 +582,8 @@ public class KyuubiConnection implements SQLConnection, KyuubiLoggable {
           // Pick trust store config from the given path
           sslTrustStore = KeyStore.getInstance(SSL_TRUST_STORE_TYPE);
           try (FileInputStream fis = new FileInputStream(sslTrustStorePath)) {
-            sslTrustStore.load(fis, sslTrustStorePassword.toCharArray());
+            sslTrustStore.load(
+                fis, sslTrustStorePassword != null ? sslTrustStorePassword.toCharArray() : null);
           }
           sslContext = SSLContexts.custom().loadTrustMaterial(sslTrustStore, null).build();
           socketFactory =
@@ -578,8 +603,41 @@ public class KyuubiConnection implements SQLConnection, KyuubiLoggable {
     return httpClientBuilder.build();
   }
 
+  private String getJWT() {
+    String jwtCredential = getJWTStringFromSession();
+    if (jwtCredential == null || jwtCredential.isEmpty()) {
+      jwtCredential = getJWTStringFromEnv();
+    }
+    return jwtCredential;
+  }
+
+  private String getJWTStringFromEnv() {
+    String jwtCredential = System.getenv(JdbcConnectionParams.AUTH_JWT_ENV);
+    if (jwtCredential == null || jwtCredential.isEmpty()) {
+      LOG.debug("No JWT is specified in env variable {}", JdbcConnectionParams.AUTH_JWT_ENV);
+    } else {
+      int startIndex = Math.max(0, jwtCredential.length() - 7);
+      String lastSevenChars = jwtCredential.substring(startIndex);
+      LOG.debug("Fetched JWT (ends with {}) from the env.", lastSevenChars);
+    }
+    return jwtCredential;
+  }
+
+  private String getJWTStringFromSession() {
+    String jwtCredential = sessConfMap.get(JdbcConnectionParams.AUTH_TYPE_JWT_KEY);
+    if (jwtCredential == null || jwtCredential.isEmpty()) {
+      LOG.debug("No JWT is specified in connection string.");
+    } else {
+      int startIndex = Math.max(0, jwtCredential.length() - 7);
+      String lastSevenChars = jwtCredential.substring(startIndex);
+      LOG.debug("Fetched JWT (ends with {}) from the session.", lastSevenChars);
+    }
+    return jwtCredential;
+  }
+
   /** Create underlying SSL or non-SSL transport */
-  private TTransport createUnderlyingTransport() throws TTransportException {
+  private TTransport createUnderlyingTransport() throws TTransportException, SQLException {
+    int maxMessageSize = getMaxMessageSize();
     TTransport transport = null;
     // Note: Thrift returns an SSL socket that is already bound to the specified host:port
     // Therefore an open called on this would be a no-op later
@@ -589,20 +647,48 @@ public class KyuubiConnection implements SQLConnection, KyuubiLoggable {
     if (isSslConnection()) {
       // get SSL socket
       String sslTrustStore = sessConfMap.get(SSL_TRUST_STORE);
-      String sslTrustStorePassword = sessConfMap.get(SSL_TRUST_STORE_PASSWORD);
+      String sslTrustStorePassword =
+          Utils.getPassword(sessConfMap, JdbcConnectionParams.SSL_TRUST_STORE_PASSWORD);
 
       if (sslTrustStore == null || sslTrustStore.isEmpty()) {
-        transport = ThriftUtils.getSSLSocket(host, port, connectTimeout, socketTimeout);
+        transport =
+            ThriftUtils.getSSLSocket(host, port, connectTimeout, socketTimeout, maxMessageSize);
       } else {
         transport =
             ThriftUtils.getSSLSocket(
-                host, port, connectTimeout, socketTimeout, sslTrustStore, sslTrustStorePassword);
+                host,
+                port,
+                connectTimeout,
+                socketTimeout,
+                sslTrustStore,
+                sslTrustStorePassword,
+                maxMessageSize);
       }
     } else {
       // get non-SSL socket transport
-      transport = ThriftUtils.getSocketTransport(host, port, connectTimeout, socketTimeout);
+      transport =
+          ThriftUtils.getSocketTransport(host, port, connectTimeout, socketTimeout, maxMessageSize);
     }
     return transport;
+  }
+
+  private int getMaxMessageSize() throws SQLException {
+    String maxMessageSize = sessConfMap.get(JdbcConnectionParams.THRIFT_CLIENT_MAX_MESSAGE_SIZE);
+    if (maxMessageSize == null) {
+      return -1;
+    }
+
+    try {
+      return Integer.parseInt(maxMessageSize);
+    } catch (Exception e) {
+      String errFormat =
+          "Invalid {} configuration of '{}'. Expected an integer specifying number of bytes. "
+              + "A configuration of <= 0 uses default max message size.";
+      String errMsg =
+          String.format(
+              errFormat, JdbcConnectionParams.THRIFT_CLIENT_MAX_MESSAGE_SIZE, maxMessageSize);
+      throw new SQLException(errMsg, "42000", e);
+    }
   }
 
   /**
@@ -660,7 +746,8 @@ public class KyuubiConnection implements SQLConnection, KyuubiLoggable {
       KeyManagerFactory keyManagerFactory =
           KeyManagerFactory.getInstance(SUNX509_ALGORITHM_STRING, SUNJSSE_ALGORITHM_STRING);
       String keyStorePath = sessConfMap.get(SSL_KEY_STORE);
-      String keyStorePassword = sessConfMap.get(SSL_KEY_STORE_PASSWORD);
+      String keyStorePassword =
+          Utils.getPassword(sessConfMap, JdbcConnectionParams.SSL_KEY_STORE_PASSWORD);
       KeyStore sslKeyStore = KeyStore.getInstance(SSL_KEY_STORE_TYPE);
 
       if (keyStorePath == null || keyStorePath.isEmpty()) {
@@ -676,7 +763,8 @@ public class KyuubiConnection implements SQLConnection, KyuubiLoggable {
       TrustManagerFactory trustManagerFactory =
           TrustManagerFactory.getInstance(SUNX509_ALGORITHM_STRING);
       String trustStorePath = sessConfMap.get(SSL_TRUST_STORE);
-      String trustStorePassword = sessConfMap.get(SSL_TRUST_STORE_PASSWORD);
+      String trustStorePassword =
+          Utils.getPassword(sessConfMap, JdbcConnectionParams.SSL_TRUST_STORE_PASSWORD);
       KeyStore sslTrustStore = KeyStore.getInstance(SSL_TRUST_STORE_TYPE);
 
       if (trustStorePath == null || trustStorePath.isEmpty()) {
@@ -684,7 +772,8 @@ public class KyuubiConnection implements SQLConnection, KyuubiLoggable {
             SSL_TRUST_STORE + " Not configured for 2 way SSL connection");
       }
       try (FileInputStream fis = new FileInputStream(trustStorePath)) {
-        sslTrustStore.load(fis, trustStorePassword.toCharArray());
+        sslTrustStore.load(
+            fis, trustStorePassword != null ? trustStorePassword.toCharArray() : null);
       }
       trustManagerFactory.init(sslTrustStore);
       SSLContext context = SSLContext.getInstance("TLS");
@@ -716,10 +805,6 @@ public class KyuubiConnection implements SQLConnection, KyuubiLoggable {
     }
     // switch the database
     openConf.put("use:database", connParams.getDbName());
-    // set the fetchSize
-    openConf.put(
-        "set:hiveconf:hive.server2.thrift.resultset.default.fetch.size",
-        Integer.toString(fetchSize));
     if (wmPool != null) {
       openConf.put("set:hivevar:wmpool", wmPool);
     }
@@ -732,12 +817,33 @@ public class KyuubiConnection implements SQLConnection, KyuubiLoggable {
     if (sessVars.containsKey(HS2_PROXY_USER)) {
       openConf.put(HS2_PROXY_USER, sessVars.get(HS2_PROXY_USER));
     }
+    String clientProtocolStr =
+        sessVars.getOrDefault(
+            CLIENT_PROTOCOL_VERSION, openReq.getClient_protocol().getValue() + "");
+    TProtocolVersion clientProtocol =
+        TProtocolVersion.findByValue(Integer.parseInt(clientProtocolStr));
+    if (clientProtocol == null) {
+      throw new IllegalArgumentException(
+          String.format(
+              "Unsupported Hive2 protocol version %s specified by session conf key %s",
+              clientProtocolStr, CLIENT_PROTOCOL_VERSION));
+    }
+    openReq.setClient_protocol(clientProtocol);
+    // HIVE-14901: set the fetchSize
+    if (clientProtocol.compareTo(TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V10) >= 0) {
+      openConf.put(
+          "set:hiveconf:hive.server2.thrift.resultset.default.fetch.size",
+          Integer.toString(fetchSize));
+    }
     try {
       openConf.put("kyuubi.client.ipAddress", InetAddress.getLocalHost().getHostAddress());
     } catch (UnknownHostException e) {
       LOG.debug("Error getting Kyuubi session local client ip address", e);
     }
     openConf.put(Utils.KYUUBI_CLIENT_VERSION_KEY, Utils.getVersion());
+    if (StringUtils.isNotBlank(engineRefId)) {
+      openConf.put("kyuubi.engine.refId", engineRefId);
+    }
     openReq.setConfiguration(openConf);
 
     // Store the user name in the open request in case no non-sasl authentication
@@ -770,10 +876,14 @@ public class KyuubiConnection implements SQLConnection, KyuubiLoggable {
       String launchEngineOpHandleSecret =
           openRespConf.get("kyuubi.session.engine.launch.handle.secret");
 
+      launchEngineOpSupportResult =
+          Boolean.parseBoolean(
+              openRespConf.getOrDefault("kyuubi.session.engine.launch.support.result", "false"));
+
       if (launchEngineOpHandleGuid != null && launchEngineOpHandleSecret != null) {
         try {
-          byte[] guidBytes = Base64.getMimeDecoder().decode(launchEngineOpHandleGuid);
-          byte[] secretBytes = Base64.getMimeDecoder().decode(launchEngineOpHandleSecret);
+          byte[] guidBytes = Base64.getDecoder().decode(launchEngineOpHandleGuid);
+          byte[] secretBytes = Base64.getDecoder().decode(launchEngineOpHandleSecret);
           THandleIdentifier handleIdentifier =
               new THandleIdentifier(ByteBuffer.wrap(guidBytes), ByteBuffer.wrap(secretBytes));
           launchEngineOpHandle =
@@ -824,32 +934,78 @@ public class KyuubiConnection implements SQLConnection, KyuubiLoggable {
     }
   }
 
+  private boolean isForciblyFromKeytabAuthMode() {
+    return AUTH_KERBEROS_AUTH_TYPE_FROM_KEYTAB.equalsIgnoreCase(
+        sessConfMap.get(AUTH_KERBEROS_AUTH_TYPE));
+  }
+
+  private boolean isForciblyFromSubjectAuthMode() {
+    return AUTH_KERBEROS_AUTH_TYPE_FROM_SUBJECT.equalsIgnoreCase(
+        sessConfMap.get(AUTH_KERBEROS_AUTH_TYPE));
+  }
+
+  private boolean isForciblyTgtCacheAuthMode() {
+    return AUTH_KERBEROS_AUTH_TYPE_FROM_TICKET_CACHE.equalsIgnoreCase(
+        sessConfMap.get(AUTH_KERBEROS_AUTH_TYPE));
+  }
+
   private boolean isKeytabAuthMode() {
-    return isSaslAuthMode()
-        && hasSessionValue(AUTH_PRINCIPAL)
+    // handle explicit cases first
+    if (isForciblyFromSubjectAuthMode() || isForciblyTgtCacheAuthMode()) {
+      return false;
+    }
+    if (isKerberosAuthMode() && isForciblyFromKeytabAuthMode()) {
+      return true;
+    }
+    if (isKerberosAuthMode()
+        && hasSessionValue(AUTH_KYUUBI_CLIENT_KEYTAB)
+        && !hasSessionValue(AUTH_KYUUBI_CLIENT_PRINCIPAL)) {
+      throw new IllegalArgumentException(
+          AUTH_KYUUBI_CLIENT_KEYTAB
+              + " is set but "
+              + AUTH_KYUUBI_CLIENT_PRINCIPAL
+              + " is not set");
+    }
+    // handle implicit cases then
+    return isKerberosAuthMode()
         && hasSessionValue(AUTH_KYUUBI_CLIENT_PRINCIPAL)
         && hasSessionValue(AUTH_KYUUBI_CLIENT_KEYTAB);
   }
 
   private boolean isFromSubjectAuthMode() {
-    return isSaslAuthMode()
-        && hasSessionValue(AUTH_PRINCIPAL)
-        && !hasSessionValue(AUTH_KYUUBI_CLIENT_PRINCIPAL)
+    // handle explicit cases first
+    if (isForciblyFromKeytabAuthMode() || isForciblyTgtCacheAuthMode()) {
+      return false;
+    }
+    if (isKerberosAuthMode() && isForciblyFromSubjectAuthMode()) {
+      return true;
+    }
+    // handle implicit cases then
+    return isKerberosAuthMode()
         && !hasSessionValue(AUTH_KYUUBI_CLIENT_KEYTAB)
-        && (AUTH_KERBEROS_AUTH_TYPE_FROM_SUBJECT.equalsIgnoreCase(
-                sessConfMap.get(AUTH_KERBEROS_AUTH_TYPE))
-            || isHadoopUserGroupInformationDoAs());
+        && isHadoopUserGroupInformationDoAs();
   }
 
   private boolean isTgtCacheAuthMode() {
-    return isSaslAuthMode()
-        && hasSessionValue(AUTH_PRINCIPAL)
-        && !hasSessionValue(AUTH_KYUUBI_CLIENT_PRINCIPAL)
-        && !hasSessionValue(AUTH_KYUUBI_CLIENT_KEYTAB);
+    // handle explicit cases first
+    if (isForciblyFromKeytabAuthMode() || isForciblyFromSubjectAuthMode()) {
+      return false;
+    }
+    if (isKerberosAuthMode() && isForciblyTgtCacheAuthMode()) {
+      return true;
+    }
+    // handle implicit cases then
+    return isKerberosAuthMode() && !hasSessionValue(AUTH_KYUUBI_CLIENT_KEYTAB);
   }
 
   private boolean isPlainSaslAuthMode() {
     return isSaslAuthMode() && !hasSessionValue(AUTH_PRINCIPAL);
+  }
+
+  private boolean isJwtAuthMode() {
+    return JdbcConnectionParams.AUTH_TYPE_JWT.equalsIgnoreCase(
+            sessConfMap.get(JdbcConnectionParams.AUTH_TYPE))
+        || sessConfMap.containsKey(JdbcConnectionParams.AUTH_TYPE_JWT_KEY);
   }
 
   private boolean isKerberosAuthMode() {
@@ -865,7 +1021,8 @@ public class KyuubiConnection implements SQLConnection, KyuubiLoggable {
       AccessControlContext context = AccessController.getContext();
       return Subject.getSubject(context);
     } else if (isTgtCacheAuthMode()) {
-      return KerberosAuthenticationManager.getTgtCacheAuthentication().getSubject();
+      String ticketCache = sessConfMap.getOrDefault(AUTH_KYUUBI_CLIENT_TICKET_CACHE, "");
+      return KerberosAuthenticationManager.getTgtCacheAuthentication(ticketCache).getSubject();
     } else {
       // This should never happen
       throw new IllegalArgumentException("Unsupported auth mode");
@@ -1068,7 +1225,7 @@ public class KyuubiConnection implements SQLConnection, KyuubiLoggable {
     if (isClosed) {
       throw new KyuubiSQLException("Connection is closed");
     }
-    return new KyuubiDatabaseMetaData(this, client, sessHandle);
+    return new KyuubiDatabaseMetaData(this, protocol, client, sessHandle);
   }
 
   @Override
@@ -1115,7 +1272,7 @@ public class KyuubiConnection implements SQLConnection, KyuubiLoggable {
     }
     boolean rc = false;
     try {
-      new KyuubiDatabaseMetaData(this, client, sessHandle).getDatabaseProductName();
+      new KyuubiDatabaseMetaData(this, protocol, client, sessHandle).getDatabaseProductName();
       rc = true;
     } catch (SQLException ignore) {
     }
@@ -1353,7 +1510,7 @@ public class KyuubiConnection implements SQLConnection, KyuubiLoggable {
   }
 
   private void fetchLaunchEngineResult() {
-    if (launchEngineOpHandle == null) return;
+    if (launchEngineOpHandle == null || !launchEngineOpSupportResult) return;
 
     TFetchResultsReq tFetchResultsReq =
         new TFetchResultsReq(

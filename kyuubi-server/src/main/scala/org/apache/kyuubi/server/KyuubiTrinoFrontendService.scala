@@ -19,12 +19,13 @@ package org.apache.kyuubi.server
 
 import java.util.concurrent.atomic.AtomicBoolean
 
-import org.apache.kyuubi.{KyuubiException, Utils}
+import org.apache.kyuubi.KyuubiException
 import org.apache.kyuubi.config.KyuubiConf
-import org.apache.kyuubi.config.KyuubiConf.{FRONTEND_TRINO_BIND_HOST, FRONTEND_TRINO_BIND_PORT, FRONTEND_TRINO_MAX_WORKER_THREADS}
+import org.apache.kyuubi.config.KyuubiConf._
 import org.apache.kyuubi.server.trino.api.v1.ApiRootResource
 import org.apache.kyuubi.server.ui.JettyServer
 import org.apache.kyuubi.service.{AbstractFrontendService, Serverable, Service}
+import org.apache.kyuubi.util.JavaUtils
 
 /**
  * A frontend service based on RESTful api via HTTP protocol.
@@ -40,25 +41,32 @@ class KyuubiTrinoFrontendService(override val serverable: Serverable)
   lazy val host: String = conf.get(FRONTEND_TRINO_BIND_HOST)
     .getOrElse {
       if (conf.get(KyuubiConf.FRONTEND_CONNECTION_URL_USE_HOSTNAME)) {
-        Utils.findLocalInetAddress.getCanonicalHostName
+        JavaUtils.findLocalInetAddress.getCanonicalHostName
       } else {
-        Utils.findLocalInetAddress.getHostAddress
+        JavaUtils.findLocalInetAddress.getHostAddress
       }
     }
+
+  private lazy val port: Int = conf.get(FRONTEND_TRINO_BIND_PORT)
 
   override def initialize(conf: KyuubiConf): Unit = synchronized {
     this.conf = conf
     server = JettyServer(
       getName,
       host,
-      conf.get(FRONTEND_TRINO_BIND_PORT),
-      conf.get(FRONTEND_TRINO_MAX_WORKER_THREADS))
+      port,
+      conf.get(FRONTEND_TRINO_MAX_WORKER_THREADS),
+      conf.get(FRONTEND_TRINO_JETTY_STOP_TIMEOUT),
+      conf.get(FRONTEND_JETTY_SEND_VERSION_ENABLED))
     super.initialize(conf)
   }
 
   override def connectionUrl: String = {
     checkInitialized()
-    server.getServerUri
+    conf.get(FRONTEND_ADVERTISED_HOST) match {
+      case Some(advertisedHost) => s"$advertisedHost:$port"
+      case None => server.getServerUri
+    }
   }
 
   private def startInternal(): Unit = {

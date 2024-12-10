@@ -25,6 +25,7 @@ import org.apache.commons.lang3.builder.ToStringStyle;
 
 public class SessionData {
   private String identifier;
+  private String remoteId;
   private String user;
   private String ipAddr;
   private Map<String, String> conf;
@@ -35,11 +36,16 @@ public class SessionData {
   private String sessionType;
   private String kyuubiInstance;
   private String engineId;
+  private String engineName;
+  private String engineUrl;
+  private String sessionName;
+  private Integer totalOperations;
 
   public SessionData() {}
 
   public SessionData(
       String identifier,
+      String remoteId,
       String user,
       String ipAddr,
       Map<String, String> conf,
@@ -49,8 +55,13 @@ public class SessionData {
       String exception,
       String sessionType,
       String kyuubiInstance,
-      String engineId) {
+      String engineId,
+      String engineName,
+      String engineUrl,
+      String sessionName,
+      Integer totalOperations) {
     this.identifier = identifier;
+    this.remoteId = remoteId;
     this.user = user;
     this.ipAddr = ipAddr;
     this.conf = conf;
@@ -61,6 +72,10 @@ public class SessionData {
     this.sessionType = sessionType;
     this.kyuubiInstance = kyuubiInstance;
     this.engineId = engineId;
+    this.engineName = engineName;
+    this.engineUrl = engineUrl;
+    this.sessionName = sessionName;
+    this.totalOperations = totalOperations;
   }
 
   public String getIdentifier() {
@@ -69,6 +84,14 @@ public class SessionData {
 
   public void setIdentifier(String identifier) {
     this.identifier = identifier;
+  }
+
+  public String getRemoteId() {
+    return remoteId;
+  }
+
+  public void setRemoteId(String remoteId) {
+    this.remoteId = remoteId;
   }
 
   public String getUser() {
@@ -152,6 +175,38 @@ public class SessionData {
 
   public void setEngineId(String engineId) {
     this.engineId = engineId;
+  }
+
+  public String getEngineName() {
+    return engineName;
+  }
+
+  public void setEngineName(String engineName) {
+    this.engineName = engineName;
+  }
+
+  public String getEngineUrl() {
+    return engineUrl;
+  }
+
+  public void setEngineUrl(String engineUrl) {
+    this.engineUrl = engineUrl;
+  }
+
+  public String getSessionName() {
+    return sessionName;
+  }
+
+  public void setSessionName(String sessionName) {
+    this.sessionName = sessionName;
+  }
+
+  public Integer getTotalOperations() {
+    return totalOperations;
+  }
+
+  public void setTotalOperations(Integer totalOperations) {
+    this.totalOperations = totalOperations;
   }
 
   @Override

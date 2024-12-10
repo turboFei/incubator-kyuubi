@@ -17,20 +17,13 @@
 
 package org.apache.kyuubi.engine.spark
 
-import org.apache.kyuubi.config.KyuubiConf.ENGINE_CHECK_INTERVAL
-import org.apache.kyuubi.config.KyuubiConf.ENGINE_SHARE_LEVEL
-import org.apache.kyuubi.config.KyuubiConf.ENGINE_SPARK_MAX_LIFETIME
 import org.apache.kyuubi.engine.ShareLevel
 import org.apache.kyuubi.engine.ShareLevel.ShareLevel
 
 trait EtcdShareLevelSparkEngineSuite
   extends ShareLevelSparkEngineTests with WithEtcdCluster {
   override def withKyuubiConf: Map[String, String] = {
-    super.withKyuubiConf ++
-      etcdConf ++ Map(
-        ENGINE_SHARE_LEVEL.key -> shareLevel.toString,
-        ENGINE_SPARK_MAX_LIFETIME.key -> "PT20s",
-        ENGINE_CHECK_INTERVAL.key -> "PT5s")
+    super.withKyuubiConf ++ etcdConf
   }
 }
 

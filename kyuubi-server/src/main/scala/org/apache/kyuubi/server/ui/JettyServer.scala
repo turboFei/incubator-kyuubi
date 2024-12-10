@@ -22,9 +22,9 @@ import org.eclipse.jetty.server.handler.{ContextHandlerCollection, ErrorHandler}
 import org.eclipse.jetty.util.component.LifeCycle
 import org.eclipse.jetty.util.thread.{QueuedThreadPool, ScheduledExecutorScheduler}
 
-import org.apache.kyuubi.Utils.isWindows
+import org.apache.kyuubi.util.JavaUtils
 
-private[kyuubi] case class JettyServer(
+private[kyuubi] class JettyServer(
     server: Server,
     connector: ServerConnector,
     rootHandler: ContextHandlerCollection) {
@@ -67,15 +67,24 @@ private[kyuubi] case class JettyServer(
       dest: String): Unit = {
     addHandler(JettyUtils.createRedirectHandler(src, dest))
   }
+
+  def isStarted: Boolean = server.isStarted
 }
 
 object JettyServer {
 
-  def apply(name: String, host: String, port: Int, poolSize: Int): JettyServer = {
+  def apply(
+      name: String,
+      host: String,
+      port: Int,
+      poolSize: Int,
+      stopTimeout: Long,
+      sendServerVersion: Boolean): JettyServer = {
     val pool = new QueuedThreadPool(poolSize)
     pool.setName(name)
     pool.setDaemon(true)
     val server = new Server(pool)
+    server.setStopTimeout(stopTimeout)
 
     val errorHandler = new ErrorHandler()
     errorHandler.setShowStacks(true)
@@ -87,6 +96,7 @@ object JettyServer {
 
     val serverExecutor = new ScheduledExecutorScheduler(s"$name-JettyScheduler", true)
     val httpConf = new HttpConfiguration()
+    httpConf.setSendServerVersion(sendServerVersion)
     val connector = new ServerConnector(
       server,
       null,
@@ -97,7 +107,7 @@ object JettyServer {
       new HttpConnectionFactory(httpConf))
     connector.setHost(host)
     connector.setPort(port)
-    connector.setReuseAddress(!isWindows)
+    connector.setReuseAddress(!JavaUtils.isWindows)
     connector.setAcceptQueueSize(math.min(connector.getAcceptors, 8))
 
     new JettyServer(server, connector, collection)

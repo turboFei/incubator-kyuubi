@@ -21,10 +21,11 @@ import static org.apache.kyuubi.jdbc.hive.JdbcConnectionParams.*;
 
 import com.google.common.annotations.VisibleForTesting;
 import java.io.*;
+import java.nio.file.Files;
 import java.sql.*;
 import java.util.*;
+import org.apache.hive.beeline.common.util.HiveStringUtils;
 import org.apache.hive.beeline.logs.KyuubiBeelineInPlaceUpdateStream;
-import org.apache.hive.common.util.HiveStringUtils;
 import org.apache.kyuubi.jdbc.hive.KyuubiStatement;
 import org.apache.kyuubi.jdbc.hive.Utils;
 import org.apache.kyuubi.jdbc.hive.logs.InPlaceUpdateStream;
@@ -69,7 +70,6 @@ public class KyuubiCommands extends Commands {
     String[] tokens = tokenizeCmd(cmd);
     String cmd_1 = getFirstCmd(cmd, tokens[0].length());
 
-    cmd_1 = substituteVariables(getHiveConf(false), cmd_1);
     File sourceFile = new File(cmd_1);
     if (!sourceFile.isFile()) {
       return false;
@@ -86,10 +86,9 @@ public class KyuubiCommands extends Commands {
   }
 
   private boolean sourceFileInternal(File sourceFile) throws IOException {
-    BufferedReader reader = null;
-    try {
-      reader = new BufferedReader(new FileReader(sourceFile));
-      String lines = null, extra;
+    try (BufferedReader reader = Files.newBufferedReader(sourceFile.toPath())) {
+      String lines = null;
+      String extra;
       while ((extra = reader.readLine()) != null) {
         if (beeLine.isComment(extra)) {
           continue;
@@ -106,10 +105,6 @@ public class KyuubiCommands extends Commands {
         if (!executeInternal(c, false)) {
           return false;
         }
-      }
-    } finally {
-      if (reader != null) {
-        reader.close();
       }
     }
     return true;
@@ -491,10 +486,6 @@ public class KyuubiCommands extends Commands {
           .getDatabaseConnections()
           .setConnection(new KyuubiDatabaseConnection(beeLine, driver, url, props));
       beeLine.getDatabaseConnection().getConnection();
-
-      if (!beeLine.isBeeLine()) {
-        beeLine.updateOptsForCli();
-      }
 
       // see HIVE-19048 : Initscript errors are ignored
       int initScriptExecutionResult = beeLine.runInit();

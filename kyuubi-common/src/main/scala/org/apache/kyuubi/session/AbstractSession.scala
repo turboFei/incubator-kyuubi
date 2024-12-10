@@ -17,16 +17,19 @@
 
 package org.apache.kyuubi.session
 
-import scala.collection.JavaConverters._
+import java.nio.file.Path
+import java.util.concurrent.ConcurrentHashMap
 
-import org.apache.hive.service.rpc.thrift._
+import scala.collection.JavaConverters._
 
 import org.apache.kyuubi.{KyuubiSQLException, Logging}
 import org.apache.kyuubi.config.KyuubiConf._
+import org.apache.kyuubi.config.KyuubiReservedKeys
 import org.apache.kyuubi.config.KyuubiReservedKeys.KYUUBI_CLIENT_IP_KEY
 import org.apache.kyuubi.operation.{Operation, OperationHandle}
 import org.apache.kyuubi.operation.FetchOrientation.FetchOrientation
 import org.apache.kyuubi.operation.log.OperationLog
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift._
 
 abstract class AbstractSession(
     val protocol: TProtocolVersion,
@@ -55,11 +58,17 @@ abstract class AbstractSession(
 
   override val sessionIdleTimeoutThreshold: Long = sessionManager.getConf.get(SESSION_IDLE_TIMEOUT)
 
+  @volatile private var _sessionBrokenTime: Long = 0
+  override def getSessionBrokenTime: Long = _sessionBrokenTime
+  override def setSessionBrokenTime(brokenTime: Long): Unit = _sessionBrokenTime = brokenTime
+  override def sessionBrokenTimeoutThreshold: Long =
+    sessionManager.getConf.get(SESSION_CLOSE_ON_DISCONNECT_TIMEOUT)
+
   val normalizedConf: Map[String, String] = sessionManager.validateAndNormalizeConf(conf)
 
   override lazy val name: Option[String] = normalizedConf.get(SESSION_NAME.key)
 
-  final private val opHandleSet = new java.util.HashSet[OperationHandle]
+  final private val opHandleSet = ConcurrentHashMap.newKeySet[OperationHandle]()
 
   private def acquire(userAccess: Boolean): Unit = synchronized {
     if (userAccess) {
@@ -233,7 +242,7 @@ abstract class AbstractSession(
       operationHandle: OperationHandle,
       orientation: FetchOrientation,
       maxRows: Int,
-      fetchLog: Boolean): TRowSet = {
+      fetchLog: Boolean): TFetchResultsResp = {
     if (fetchLog) {
       sessionManager.operationManager.getOperationLogRowSet(operationHandle, orientation, maxRows)
     } else {
@@ -257,7 +266,12 @@ abstract class AbstractSession(
     }
   }
 
+  protected var operationalLogRootDir: Option[Path] = None
+
   override def open(): Unit = {
-    OperationLog.createOperationLogRootDirectory(this)
+    operationalLogRootDir = Option(OperationLog.createOperationLogRootDirectory(this))
   }
+
+  val isForAliveProbe: Boolean =
+    conf.get(KyuubiReservedKeys.KYUUBI_SESSION_ALIVE_PROBE).exists(_.equalsIgnoreCase("true"))
 }

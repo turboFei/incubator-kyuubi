@@ -17,13 +17,12 @@
 
 package org.apache.kyuubi.it.flink.operation
 
-import org.apache.hive.service.rpc.thrift.{TGetInfoReq, TGetInfoType}
-
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf._
 import org.apache.kyuubi.it.flink.WithKyuubiServerAndYarnMiniCluster
 import org.apache.kyuubi.operation.HiveJDBCTestHelper
 import org.apache.kyuubi.operation.meta.ResultSetSchemaConstant.TABLE_CAT
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift.{TGetInfoReq, TGetInfoType}
 
 class FlinkOperationSuiteOnYarn extends WithKyuubiServerAndYarnMiniCluster
   with HiveJDBCTestHelper {
@@ -40,7 +39,7 @@ class FlinkOperationSuiteOnYarn extends WithKyuubiServerAndYarnMiniCluster
       .set(s"$KYUUBI_ENGINE_ENV_PREFIX.$KYUUBI_HOME", kyuubiHome)
       .set(ENGINE_TYPE, "FLINK_SQL")
       .set("flink.execution.target", "yarn-application")
-      .set("flink.parallelism.default", "6")
+      .set("flink.parallelism.default", "2")
     super.beforeAll()
   }
 
@@ -81,7 +80,7 @@ class FlinkOperationSuiteOnYarn extends WithKyuubiServerAndYarnMiniCluster
       var success = false
       while (resultSet.next() && !success) {
         if (resultSet.getString(1) == "parallelism.default" &&
-          resultSet.getString(2) == "6") {
+          resultSet.getString(2) == "2") {
           success = true
         }
       }

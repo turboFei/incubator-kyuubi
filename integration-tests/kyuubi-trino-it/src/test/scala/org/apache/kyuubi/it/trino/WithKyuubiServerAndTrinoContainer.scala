@@ -20,16 +20,17 @@ package org.apache.kyuubi.it.trino
 import com.dimafeng.testcontainers.TrinoContainer
 import com.dimafeng.testcontainers.scalatest.TestContainerForAll
 
-import org.apache.kyuubi.{Utils, WithKyuubiServer}
+import org.apache.kyuubi.WithKyuubiServer
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf._
+import org.apache.kyuubi.util.JavaUtils
 
 trait WithKyuubiServerAndTrinoContainer extends WithKyuubiServer with TestContainerForAll {
 
-  val kyuubiHome: String = Utils.getCodeSourceLocation(getClass).split("integration-tests").head
+  val kyuubiHome: String = JavaUtils.getCodeSourceLocation(getClass).split("integration-tests").head
 
-  final val IMAGE_VERSION = 363
-  final val DOCKER_IMAGE_NAME = s"trinodb/trino:${IMAGE_VERSION}"
+  final val IMAGE_VERSION = 411
+  final val DOCKER_IMAGE_NAME = s"trinodb/trino:$IMAGE_VERSION"
 
   override val containerDef: TrinoContainer.Def = TrinoContainer.Def(DOCKER_IMAGE_NAME)
 

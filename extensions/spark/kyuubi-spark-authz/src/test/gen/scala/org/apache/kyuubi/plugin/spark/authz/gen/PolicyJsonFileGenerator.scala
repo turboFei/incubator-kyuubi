@@ -22,11 +22,10 @@ import java.nio.file.{Files, Paths, StandardOpenOption}
 import java.util.UUID
 
 import com.fasterxml.jackson.annotation.JsonInclude.Include
-import com.fasterxml.jackson.databind.{JsonNode, ObjectMapper}
+import com.fasterxml.jackson.databind.{JsonNode, ObjectMapper, SerializationFeature}
 import com.fasterxml.jackson.databind.json.JsonMapper
 import com.fasterxml.jackson.databind.node.ObjectNode
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
-import org.apache.commons.io.FileUtils
 import org.apache.ranger.plugin.model.RangerPolicy
 // scalastyle:off
 import org.scalatest.funsuite.AnyFunSuite
@@ -37,31 +36,34 @@ import org.apache.kyuubi.plugin.spark.authz.gen.KRangerPolicyItemAccess.allowTyp
 import org.apache.kyuubi.plugin.spark.authz.gen.KRangerPolicyResource._
 import org.apache.kyuubi.plugin.spark.authz.gen.RangerAccessType._
 import org.apache.kyuubi.plugin.spark.authz.gen.RangerClassConversions._
+import org.apache.kyuubi.util.AssertionUtils._
+import org.apache.kyuubi.util.GoldenFileUtils._
 
 /**
  * Generates the policy file to test/main/resources dir.
  *
  * To run the test suite:
- * build/mvn clean test -Pgen-policy -pl :kyuubi-spark-authz_2.12 -Dtest=none
- * -DwildcardSuites=org.apache.kyuubi.plugin.spark.authz.gen.PolicyJsonFileGenerator
+ * {{{
+ *   KYUUBI_UPDATE=0 dev/gen/gen_ranger_policy_json.sh
+ * }}}
  *
  * To regenerate the ranger policy file:
- * KYUUBI_UPDATE=1 build/mvn clean test -Pgen-policy -pl :kyuubi-spark-authz_2.12 -Dtest=none
- * -DwildcardSuites=org.apache.kyuubi.plugin.spark.authz.gen.PolicyJsonFileGenerator
+ * {{{
+ *   dev/gen/gen_ranger_policy_json.sh
+ * }}}
  */
 class PolicyJsonFileGenerator extends AnyFunSuite {
   // scalastyle:on
   final private val mapper: ObjectMapper = JsonMapper.builder()
     .addModule(DefaultScalaModule)
     .serializationInclusion(Include.NON_NULL)
+    .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
     .build()
 
   test("check ranger policy file") {
-    val pluginHome = getClass.getProtectionDomain.getCodeSource.getLocation.getPath
-      .split("target").head
     val policyFileName = "sparkSql_hive_jenkins.json"
-    val policyFilePath =
-      Paths.get(pluginHome, "src", "test", "resources", policyFileName)
+    val policyFilePath = Paths.get(
+      s"${getCurrentModuleHome(this)}/src/test/resources/$policyFileName")
     val generatedStr = mapper.writerWithDefaultPrettyPrinter()
       .writeValueAsString(servicePolicies)
 
@@ -75,14 +77,11 @@ class PolicyJsonFileGenerator extends AnyFunSuite {
         StandardOpenOption.CREATE,
         StandardOpenOption.TRUNCATE_EXISTING)
     } else {
-      val existedFileContent =
-        FileUtils.readFileToString(policyFilePath.toFile, StandardCharsets.UTF_8)
-      withClue("Please regenerate the ranger policy file by running"
-        + "`KYUUBI_UPDATE=1 build/mvn clean test -Pgen-policy"
-        + " -pl :kyuubi-spark-authz_2.12 -Dtest=none"
-        + " -DwildcardSuites=org.apache.kyuubi.plugin.spark.authz.gen.PolicyJsonFileGenerator`.") {
-        assert(generatedStr.equals(existedFileContent))
-      }
+      assertFileContent(
+        policyFilePath,
+        Seq(generatedStr),
+        "dev/gen/gen_ranger_policy_json.sh",
+        splitFirstExpectedLine = true)
     }
   }
 
@@ -109,6 +108,7 @@ class PolicyJsonFileGenerator extends AnyFunSuite {
       policyAccessForDefaultBobUse,
       policyAccessForDefaultBobSelect,
       policyAccessForPermViewAccessOnly,
+      policyAccessForTable2AccessOnly,
       // row filter
       policyFilterForSrcTableKeyLessThan20,
       policyFilterForPermViewKeyLessThan20,
@@ -174,7 +174,7 @@ class PolicyJsonFileGenerator extends AnyFunSuite {
     name = "all - database, udf",
     description = "Policy for all - database, udf",
     resources = Map(
-      databaseRes(defaultDb, sparkCatalog, icebergNamespace, namespace1),
+      databaseRes(defaultDb, sparkCatalog, icebergNamespace, namespace1, paimonNamespace),
       allTableRes,
       allColumnRes),
     policyItems = List(
@@ -344,6 +344,18 @@ class PolicyJsonFileGenerator extends AnyFunSuite {
     policyItems = List(
       KRangerPolicyItem(
         users = List(permViewOnlyUser),
+        accesses = allowTypes(select),
+        delegateAdmin = true)))
+
+  private val policyAccessForTable2AccessOnly = KRangerPolicy(
+    name = "someone_access_table2",
+    resources = Map(
+      databaseRes(defaultDb),
+      tableRes("table2"),
+      allColumnRes),
+    policyItems = List(
+      KRangerPolicyItem(
+        users = List(table2OnlyUser),
         accesses = allowTypes(select),
         delegateAdmin = true)))
 }

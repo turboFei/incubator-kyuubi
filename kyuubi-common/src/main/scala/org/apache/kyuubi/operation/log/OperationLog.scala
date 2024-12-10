@@ -20,19 +20,18 @@ package org.apache.kyuubi.operation.log
 import java.io.{BufferedReader, IOException}
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Files, NoSuchFileException, Path, Paths}
 import java.util.{ArrayList => JArrayList, List => JList}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 
-import org.apache.hive.service.rpc.thrift.{TColumn, TRow, TRowSet, TStringColumn}
-
 import org.apache.kyuubi.{KyuubiSQLException, Logging}
 import org.apache.kyuubi.operation.FetchOrientation.{FETCH_FIRST, FETCH_NEXT, FetchOrientation}
 import org.apache.kyuubi.operation.OperationHandle
 import org.apache.kyuubi.session.Session
-import org.apache.kyuubi.util.ThriftUtils
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift.{TColumn, TRow, TRowSet, TStringColumn}
+import org.apache.kyuubi.util.{TempFileCleanupUtils, ThriftUtils}
 
 object OperationLog extends Logging {
   final private val OPERATION_LOG: InheritableThreadLocal[OperationLog] = {
@@ -50,19 +49,23 @@ object OperationLog extends Logging {
   def removeCurrentOperationLog(): Unit = OPERATION_LOG.remove()
 
   /**
-   * The operation log root directory, this directory will delete when JVM exit.
+   * The operation log root directory, this directory will be deleted
+   * either after the duration of `kyuubi.server.tempFile.expireTime`
+   * or when JVM exit.
    */
-  def createOperationLogRootDirectory(session: Session): Unit = {
-    session.sessionManager.operationLogRoot.foreach { operationLogRoot =>
+  def createOperationLogRootDirectory(session: Session): Path = {
+    session.sessionManager.operationLogRoot.map { operationLogRoot =>
       val path = Paths.get(operationLogRoot, session.handle.identifier.toString)
       try {
         Files.createDirectories(path)
-        path.toFile.deleteOnExit()
+        TempFileCleanupUtils.deleteOnExit(path)
+        path
       } catch {
         case e: IOException =>
           error(s"Failed to create operation log root directory: $path", e)
+          null
       }
-    }
+    }.orNull
   }
 
   /**
@@ -233,8 +236,6 @@ class OperationLog(path: Path) {
   }
 
   def close(): Unit = synchronized {
-    if (!initialized) return
-
     closeExtraReaders()
 
     trySafely {
@@ -254,7 +255,7 @@ class OperationLog(path: Path) {
     }
 
     trySafely {
-      Files.delete(path)
+      Files.deleteIfExists(path)
     }
   }
 
@@ -262,6 +263,7 @@ class OperationLog(path: Path) {
     try {
       f
     } catch {
+      case _: NoSuchFileException =>
       case e: IOException =>
         // Printing log here may cause a deadlock. The lock order of OperationLog.write
         // is RootLogger -> LogDivertAppender -> OperationLog. If printing log here, the

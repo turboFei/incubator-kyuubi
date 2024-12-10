@@ -66,11 +66,13 @@ case class BatchOpts(
     batchType: String = null,
     batchUser: String = null,
     batchState: String = null,
+    batchName: String = null,
     createTime: Long = 0,
     endTime: Long = 0,
     from: Int = -1,
     size: Int = 100,
-    waitCompletion: Boolean = true)
+    waitCompletion: Boolean = true,
+    desc: Boolean = false)
 
 case class EngineOpts(
     user: String = null,

@@ -19,6 +19,16 @@
 
 Note that: now the api version is v1 and the base uri is `/api/v1`.
 
+## Authentication
+
+REST API supports the [Basic Authentication](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Authorization#basic_authentication) which relies on `Authorization` header in HTTP request.
+
+```
+Authorization: Basic <credentials>
+```
+
+The `<credentials>` value is the Base64 encoded string of `username:password`. For example, in the case of a user `aladdin` with the password `opensesame`, set the `Authorization` header to `Basic YWxhZGRpbjpvcGVuc2VzYW1l` as Base64 encoded `aladdin:opensesame`.
+
 ## Session Resource
 
 ### GET /sessions
@@ -297,7 +307,7 @@ Get a list of operation log lines of the running operation by the specified oper
 
 | Name    | Description                           | Type |
 |:--------|:--------------------------------------|:-----|
-| maxRows | The max row that are pulled each time | Int  |
+| maxrows | The max row that are pulled each time | Int  |
 
 #### Response Body
 
@@ -332,15 +342,16 @@ Returns all the batches.
 
 #### Request Parameters
 
-| Name       | Description                                                                                         | Type   |
-|:-----------|:----------------------------------------------------------------------------------------------------|:-------|
-| batchType  | The batch type, such as spark/flink, if no batchType is specified,<br/> return all types            | String |
-| batchState | The valid batch state can be one of the following:<br/> PENDING, RUNNING, FINISHED, ERROR, CANCELED | String |
-| batchUser  | The user name that created the batch                                                                | String |
-| createTime | Return the batch that created after this timestamp                                                  | Long   |
-| endTime    | Return the batch that ended before this timestamp                                                   | Long   |
-| from       | The start index to fetch batches                                                                    | Int    |
-| size       | Number of batches to fetch, 100 by default                                                          | Int    |
+| Name       | Description                                                                                         | Type    |
+|:-----------|:----------------------------------------------------------------------------------------------------|:--------|
+| batchType  | The batch type, such as spark/flink, if no batchType is specified,<br/> return all types            | String  |
+| batchState | The valid batch state can be one of the following:<br/> PENDING, RUNNING, FINISHED, ERROR, CANCELED | String  |
+| batchUser  | The user name that created the batch                                                                | String  |
+| createTime | Return the batch that created after this timestamp                                                  | Long    |
+| endTime    | Return the batch that ended before this timestamp                                                   | Long    |
+| from       | The start index to fetch batches                                                                    | Int     |
+| size       | Number of batches to fetch, 100 by default                                                          | Int     |
+| desc       | List the batches in descending order, false by default.                                             | Boolean |
 
 #### Response Body
 
@@ -391,7 +402,7 @@ curl --location --request POST 'http://localhost:10099/api/v1/batches' \
 
 | Name         | Description                                                                                       | Media Type       |
 |:-------------|:--------------------------------------------------------------------------------------------------|:-----------------|
-| batchRequest | The batch request in JSON format as request body requried in [POST /batches](#post-batches)       | application/json |
+| batchRequest | The batch request in JSON format as request body required in [POST /batches](#post-batches)       | application/json |
 | resourceFile | The resource to upload and execute, which will be cached on server and cleaned up after execution | File             |
 
 #### Response Body
@@ -409,12 +420,6 @@ The [Batch](#batch).
 ### DELETE /batches/${batchId}
 
 Kill the batch if it is still running.
-
-#### Request Parameters
-
-| Name                    | Description                   | Type             |
-|:------------------------|:------------------------------|:-----------------|
-| hive.server2.proxy.user | the proxy user to impersonate | String(optional) |
 
 #### Response Body
 
@@ -449,7 +454,13 @@ Refresh the Hadoop configurations of the Kyuubi server.
 
 ### POST /admin/refresh/user_defaults_conf
 
-Refresh the [user defaults configs](../../deployment/settings.html#user-defaults) with key in format in the form of `___{username}___.{config key}` from default property file.
+Refresh the [user defaults configs](../../configuration/settings.html#user-defaults) with key in format in the form of `___{username}___.{config key}` from default property file.
+
+### POST /admin/refresh/kubernetes_conf
+
+Refresh the kubernetes configs with key prefixed with `kyuubi.kubernetes` from default property file.
+
+It is helpful if you need to support multiple kubernetes contexts and namespaces, see [KYUUBI #4843](https://github.com/apache/kyuubi/issues/4843).
 
 ### DELETE /admin/engine
 
@@ -457,12 +468,17 @@ Delete the specified engine.
 
 #### Request Parameters
 
-| Name                    | Description                   | Type             |
-|:------------------------|:------------------------------|:-----------------|
-| type                    | the engine type               | String(optional) |
-| sharelevel              | the engine share level        | String(optional) |
-| subdomain               | the engine subdomain          | String(optional) |
-| hive.server2.proxy.user | the proxy user to impersonate | String(optional) |
+| Name                    | Description                                                  | Type              |
+|:------------------------|:-------------------------------------------------------------|:------------------|
+| type                    | the engine type                                              | String(optional)  |
+| sharelevel              | the engine share level                                       | String(optional)  |
+| subdomain               | the engine subdomain                                         | String(optional)  |
+| proxyUser               | the proxy user to impersonate                                | String(optional)  |
+| hive.server2.proxy.user | the proxy user to impersonate                                | String(optional)  |
+| kill                    | whether to kill the engine forcibly. Default value is false. | Boolean(optional) |
+
+`proxyUser` is an alternative to `hive.server2.proxy.user`, and the current behavior is consistent with
+`hive.server2.proxy.user`. When both parameters are set, `proxyUser` takes precedence.
 
 ### GET /admin/engine
 
@@ -475,7 +491,11 @@ Get a list of satisfied engines.
 | type                    | the engine type               | String(optional) |
 | sharelevel              | the engine share level        | String(optional) |
 | subdomain               | the engine subdomain          | String(optional) |
+| proxyUser               | the proxy user to impersonate | String(optional) |
 | hive.server2.proxy.user | the proxy user to impersonate | String(optional) |
+
+`proxyUser` is an alternative to hive.server2.proxy.user, and the current behavior is consistent with
+hive.server2.proxy.user. When both parameters are set, proxyUser takes precedence.
 
 #### Response Body
 

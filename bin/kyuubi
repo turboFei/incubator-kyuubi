@@ -26,6 +26,7 @@ function usage() {
   echo "    restart      - Restart Kyuubi server as a daemon"
   echo "    run          - Run a Kyuubi server in the foreground"
   echo "    stop         - Stop the Kyuubi daemon"
+  echo "    kill         - Stop the Kyuubi daemon forcefully"
   echo "    status       - Show status of the Kyuubi daemon"
   echo "    -h | --help  - Show this help message"
 }
@@ -34,6 +35,11 @@ if [[ "$*" = *--help ]] || [[ "$*" = *-h ]]; then
   usage
   exit 0
 fi
+
+# if for some reason the shell doesn't have $USER defined
+# (e.g., ssh'd in to execute a command)
+# let's get the effective username and use that
+USER=${USER:-$(id -nu)}
 
 function kyuubi_logo() {
   source ${KYUUBI_HOME}/bin/kyuubi-logo
@@ -62,7 +68,9 @@ function kyuubi_rotate_log() {
   fi
 }
 
-export KYUUBI_HOME="$(cd "$(dirname "$0")"/..; pwd)"
+if [ -z "${KYUUBI_HOME}" ]; then
+  KYUUBI_HOME="$(cd "`dirname "$0"`"/..; pwd)"
+fi
 
 if [[ $1 == "start" ]] || [[ $1 == "run" ]]; then
   . "${KYUUBI_HOME}/bin/load-kyuubi-env.sh"
@@ -100,7 +108,12 @@ if [[ -n ${YARN_CONF_DIR} ]]; then
   KYUUBI_CLASSPATH="${KYUUBI_CLASSPATH}:${YARN_CONF_DIR}"
 fi
 
-cmd="${RUNNER} ${KYUUBI_JAVA_OPTS} -cp ${KYUUBI_CLASSPATH} $CLASS"
+if [[ "$1" =~ ^(start|restart|run|stop|kill|status)$ ]]; then
+    command=$1
+    shift
+fi
+
+cmd="${RUNNER} ${KYUUBI_JAVA_OPTS} -cp ${KYUUBI_CLASSPATH} $CLASS $@"
 
 pid="${KYUUBI_PID_DIR}/kyuubi-$USER-$CLASS.pid"
 
@@ -203,6 +216,18 @@ function stop_kyuubi() {
   fi
 }
 
+function kill_kyuubi() {
+  if [ -f ${pid} ]; then
+    TARGET_ID="$(cat "$pid")"
+    echo "Stopping $CLASS forcefully."
+    kill -9 $TARGET_ID
+    kyuubi_logo
+    echo "Bye!"
+  else
+    echo "no $CLASS to stop"
+  fi
+}
+
 function check_kyuubi() {
   if [[ -f ${pid} ]]; then
     TARGET_ID="$(cat "$pid")"
@@ -216,7 +241,7 @@ function check_kyuubi() {
   fi
 }
 
-case $1 in
+case $command in
   (start | "")
     start_kyuubi
     ;;
@@ -233,6 +258,10 @@ case $1 in
 
   (stop)
     stop_kyuubi
+    ;;
+
+  (kill)
+    kill_kyuubi
     ;;
 
   (status)

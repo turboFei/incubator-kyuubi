@@ -33,6 +33,7 @@ public class JdbcConnectionParams {
 
   // Client param names:
 
+  static final String CLIENT_PROTOCOL_VERSION = "clientProtocolVersion";
   // Retry setting
   static final String RETRIES = "retries";
 
@@ -48,9 +49,15 @@ public class JdbcConnectionParams {
   public static final String AUTH_KYUUBI_SERVER_PRINCIPAL = "kyuubiServerPrincipal";
   public static final String AUTH_KYUUBI_CLIENT_PRINCIPAL = "kyuubiClientPrincipal";
   public static final String AUTH_KYUUBI_CLIENT_KEYTAB = "kyuubiClientKeytab";
+  public static final String AUTH_KYUUBI_CLIENT_TICKET_CACHE = "kyuubiClientTicketCache";
   public static final String AUTH_PASSWD = "password";
   public static final String AUTH_KERBEROS_AUTH_TYPE = "kerberosAuthType";
+  public static final String AUTH_KERBEROS_AUTH_TYPE_FROM_KEYTAB = "fromKeytab";
   public static final String AUTH_KERBEROS_AUTH_TYPE_FROM_SUBJECT = "fromSubject";
+  public static final String AUTH_KERBEROS_AUTH_TYPE_FROM_TICKET_CACHE = "fromTicketCache";
+  public static final String AUTH_TYPE_JWT = "jwt";
+  public static final String AUTH_TYPE_JWT_KEY = "jwt";
+  public static final String AUTH_JWT_ENV = "JWT";
   public static final String ANONYMOUS_USER = "anonymous";
   public static final String ANONYMOUS_PASSWD = "anonymous";
   public static final String USE_SSL = "ssl";
@@ -72,6 +79,7 @@ public class JdbcConnectionParams {
   // Use ZooKeeper for indirection while using dynamic service discovery
   static final String SERVICE_DISCOVERY_MODE_ZOOKEEPER = "zooKeeper";
   static final String ZOOKEEPER_NAMESPACE = "zooKeeperNamespace";
+  static final String SERVER_SELECT_STRATEGY = "serverSelectStrategy";
   // Default namespace value on ZooKeeper.
   // This value is used if the param "zooKeeperNamespace" is not specified in the JDBC Uri.
   static final String ZOOKEEPER_DEFAULT_NAMESPACE = "hiveserver2";
@@ -90,6 +98,7 @@ public class JdbcConnectionParams {
 
   static final String CONNECT_TIMEOUT = "connectTimeout";
   static final String SOCKET_TIMEOUT = "socketTimeout";
+  static final String THRIFT_CLIENT_MAX_MESSAGE_SIZE = "thrift.client.max.message.size";
 
   // We support ways to specify application name modeled after some existing DBs, since
   // there's no standard approach.
@@ -113,6 +122,8 @@ public class JdbcConnectionParams {
   // Non-configurable params:
   // Currently supports JKS keystore format
   static final String SSL_TRUST_STORE_TYPE = "JKS";
+
+  static final String SSL_STORE_PASSWORD_PATH = "storePasswordPath";
 
   static final String HIVE_VAR_PREFIX = "hivevar:";
   static final String HIVE_CONF_PREFIX = "hiveconf:";

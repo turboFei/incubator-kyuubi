@@ -26,17 +26,18 @@ import scala.collection.JavaConverters._
 import org.apache.flink.api.common.JobID
 import org.apache.flink.configuration.PipelineOptions
 import org.apache.flink.table.types.logical.LogicalTypeRoot
-import org.apache.hive.service.rpc.thrift._
 
 import org.apache.kyuubi.Utils
 import org.apache.kyuubi.config.KyuubiConf._
-import org.apache.kyuubi.engine.flink.{FlinkEngineUtils, WithFlinkTestResources}
-import org.apache.kyuubi.engine.flink.result.Constants
+import org.apache.kyuubi.engine.flink.FlinkEngineUtils.FLINK_RUNTIME_VERSION
+import org.apache.kyuubi.engine.flink.WithFlinkTestResources
+import org.apache.kyuubi.engine.flink.result.{CommandStrings, Constants}
 import org.apache.kyuubi.engine.flink.util.TestUserClassLoaderJar
-import org.apache.kyuubi.jdbc.hive.KyuubiStatement
+import org.apache.kyuubi.jdbc.hive.{KyuubiSQLException, KyuubiStatement}
 import org.apache.kyuubi.jdbc.hive.common.TimestampTZ
 import org.apache.kyuubi.operation.HiveJDBCTestHelper
 import org.apache.kyuubi.operation.meta.ResultSetSchemaConstant._
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift._
 
 abstract class FlinkOperationSuite extends HiveJDBCTestHelper with WithFlinkTestResources {
 
@@ -635,8 +636,10 @@ abstract class FlinkOperationSuite extends HiveJDBCTestHelper with WithFlinkTest
   }
 
   test("execute statement - show/stop jobs") {
-    if (FlinkEngineUtils.isFlinkVersionAtLeast("1.17")) {
-      withSessionConf()(Map(ENGINE_FLINK_MAX_ROWS.key -> "10"))(Map.empty) {
+    if (FLINK_RUNTIME_VERSION >= "1.17") {
+      // use a bigger value to ensure all tasks of the streaming query run until
+      // we explicitly stop the job.
+      withSessionConf()(Map(ENGINE_FLINK_MAX_ROWS.key -> "10000"))(Map.empty) {
         withMultipleConnectionJdbcStatement()({ statement =>
           statement.executeQuery(
             "create table tbl_a (a int) with (" +
@@ -675,12 +678,10 @@ abstract class FlinkOperationSuite extends HiveJDBCTestHelper with WithFlinkTest
           assert(stopResult1.next())
           assert(stopResult1.getString(1) === "OK")
 
-          val selectResult = statement.executeQuery("select * from tbl_a")
-          val jobId2 = statement.asInstanceOf[KyuubiStatement].getQueryId
-          assert(jobId2 !== null)
-          while (!selectResult.next()) {
-            Thread.sleep(1000L)
-          }
+          val insertResult2 = statement.executeQuery("insert into tbl_b select * from tbl_a")
+          assert(insertResult2.next())
+          val jobId2 = insertResult2.getString(1)
+
           val stopResult2 = statement.executeQuery(s"stop job '$jobId2' with savepoint")
           assert(stopResult2.getMetaData.getColumnName(1).equals("savepoint path"))
           assert(stopResult2.next())
@@ -992,6 +993,8 @@ abstract class FlinkOperationSuite extends HiveJDBCTestHelper with WithFlinkTest
         statement.getConnection.setSchema("db_a")
         val changedSchema = statement.getConnection.getSchema
         assert(changedSchema == "db_a")
+        // reset database to default
+        statement.getConnection.setSchema("default_database")
         assert(statement.execute("drop database db_a"))
       }
     }
@@ -1055,7 +1058,7 @@ abstract class FlinkOperationSuite extends HiveJDBCTestHelper with WithFlinkTest
       val jobId = resultSet.getString(1)
       assert(jobId.length == 32)
 
-      if (FlinkEngineUtils.isFlinkVersionAtLeast("1.17")) {
+      if (FLINK_RUNTIME_VERSION >= "1.17") {
         val stopResult = statement.executeQuery(s"stop job '$jobId'")
         assert(stopResult.next())
         assert(stopResult.getString(1) === "OK")
@@ -1145,6 +1148,22 @@ abstract class FlinkOperationSuite extends HiveJDBCTestHelper with WithFlinkTest
           rows += 1
         }
         assert(rows === 200)
+      }
+    }
+    if (FLINK_RUNTIME_VERSION >= "1.17") {
+      withSessionConf()(Map(ENGINE_FLINK_MAX_ROWS.key -> "10"))(Map.empty) {
+        withJdbcStatement() { statement =>
+          for (i <- 0 to 10) {
+            statement.execute(s"create table tbl_src$i (a bigint) " +
+              s"with ('connector' = 'blackhole')")
+          }
+          val resultSet = statement.executeQuery("show tables")
+          var rows = 0
+          while (resultSet.next()) {
+            rows += 1
+          }
+          assert(rows === 11)
+        }
       }
     }
   }
@@ -1243,12 +1262,32 @@ abstract class FlinkOperationSuite extends HiveJDBCTestHelper with WithFlinkTest
       assert(stmt.asInstanceOf[KyuubiStatement].getQueryId === null)
       stmt.executeQuery("insert into tbl_a values (1)")
       val queryId = stmt.asInstanceOf[KyuubiStatement].getQueryId
-      // Flink 1.16 doesn't support query id via ResultFetcher
-      if (FlinkEngineUtils.isFlinkVersionAtLeast("1.17")) {
-        assert(queryId !== null)
-        // parse the string to check if it's valid Flink job id
-        assert(JobID.fromHexString(queryId) !== null)
-      }
+      assert(queryId !== null)
+      // parse the string to check if it's valid Flink job id
+      assert(JobID.fromHexString(queryId) !== null)
+    }
+  }
+
+  test("test result fetch timeout") {
+    val exception = intercept[KyuubiSQLException](
+      withSessionConf()(Map(ENGINE_FLINK_FETCH_TIMEOUT.key -> "PT60S"))() {
+        withJdbcStatement("tbl_a") { stmt =>
+          stmt.executeQuery("create table tbl_a (a int) " +
+            "with ('connector' = 'datagen', 'rows-per-second'='0')")
+          val resultSet = stmt.executeQuery("select * from tbl_a")
+          while (resultSet.next()) {}
+        }
+      })
+    assert(exception.getMessage === "Futures timed out after [60000 milliseconds]")
+  }
+
+  test("execute statement - help") {
+    withJdbcStatement() { stmt =>
+      val resultSet = stmt.executeQuery("help")
+      val metadata = resultSet.getMetaData
+      assert(metadata.getColumnName(1) === "result")
+      assert(resultSet.next())
+      assert(resultSet.getString(1).equals(CommandStrings.MESSAGE_HELP.toString))
     }
   }
 }

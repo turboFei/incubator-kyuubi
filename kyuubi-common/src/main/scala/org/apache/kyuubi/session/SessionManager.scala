@@ -23,15 +23,16 @@ import java.util.concurrent.{ConcurrentHashMap, Future, ThreadPoolExecutor, Time
 
 import scala.collection.JavaConverters._
 import scala.concurrent.duration.Duration
-
-import org.apache.hive.service.rpc.thrift.TProtocolVersion
+import scala.util.control.NonFatal
 
 import org.apache.kyuubi.{KyuubiSQLException, Utils}
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf._
 import org.apache.kyuubi.operation.OperationManager
 import org.apache.kyuubi.service.CompositeService
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift.TProtocolVersion
 import org.apache.kyuubi.util.ThreadUtils
+import org.apache.kyuubi.util.ThreadUtils.scheduleTolerableRunnableWithFixedDelay
 
 /**
  * The [[SessionManager]] holds the all the connected [[Session]]s, provides us the APIs to
@@ -89,9 +90,9 @@ abstract class SessionManager(name: String) extends CompositeService(name) {
       conf: Map[String, String]): Session
 
   protected def logSessionCountInfo(session: Session, action: String): Unit = {
-    info(s"${session.user}'s session with" +
+    info(s"${session.user}'s ${session.getClass.getSimpleName} with" +
       s" ${session.handle}${session.name.map("/" + _).getOrElse("")} is $action," +
-      s" current opening sessions $getOpenSessionCount")
+      s" current opening sessions $getActiveUserSessionCount")
   }
 
   def openSession(
@@ -102,16 +103,16 @@ abstract class SessionManager(name: String) extends CompositeService(name) {
       conf: Map[String, String]): SessionHandle = {
     info(s"Opening session for $user@$ipAddress")
     val session = createSession(protocol, user, password, ipAddress, conf)
+    val handle = session.handle
     try {
-      val handle = session.handle
-      session.open()
       setSession(handle, session)
+      session.open()
       logSessionCountInfo(session, "opened")
       handle
     } catch {
       case e: Exception =>
         try {
-          session.close()
+          closeSession(handle)
         } catch {
           case t: Throwable =>
             warn(s"Error closing session for $user client ip: $ipAddress", t)
@@ -121,10 +122,12 @@ abstract class SessionManager(name: String) extends CompositeService(name) {
   }
 
   def closeSession(sessionHandle: SessionHandle): Unit = {
-    _latestLogoutTime = System.currentTimeMillis()
     val session = handleToSession.remove(sessionHandle)
     if (session == null) {
       throw KyuubiSQLException(s"Invalid $sessionHandle")
+    }
+    if (!session.isForAliveProbe) {
+      _latestLogoutTime = System.currentTimeMillis()
     }
     logSessionCountInfo(session, "closed")
     try {
@@ -158,7 +161,10 @@ abstract class SessionManager(name: String) extends CompositeService(name) {
     handleToSession.put(sessionHandle, session)
   }
 
-  def getOpenSessionCount: Int = handleToSession.size()
+  /**
+   * Get the count of active user sessions, which excludes alive probe sessions.
+   */
+  def getActiveUserSessionCount: Int = handleToSession.values().asScala.count(!_.isForAliveProbe)
 
   def allSessions(): Iterable[Session] = handleToSession.values().asScala
 
@@ -265,10 +271,10 @@ abstract class SessionManager(name: String) extends CompositeService(name) {
         conf.get(ENGINE_EXEC_KEEPALIVE_TIME)
       }
 
-    _confRestrictList = conf.get(SESSION_CONF_RESTRICT_LIST).toSet
-    _confIgnoreList = conf.get(SESSION_CONF_IGNORE_LIST).toSet +
+    _confRestrictList = conf.get(SESSION_CONF_RESTRICT_LIST)
+    _confIgnoreList = conf.get(SESSION_CONF_IGNORE_LIST) +
       s"${SESSION_USER_SIGN_ENABLED.key}"
-    _batchConfIgnoreList = conf.get(BATCH_CONF_IGNORE_LIST).toSet
+    _batchConfIgnoreList = conf.get(BATCH_CONF_IGNORE_LIST)
 
     execPool = ThreadUtils.newDaemonQueuedThreadPool(
       poolSize,
@@ -302,28 +308,38 @@ abstract class SessionManager(name: String) extends CompositeService(name) {
 
     val checkTask = new Runnable {
       override def run(): Unit = {
+        info(s"Checking sessions timeout, current count: $getActiveUserSessionCount")
         val current = System.currentTimeMillis
         if (!shutdown) {
           for (session <- handleToSession.values().asScala) {
-            if (session.lastAccessTime + session.sessionIdleTimeoutThreshold <= current &&
-              session.getNoOperationTime > session.sessionIdleTimeoutThreshold) {
-              info(s"Closing session ${session.handle.identifier} that has been idle for more" +
-                s" than ${session.sessionIdleTimeoutThreshold} ms")
-              try {
+            try {
+              if (session.lastAccessTime + session.sessionIdleTimeoutThreshold <= current &&
+                session.getNoOperationTime > session.sessionIdleTimeoutThreshold) {
+                info(s"Closing session ${session.handle.identifier} that has been idle for more" +
+                  s" than ${session.sessionIdleTimeoutThreshold} ms")
                 closeSession(session.handle)
-              } catch {
-                case e: KyuubiSQLException =>
-                  warn(s"Error closing idle session ${session.handle}", e)
+              } else if (session.getSessionBrokenTime > 0 &&
+                session.getSessionBrokenTime + session.sessionBrokenTimeoutThreshold < current) {
+                info(s"Closing session ${session.handle.identifier} that has been broken for more" +
+                  s" than ${session.sessionBrokenTimeoutThreshold} ms")
+                closeSession(session.handle)
+              } else {
+                session.closeExpiredOperations()
               }
-            } else {
-              session.closeExpiredOperations()
+            } catch {
+              case NonFatal(e) => warn(s"Error checking session ${session.handle} timeout", e)
             }
           }
         }
       }
     }
 
-    timeoutChecker.scheduleWithFixedDelay(checkTask, interval, interval, TimeUnit.MILLISECONDS)
+    scheduleTolerableRunnableWithFixedDelay(
+      timeoutChecker,
+      checkTask,
+      interval,
+      interval,
+      TimeUnit.MILLISECONDS)
   }
 
   private[kyuubi] def startTerminatingChecker(stop: () => Unit): Unit = if (!isServer) {
@@ -335,13 +351,18 @@ abstract class SessionManager(name: String) extends CompositeService(name) {
       val checkTask = new Runnable {
         override def run(): Unit = {
           if (!shutdown && System.currentTimeMillis() - latestLogoutTime > idleTimeout &&
-            getOpenSessionCount <= 0) {
+            getActiveUserSessionCount <= 0) {
             info(s"Idled for more than $idleTimeout ms, terminating")
             stop()
           }
         }
       }
-      timeoutChecker.scheduleWithFixedDelay(checkTask, interval, interval, TimeUnit.MILLISECONDS)
+      scheduleTolerableRunnableWithFixedDelay(
+        timeoutChecker,
+        checkTask,
+        interval,
+        interval,
+        TimeUnit.MILLISECONDS)
     }
   }
 }

@@ -17,14 +17,13 @@
 
 package org.apache.kyuubi.engine.trino.session
 
-import org.apache.hive.service.rpc.thrift.TProtocolVersion
-
 import org.apache.kyuubi.config.KyuubiConf.ENGINE_SHARE_LEVEL
 import org.apache.kyuubi.config.KyuubiReservedKeys.KYUUBI_SESSION_HANDLE_KEY
 import org.apache.kyuubi.engine.ShareLevel
 import org.apache.kyuubi.engine.trino.TrinoSqlEngine
 import org.apache.kyuubi.engine.trino.operation.TrinoOperationManager
 import org.apache.kyuubi.session.{Session, SessionHandle, SessionManager}
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift.TProtocolVersion
 
 class TrinoSessionManager
   extends SessionManager("TrinoSessionManager") {
@@ -46,12 +45,12 @@ class TrinoSessionManager
   override def closeSession(sessionHandle: SessionHandle): Unit = {
     super.closeSession(sessionHandle)
     if (conf.get(ENGINE_SHARE_LEVEL) == ShareLevel.CONNECTION.toString) {
-      info("Session stopped due to shared level is Connection.")
-      stopSession()
+      info("Trino engine stopped due to session stopped and shared level is CONNECTION.")
+      stopEngine()
     }
   }
 
-  private def stopSession(): Unit = {
+  private def stopEngine(): Unit = {
     TrinoSqlEngine.currentEngine.foreach(_.stop())
   }
 

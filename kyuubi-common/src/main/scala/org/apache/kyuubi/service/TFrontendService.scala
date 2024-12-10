@@ -19,24 +19,22 @@ package org.apache.kyuubi.service
 
 import java.net.{InetAddress, ServerSocket}
 import java.util.concurrent.atomic.AtomicBoolean
-
 import scala.collection.JavaConverters._
 import scala.language.implicitConversions
-
 import org.apache.hadoop.conf.Configuration
-import org.apache.hive.service.rpc.thrift._
-import org.apache.thrift.protocol.TProtocol
-import org.apache.thrift.server.{ServerContext, TServerEventHandler}
-import org.apache.thrift.transport.TTransport
-
-import org.apache.kyuubi.{KyuubiSQLException, Logging, Utils}
+import org.apache.kyuubi.{KyuubiSQLException, Logging}
 import org.apache.kyuubi.Utils.stringifyException
-import org.apache.kyuubi.config.KyuubiConf.{FRONTEND_CONNECTION_URL_USE_HOSTNAME, SESSION_CLOSE_ON_DISCONNECT}
+import org.apache.kyuubi.config.KyuubiConf.{FRONTEND_ADVERTISED_HOST, FRONTEND_CONNECTION_URL_USE_HOSTNAME, PROXY_USER, SESSION_CLOSE_ON_DISCONNECT}
+import org.apache.kyuubi.config.KyuubiReservedKeys
 import org.apache.kyuubi.config.KyuubiReservedKeys._
 import org.apache.kyuubi.operation.{FetchOrientation, OperationHandle}
-import org.apache.kyuubi.service.authentication.KyuubiAuthenticationFactory
+import org.apache.kyuubi.service.authentication.{AuthUtils, KyuubiAuthenticationFactory}
 import org.apache.kyuubi.session.SessionHandle
-import org.apache.kyuubi.util.{KyuubiHadoopUtils, NamedThreadFactory}
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift._
+import org.apache.kyuubi.shaded.thrift.protocol.TProtocol
+import org.apache.kyuubi.shaded.thrift.server.{ServerContext, TServerEventHandler}
+import org.apache.kyuubi.shaded.thrift.transport.TTransport
+import org.apache.kyuubi.util.{JavaUtils, KyuubiHadoopUtils, NamedThreadFactory}
 
 /**
  * Apache Thrift based hive-service-rpc base class
@@ -53,7 +51,7 @@ abstract class TFrontendService(name: String)
   protected def serverHost: Option[String]
   protected def portNum: Int
   protected lazy val serverAddr: InetAddress =
-    serverHost.map(InetAddress.getByName).getOrElse(Utils.findLocalInetAddress)
+    serverHost.map(InetAddress.getByName).getOrElse(JavaUtils.findLocalInetAddress)
   protected lazy val serverSocket = new ServerSocket(portNum, -1, serverAddr)
   protected lazy val actualPort: Int = serverSocket.getLocalPort
   protected lazy val authFactory: KyuubiAuthenticationFactory =
@@ -112,12 +110,12 @@ abstract class TFrontendService(name: String)
 
   override def connectionUrl: String = {
     checkInitialized()
-    val host = serverHost match {
-      case Some(h) => h // respect user's setting ahead
-      case None if conf.get(FRONTEND_CONNECTION_URL_USE_HOSTNAME) =>
+    val host = (conf.get(FRONTEND_ADVERTISED_HOST), serverHost) match {
+      case (Some(advertisedHost), _) => advertisedHost
+      case (None, Some(h)) => h
+      case (None, None) if conf.get(FRONTEND_CONNECTION_URL_USE_HOSTNAME) =>
         serverAddr.getCanonicalHostName
-      case None =>
-        serverAddr.getHostAddress
+      case (None, None) => serverAddr.getHostAddress
     }
 
     host + ":" + actualPort
@@ -127,11 +125,12 @@ abstract class TFrontendService(name: String)
       sessionConf: java.util.Map[String, String],
       ipAddress: String,
       realUser: String): String = {
-    val proxyUser = sessionConf.get(KyuubiAuthenticationFactory.HS2_PROXY_USER)
+    val proxyUser = Option(sessionConf.get(PROXY_USER.key))
+      .getOrElse(sessionConf.get(AuthUtils.HS2_PROXY_USER))
     if (proxyUser == null) {
       realUser
     } else {
-      KyuubiAuthenticationFactory.verifyProxyAccess(realUser, proxyUser, ipAddress, hadoopConf)
+      AuthUtils.verifyProxyAccess(realUser, proxyUser, ipAddress, hadoopConf)
       proxyUser
     }
   }
@@ -173,6 +172,10 @@ abstract class TFrontendService(name: String)
         Map(
           KYUUBI_SESSION_CONNECTION_URL_KEY -> connectionUrl,
           KYUUBI_SESSION_REAL_USER_KEY -> realUser)
+
+    val sessionHandleId = configuration.get(KyuubiReservedKeys.KYUUBI_SESSION_HANDLE_KEY)
+    val sessionEngineRefId = configuration.get(KyuubiReservedKeys.KYUUBI_ENGINE_REF_ID)
+
     val sessionHandle = be.openSession(
       protocol,
       sessionUser,
@@ -520,23 +523,20 @@ abstract class TFrontendService(name: String)
 
   override def FetchResults(req: TFetchResultsReq): TFetchResultsResp = {
     debug(req.toString)
-    val resp = new TFetchResultsResp
     try {
       val operationHandle = OperationHandle(req.getOperationHandle)
       val orientation = FetchOrientation.getFetchOrientation(req.getOrientation)
       // 1 means fetching log
       val fetchLog = req.getFetchType == 1
       val maxRows = req.getMaxRows.toInt
-      val rowSet = be.fetchResults(operationHandle, orientation, maxRows, fetchLog)
-      resp.setResults(rowSet)
-      resp.setHasMoreRows(false)
-      resp.setStatus(OK_STATUS)
+      be.fetchResults(operationHandle, orientation, maxRows, fetchLog)
     } catch {
       case e: Exception =>
         error("Error fetching results: ", e)
+        val resp = new TFetchResultsResp
         resp.setStatus(KyuubiSQLException.toTStatus(e))
+        resp
     }
-    resp
   }
 
   protected def notSupportTokenErrorStatus = {
@@ -596,7 +596,19 @@ abstract class TFrontendService(name: String)
     resp
   }
 
+  override def UploadData(req: TUploadDataReq): TUploadDataResp = {
+    debug(req.toString)
+    throw KyuubiSQLException.featureNotSupported("Method UploadData has not been implemented.")
+  }
+
+  override def DownloadData(req: TDownloadDataReq): TDownloadDataResp = {
+    debug(req.toString)
+    throw KyuubiSQLException.featureNotSupported("Method DownloadData has not been implemented.")
+  }
+
   protected def isServer(): Boolean = false
+
+  protected def reserveSessionOnDisconnect(sessionHandle: SessionHandle): Unit = {}
 
   class FeTServerEventHandler extends TServerEventHandler {
     implicit def toFeServiceServerContext(context: ServerContext): FeServiceServerContext = {
@@ -608,13 +620,15 @@ abstract class TFrontendService(name: String)
       if (handle != null) {
         info(s"Session [$handle] disconnected without closing properly, close it now")
         try {
-          val needToClose = be.sessionManager.getSession(handle).conf
-            .getOrElse(SESSION_CLOSE_ON_DISCONNECT.key, "true").toBoolean
+          val session = be.sessionManager.getSession(handle)
+          val needToClose = session.isForAliveProbe ||
+            session.conf.getOrElse(SESSION_CLOSE_ON_DISCONNECT.key, "true").toBoolean
           if (needToClose) {
             be.closeSession(handle)
           } else {
             warn(s"Session not actually closed because configuration " +
               s"${SESSION_CLOSE_ON_DISCONNECT.key} is set to false")
+            reserveSessionOnDisconnect(handle)
           }
         } catch {
           case e: KyuubiSQLException =>
@@ -651,5 +665,9 @@ private[kyuubi] object TFrontendService {
     }
 
     def getSessionHandle: SessionHandle = sessionHandle
+
+    override def unwrap[T](aClass: Class[T]): T = null.asInstanceOf[T]
+
+    override def isWrapperFor(aClass: Class[_]): Boolean = false
   }
 }

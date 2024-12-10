@@ -16,9 +16,7 @@
 # limitations under the License.
 #
 
-
 export KYUUBI_HOME="${KYUUBI_HOME:-"$(cd "$(dirname "$0")"/.. || exit; pwd)"}"
-
 export KYUUBI_CONF_DIR="${KYUUBI_CONF_DIR:-"${KYUUBI_HOME}"/conf}"
 
 silent=0
@@ -80,6 +78,7 @@ KYUUBI_JAVA_OPTS="$KYUUBI_JAVA_OPTS --add-opens=java.base/java.nio=ALL-UNNAMED"
 KYUUBI_JAVA_OPTS="$KYUUBI_JAVA_OPTS --add-opens=java.base/java.util=ALL-UNNAMED"
 KYUUBI_JAVA_OPTS="$KYUUBI_JAVA_OPTS --add-opens=java.base/java.util.concurrent=ALL-UNNAMED"
 KYUUBI_JAVA_OPTS="$KYUUBI_JAVA_OPTS --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED"
+KYUUBI_JAVA_OPTS="$KYUUBI_JAVA_OPTS --add-opens=java.base/jdk.internal.ref=ALL-UNNAMED"
 KYUUBI_JAVA_OPTS="$KYUUBI_JAVA_OPTS --add-opens=java.base/sun.nio.ch=ALL-UNNAMED"
 KYUUBI_JAVA_OPTS="$KYUUBI_JAVA_OPTS --add-opens=java.base/sun.nio.cs=ALL-UNNAMED"
 KYUUBI_JAVA_OPTS="$KYUUBI_JAVA_OPTS --add-opens=java.base/sun.security.action=ALL-UNNAMED"
@@ -99,6 +98,7 @@ KYUUBI_CTL_JAVA_OPTS="$KYUUBI_CTL_JAVA_OPTS --add-opens=java.base/java.nio=ALL-U
 KYUUBI_CTL_JAVA_OPTS="$KYUUBI_CTL_JAVA_OPTS --add-opens=java.base/java.util=ALL-UNNAMED"
 KYUUBI_CTL_JAVA_OPTS="$KYUUBI_CTL_JAVA_OPTS --add-opens=java.base/java.util.concurrent=ALL-UNNAMED"
 KYUUBI_CTL_JAVA_OPTS="$KYUUBI_CTL_JAVA_OPTS --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED"
+KYUUBI_CTL_JAVA_OPTS="$KYUUBI_CTL_JAVA_OPTS --add-opens=java.base/jdk.internal.ref=ALL-UNNAMED"
 KYUUBI_CTL_JAVA_OPTS="$KYUUBI_CTL_JAVA_OPTS --add-opens=java.base/sun.nio.ch=ALL-UNNAMED"
 KYUUBI_CTL_JAVA_OPTS="$KYUUBI_CTL_JAVA_OPTS --add-opens=java.base/sun.nio.cs=ALL-UNNAMED"
 KYUUBI_CTL_JAVA_OPTS="$KYUUBI_CTL_JAVA_OPTS --add-opens=java.base/sun.security.action=ALL-UNNAMED"

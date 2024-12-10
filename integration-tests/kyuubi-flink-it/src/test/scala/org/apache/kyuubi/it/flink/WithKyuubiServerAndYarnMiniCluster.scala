@@ -20,16 +20,18 @@ package org.apache.kyuubi.it.flink
 import java.io.{File, FileWriter}
 import java.nio.file.Paths
 
+import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.yarn.conf.YarnConfiguration
 
 import org.apache.kyuubi.{KyuubiFunSuite, Utils, WithKyuubiServer}
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.config.KyuubiConf.KYUUBI_ENGINE_ENV_PREFIX
 import org.apache.kyuubi.server.{MiniDFSService, MiniYarnService}
+import org.apache.kyuubi.util.JavaUtils
 
 trait WithKyuubiServerAndYarnMiniCluster extends KyuubiFunSuite with WithKyuubiServer {
 
-  val kyuubiHome: String = Utils.getCodeSourceLocation(getClass).split("integration-tests").head
+  val kyuubiHome: String = JavaUtils.getCodeSourceLocation(getClass).split("integration-tests").head
 
   override protected val conf: KyuubiConf = new KyuubiConf(false)
 
@@ -83,7 +85,13 @@ trait WithKyuubiServerAndYarnMiniCluster extends KyuubiFunSuite with WithKyuubiS
   }
 
   override def beforeAll(): Unit = {
-    miniHdfsService = new MiniDFSService()
+    val hdfsConf = new Configuration()
+    // before HADOOP-18206 (3.4.0), HDFS MetricsLogger strongly depends on
+    // commons-logging, we should disable it explicitly, otherwise, it throws
+    // ClassNotFound: org.apache.commons.logging.impl.Log4JLogger
+    hdfsConf.set("dfs.namenode.metrics.logger.period.seconds", "0")
+    hdfsConf.set("dfs.datanode.metrics.logger.period.seconds", "0")
+    miniHdfsService = new MiniDFSService(hdfsConf)
     miniHdfsService.initialize(conf)
     miniHdfsService.start()
 

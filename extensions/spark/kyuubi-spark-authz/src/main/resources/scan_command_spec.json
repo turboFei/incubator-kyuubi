@@ -1,29 +1,114 @@
 [ {
-  "classname" : "org.apache.kyuubi.plugin.spark.authz.util.PermanentViewMarker",
+  "classname" : "org.apache.kyuubi.plugin.spark.authz.rule.permanentview.PermanentViewMarker",
   "scanDescs" : [ {
     "fieldName" : "catalogTable",
     "fieldExtractor" : "CatalogTableTableExtractor",
-    "catalogDesc" : null
-  } ]
+    "catalogDesc" : null,
+    "comment" : ""
+  } ],
+  "functionDescs" : [ ],
+  "uriDescs" : [ ]
 }, {
   "classname" : "org.apache.spark.sql.catalyst.catalog.HiveTableRelation",
   "scanDescs" : [ {
     "fieldName" : "tableMeta",
     "fieldExtractor" : "CatalogTableTableExtractor",
-    "catalogDesc" : null
-  } ]
+    "catalogDesc" : null,
+    "comment" : ""
+  } ],
+  "functionDescs" : [ ],
+  "uriDescs" : [ ]
 }, {
   "classname" : "org.apache.spark.sql.execution.datasources.LogicalRelation",
   "scanDescs" : [ {
     "fieldName" : "catalogTable",
     "fieldExtractor" : "CatalogTableOptionTableExtractor",
-    "catalogDesc" : null
+    "catalogDesc" : null,
+    "comment" : ""
+  } ],
+  "functionDescs" : [ ],
+  "uriDescs" : [ {
+    "fieldName" : "relation",
+    "fieldExtractor" : "BaseRelationFileIndexURIExtractor",
+    "isInput" : false,
+    "comment" : ""
   } ]
 }, {
   "classname" : "org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation",
   "scanDescs" : [ {
     "fieldName" : null,
     "fieldExtractor" : "DataSourceV2RelationTableExtractor",
-    "catalogDesc" : null
-  } ]
+    "catalogDesc" : null,
+    "comment" : ""
+  } ],
+  "functionDescs" : [ ],
+  "uriDescs" : [ ]
+}, {
+  "classname" : "org.apache.spark.sql.hive.HiveGenericUDF",
+  "scanDescs" : [ ],
+  "functionDescs" : [ {
+    "fieldName" : "name",
+    "fieldExtractor" : "QualifiedNameStringFunctionExtractor",
+    "databaseDesc" : null,
+    "functionTypeDesc" : {
+      "fieldName" : "name",
+      "fieldExtractor" : "FunctionNameFunctionTypeExtractor",
+      "skipTypes" : [ "TEMP", "SYSTEM" ],
+      "comment" : ""
+    },
+    "isInput" : true,
+    "comment" : ""
+  } ],
+  "uriDescs" : [ ]
+}, {
+  "classname" : "org.apache.spark.sql.hive.HiveGenericUDTF",
+  "scanDescs" : [ ],
+  "functionDescs" : [ {
+    "fieldName" : "name",
+    "fieldExtractor" : "QualifiedNameStringFunctionExtractor",
+    "databaseDesc" : null,
+    "functionTypeDesc" : {
+      "fieldName" : "name",
+      "fieldExtractor" : "FunctionNameFunctionTypeExtractor",
+      "skipTypes" : [ "TEMP", "SYSTEM" ],
+      "comment" : ""
+    },
+    "isInput" : true,
+    "comment" : ""
+  } ],
+  "uriDescs" : [ ]
+}, {
+  "classname" : "org.apache.spark.sql.hive.HiveSimpleUDF",
+  "scanDescs" : [ ],
+  "functionDescs" : [ {
+    "fieldName" : "name",
+    "fieldExtractor" : "QualifiedNameStringFunctionExtractor",
+    "databaseDesc" : null,
+    "functionTypeDesc" : {
+      "fieldName" : "name",
+      "fieldExtractor" : "FunctionNameFunctionTypeExtractor",
+      "skipTypes" : [ "TEMP", "SYSTEM" ],
+      "comment" : ""
+    },
+    "isInput" : true,
+    "comment" : ""
+  } ],
+  "uriDescs" : [ ]
+}, {
+  "classname" : "org.apache.spark.sql.hive.HiveUDAFFunction",
+  "scanDescs" : [ ],
+  "functionDescs" : [ {
+    "fieldName" : "name",
+    "fieldExtractor" : "QualifiedNameStringFunctionExtractor",
+    "databaseDesc" : null,
+    "functionTypeDesc" : {
+      "fieldName" : "name",
+      "fieldExtractor" : "FunctionNameFunctionTypeExtractor",
+      "skipTypes" : [ "TEMP", "SYSTEM" ],
+      "comment" : ""
+    },
+    "isInput" : true,
+    "comment" : ""
+  } ],
+  "uriDescs" : [ ]
 } ]

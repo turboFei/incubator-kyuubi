@@ -60,7 +60,7 @@ trait DiscoveryClientTests extends KyuubiFunSuite {
         assert(discoveryClient.pathExists(basePath))
         val children = discoveryClient.getChildren(basePath)
         assert(children.head ===
-          s"serviceUri=${service.frontendServices.head.connectionUrl};" +
+          s"serverUri=${service.frontendServices.head.connectionUrl};" +
           s"version=$KYUUBI_VERSION;sequence=0000000000")
 
         children.foreach { child =>
@@ -107,7 +107,7 @@ trait DiscoveryClientTests extends KyuubiFunSuite {
           assert(discoveryClient.pathExists(basePath))
           val children = discoveryClient.getChildren(basePath)
           assert(children.head ===
-            s"serviceUri=${service.frontendServices.head.connectionUrl};" +
+            s"serverUri=${service.frontendServices.head.connectionUrl};" +
             s"version=$KYUUBI_VERSION;sequence=0000000000")
 
           children.foreach { child =>
@@ -135,17 +135,17 @@ trait DiscoveryClientTests extends KyuubiFunSuite {
 
     new Thread(() => {
       withDiscoveryClient(conf) { discoveryClient =>
-        discoveryClient.tryWithLock(lockPath, 3000) {
+        discoveryClient.tryWithLock(lockPath, 10000) {
           lockLatch.countDown()
-          Thread.sleep(5000)
+          Thread.sleep(15000)
         }
       }
     }).start()
 
     withDiscoveryClient(conf) { discoveryClient =>
-      assert(lockLatch.await(5000, TimeUnit.MILLISECONDS))
+      assert(lockLatch.await(20000, TimeUnit.MILLISECONDS))
       val e = intercept[KyuubiSQLException] {
-        discoveryClient.tryWithLock(lockPath, 2000) {}
+        discoveryClient.tryWithLock(lockPath, 5000) {}
       }
       assert(e.getMessage contains s"Timeout to lock on path [$lockPath]")
     }

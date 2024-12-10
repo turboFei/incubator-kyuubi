@@ -17,12 +17,32 @@
 
 package org.apache.kyuubi.engine.flink
 
+import org.apache.kyuubi.KyuubiSQLException
+import org.apache.kyuubi.engine.flink.FlinkEngineUtils.renewDelegationToken
 import org.apache.kyuubi.ha.client.{EngineServiceDiscovery, ServiceDiscovery}
 import org.apache.kyuubi.service.{Serverable, Service, TBinaryFrontendService}
+import org.apache.kyuubi.service.TFrontendService.OK_STATUS
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift.{TRenewDelegationTokenReq, TRenewDelegationTokenResp}
 
 class FlinkTBinaryFrontendService(
     override val serverable: Serverable)
   extends TBinaryFrontendService("FlinkThriftBinaryFrontendService") {
+
+  override def RenewDelegationToken(req: TRenewDelegationTokenReq): TRenewDelegationTokenResp = {
+    debug(req.toString)
+    // We hacked `TCLIService.Iface.RenewDelegationToken` to transfer Credentials from Kyuubi
+    // Server to Flink SQL engine
+    val resp = new TRenewDelegationTokenResp()
+    try {
+      renewDelegationToken(req.getDelegationToken)
+      resp.setStatus(OK_STATUS)
+    } catch {
+      case e: Exception =>
+        warn("Error renew delegation tokens: ", e)
+        resp.setStatus(KyuubiSQLException.toTStatus(e))
+    }
+    resp
+  }
 
   override lazy val discoveryService: Option[Service] = {
     if (ServiceDiscovery.supportServiceDiscovery(conf)) {

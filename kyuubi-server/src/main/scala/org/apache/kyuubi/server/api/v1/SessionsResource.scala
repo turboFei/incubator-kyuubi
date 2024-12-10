@@ -28,7 +28,6 @@ import io.swagger.v3.oas.annotations.media.{ArraySchema, Content, Schema}
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.apache.commons.lang3.StringUtils
-import org.apache.hive.service.rpc.thrift.{TGetInfoType, TProtocolVersion}
 
 import org.apache.kyuubi.Logging
 import org.apache.kyuubi.client.api.v1.dto
@@ -37,11 +36,14 @@ import org.apache.kyuubi.config.KyuubiReservedKeys._
 import org.apache.kyuubi.operation.{KyuubiOperation, OperationHandle}
 import org.apache.kyuubi.server.api.{ApiRequestContext, ApiUtils}
 import org.apache.kyuubi.session.{KyuubiSession, SessionHandle}
+import org.apache.kyuubi.shaded.hive.service.rpc.thrift.{TGetInfoType, TProtocolVersion}
 
 @Tag(name = "Session")
 @Produces(Array(MediaType.APPLICATION_JSON))
 @Consumes(Array(MediaType.APPLICATION_JSON))
 private[v1] class SessionsResource extends ApiRequestContext with Logging {
+  import ApiUtils.logAndRefineErrorMsg
+
   implicit def toSessionHandle(str: String): SessionHandle = SessionHandle.fromUUID(str)
   private def sessionManager = fe.be.sessionManager
 
@@ -67,30 +69,11 @@ private[v1] class SessionsResource extends ApiRequestContext with Logging {
   @Path("{sessionHandle}")
   def sessionInfo(@PathParam("sessionHandle") sessionHandleStr: String): dto.KyuubiSessionEvent = {
     try {
-      sessionManager.getSession(sessionHandleStr)
-        .asInstanceOf[KyuubiSession].getSessionEvent.map(event =>
-          dto.KyuubiSessionEvent.builder
-            .sessionId(event.sessionId)
-            .clientVersion(event.clientVersion)
-            .sessionType(event.sessionType)
-            .sessionName(event.sessionName)
-            .user(event.user)
-            .clientIp(event.clientIP)
-            .serverIp(event.serverIP)
-            .conf(event.conf.asJava)
-            .remoteSessionId(event.remoteSessionId)
-            .engineId(event.engineId)
-            .eventTime(event.eventTime)
-            .openedTime(event.openedTime)
-            .startTime(event.startTime)
-            .endTime(event.endTime)
-            .totalOperations(event.totalOperations)
-            .exception(event.exception.orNull)
-            .build).get
+      ApiUtils.sessionEvent(sessionManager.getSession(sessionHandleStr).asInstanceOf[KyuubiSession])
     } catch {
       case NonFatal(e) =>
-        error(s"Invalid $sessionHandleStr", e)
-        throw new NotFoundException(s"Invalid $sessionHandleStr")
+        val errorMsg = s"Invalid $sessionHandleStr"
+        throw new NotFoundException(logAndRefineErrorMsg(errorMsg, e))
     }
   }
 
@@ -112,8 +95,8 @@ private[v1] class SessionsResource extends ApiRequestContext with Logging {
       new InfoDetail(info.toString, infoValue.getStringValue)
     } catch {
       case NonFatal(e) =>
-        error(s"Unrecognized GetInfoType value: $infoType", e)
-        throw new NotFoundException(s"Unrecognized GetInfoType value: $infoType")
+        val errorMsg = s"Unrecognized GetInfoType value: $infoType"
+        throw new NotFoundException(logAndRefineErrorMsg(errorMsg, e))
     }
   }
 
@@ -126,7 +109,7 @@ private[v1] class SessionsResource extends ApiRequestContext with Logging {
   @GET
   @Path("count")
   def sessionCount(): SessionOpenCount = {
-    new SessionOpenCount(sessionManager.getOpenSessionCount)
+    new SessionOpenCount(sessionManager.getActiveUserSessionCount)
   }
 
   @ApiResponse(
@@ -198,8 +181,7 @@ private[v1] class SessionsResource extends ApiRequestContext with Logging {
     } catch {
       case NonFatal(e) =>
         val errorMsg = "Error executing statement"
-        error(errorMsg, e)
-        throw new NotFoundException(errorMsg)
+        throw new NotFoundException(logAndRefineErrorMsg(errorMsg, e))
     }
   }
 
@@ -217,8 +199,7 @@ private[v1] class SessionsResource extends ApiRequestContext with Logging {
     } catch {
       case NonFatal(e) =>
         val errorMsg = "Error getting type information"
-        error(errorMsg, e)
-        throw new NotFoundException(errorMsg)
+        throw new NotFoundException(logAndRefineErrorMsg(errorMsg, e))
     }
   }
 
@@ -236,8 +217,7 @@ private[v1] class SessionsResource extends ApiRequestContext with Logging {
     } catch {
       case NonFatal(e) =>
         val errorMsg = "Error getting catalogs"
-        error(errorMsg, e)
-        throw new NotFoundException(errorMsg)
+        throw new NotFoundException(logAndRefineErrorMsg(errorMsg, e))
     }
   }
 
@@ -261,8 +241,7 @@ private[v1] class SessionsResource extends ApiRequestContext with Logging {
     } catch {
       case NonFatal(e) =>
         val errorMsg = "Error getting schemas"
-        error(errorMsg, e)
-        throw new NotFoundException(errorMsg)
+        throw new NotFoundException(logAndRefineErrorMsg(errorMsg, e))
     }
   }
 
@@ -287,8 +266,7 @@ private[v1] class SessionsResource extends ApiRequestContext with Logging {
     } catch {
       case NonFatal(e) =>
         val errorMsg = "Error getting tables"
-        error(errorMsg, e)
-        throw new NotFoundException(errorMsg)
+        throw new NotFoundException(logAndRefineErrorMsg(errorMsg, e))
     }
   }
 
@@ -306,8 +284,7 @@ private[v1] class SessionsResource extends ApiRequestContext with Logging {
     } catch {
       case NonFatal(e) =>
         val errorMsg = "Error getting table types"
-        error(errorMsg, e)
-        throw new NotFoundException(errorMsg)
+        throw new NotFoundException(logAndRefineErrorMsg(errorMsg, e))
     }
   }
 
@@ -332,8 +309,7 @@ private[v1] class SessionsResource extends ApiRequestContext with Logging {
     } catch {
       case NonFatal(e) =>
         val errorMsg = "Error getting columns"
-        error(errorMsg, e)
-        throw new NotFoundException(errorMsg)
+        throw new NotFoundException(logAndRefineErrorMsg(errorMsg, e))
     }
   }
 
@@ -357,8 +333,7 @@ private[v1] class SessionsResource extends ApiRequestContext with Logging {
     } catch {
       case NonFatal(e) =>
         val errorMsg = "Error getting functions"
-        error(errorMsg, e)
-        throw new NotFoundException(errorMsg)
+        throw new NotFoundException(logAndRefineErrorMsg(errorMsg, e))
     }
   }
 
@@ -382,8 +357,7 @@ private[v1] class SessionsResource extends ApiRequestContext with Logging {
     } catch {
       case NonFatal(e) =>
         val errorMsg = "Error getting primary keys"
-        error(errorMsg, e)
-        throw new NotFoundException(errorMsg)
+        throw new NotFoundException(logAndRefineErrorMsg(errorMsg, e))
     }
   }
 
@@ -410,8 +384,7 @@ private[v1] class SessionsResource extends ApiRequestContext with Logging {
     } catch {
       case NonFatal(e) =>
         val errorMsg = "Error getting cross reference"
-        error(errorMsg, e)
-        throw new NotFoundException(errorMsg)
+        throw new NotFoundException(logAndRefineErrorMsg(errorMsg, e))
     }
   }
 
@@ -437,8 +410,7 @@ private[v1] class SessionsResource extends ApiRequestContext with Logging {
     } catch {
       case NonFatal(e) =>
         val errorMsg = "Error getting the list of all type operations belong to session"
-        error(errorMsg, e)
-        throw new NotFoundException(errorMsg)
+        throw new NotFoundException(logAndRefineErrorMsg(errorMsg, e))
     }
   }
 }

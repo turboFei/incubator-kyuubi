@@ -32,6 +32,7 @@ import org.apache.kyuubi.server.metadata.api.{Metadata, MetadataFilter}
 import org.apache.kyuubi.service.AbstractService
 import org.apache.kyuubi.session.SessionType
 import org.apache.kyuubi.util.{ClassUtils, JdbcUtils, ThreadUtils}
+import org.apache.kyuubi.util.ThreadUtils.scheduleTolerableRunnableWithFixedDelay
 
 class MetadataManager extends AbstractService("MetadataManager") {
   import MetadataManager._
@@ -129,27 +130,43 @@ class MetadataManager extends AbstractService("MetadataManager") {
   }
 
   def getBatchSessionMetadata(batchId: String): Option[Metadata] = {
-    Option(withMetadataRequestMetrics(_metadataStore.getMetadata(batchId, true)))
+    Option(withMetadataRequestMetrics(_metadataStore.getMetadata(batchId)))
       .filter(_.sessionType == SessionType.BATCH)
   }
 
   def getBatches(
+      filter: MetadataFilter,
+      from: Int,
+      size: Int,
+      desc: Boolean = false): Seq[Batch] = {
+    withMetadataRequestMetrics(_metadataStore.getMetadataList(
+      filter,
+      from,
+      size,
+      // if create_file field is set, order by create_time, which is faster, otherwise by key_id
+      orderBy = if (filter.createTime > 0) Some("create_time") else Some("key_id"),
+      direction = if (desc) "DESC" else "ASC")).map(buildBatch)
+  }
+
+  def countBatch(
       batchType: String,
       batchUser: String,
       batchState: String,
-      createTime: Long,
-      endTime: Long,
-      from: Int,
-      size: Int): Seq[Batch] = {
+      kyuubiInstance: String): Int = {
     val filter = MetadataFilter(
       sessionType = SessionType.BATCH,
       engineType = batchType,
       username = batchUser,
       state = batchState,
-      createTime = createTime,
-      endTime = endTime)
-    withMetadataRequestMetrics(_metadataStore.getMetadataList(filter, from, size, true)).map(
-      buildBatch)
+      kyuubiInstance = kyuubiInstance)
+    withMetadataRequestMetrics(_metadataStore.countMetadata(filter))
+  }
+
+  def pickBatchForSubmitting(kyuubiInstance: String): Option[Metadata] =
+    withMetadataRequestMetrics(_metadataStore.pickMetadata(kyuubiInstance))
+
+  def cancelUnscheduledBatch(batchId: String): Boolean = {
+    _metadataStore.transformMetadataState(batchId, "INITIALIZED", "CANCELED")
   }
 
   def getBatchesRecoveryMetadata(
@@ -161,7 +178,7 @@ class MetadataManager extends AbstractService("MetadataManager") {
       sessionType = SessionType.BATCH,
       state = state,
       kyuubiInstance = kyuubiInstance)
-    withMetadataRequestMetrics(_metadataStore.getMetadataList(filter, from, size, false))
+    withMetadataRequestMetrics(_metadataStore.getMetadataList(filter, from, size))
   }
 
   def getPeerInstanceClosedBatchesMetadata(
@@ -174,7 +191,7 @@ class MetadataManager extends AbstractService("MetadataManager") {
       state = state,
       kyuubiInstance = kyuubiInstance,
       peerInstanceClosed = true)
-    withMetadataRequestMetrics(_metadataStore.getMetadataList(filter, from, size, true))
+    withMetadataRequestMetrics(_metadataStore.getMetadataList(filter, from, size))
   }
 
   def updateMetadata(metadata: Metadata, asyncRetryOnError: Boolean = true): Unit = {
@@ -202,7 +219,8 @@ class MetadataManager extends AbstractService("MetadataManager") {
       }
     }
 
-    metadataCleaner.scheduleWithFixedDelay(
+    scheduleTolerableRunnableWithFixedDelay(
+      metadataCleaner,
       cleanerTask,
       interval,
       interval,
@@ -291,7 +309,9 @@ class MetadataManager extends AbstractService("MetadataManager") {
         }
       }
     }
-    requestsAsyncRetryTrigger.scheduleWithFixedDelay(
+
+    scheduleTolerableRunnableWithFixedDelay(
+      requestsAsyncRetryTrigger,
       triggerTask,
       requestsRetryInterval,
       requestsRetryInterval,

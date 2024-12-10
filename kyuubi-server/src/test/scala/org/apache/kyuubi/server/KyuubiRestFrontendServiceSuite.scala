@@ -19,8 +19,14 @@ package org.apache.kyuubi.server
 
 import org.apache.kyuubi.{KYUUBI_VERSION, RestFrontendTestHelper}
 import org.apache.kyuubi.client.api.v1.dto.VersionInfo
+import org.apache.kyuubi.config.KyuubiConf
+import org.apache.kyuubi.config.KyuubiConf._
+import org.apache.kyuubi.service.authentication.AnonymousAuthenticationProviderImpl
 
 class KyuubiRestFrontendServiceSuite extends RestFrontendTestHelper {
+
+  override protected lazy val conf: KyuubiConf = KyuubiConf()
+    .set(AUTHENTICATION_METHOD, Seq("NONE"))
 
   test("version") {
     val resp = v1Call("version")
@@ -46,16 +52,41 @@ class KyuubiRestFrontendServiceSuite extends RestFrontendTestHelper {
     assert(response.getStatusInfo.getReasonPhrase.equalsIgnoreCase("Internal Server Error"))
   }
 
-  test("swagger ui") {
-    Seq("/docs", "/swagger").foreach { p =>
-      val resp = webTarget.path(p).request().get()
-      assert(resp.readEntity(classOf[String])
-        .contains("<title>Apache Kyuubi REST API Documentation</title>"))
-    }
-  }
-
   test("swagger ui json data") {
     val resp = webTarget.path("/openapi.json").request().get()
     assert(resp.getStatus === 200)
+  }
+}
+
+class KerberosKyuubiRestFrontendServiceSuite extends RestFrontendTestHelper {
+
+  override protected lazy val conf: KyuubiConf = KyuubiConf()
+    .set(AUTHENTICATION_METHOD, Seq("KERBEROS"))
+    .set(AUTHENTICATION_CUSTOM_CLASS, classOf[AnonymousAuthenticationProviderImpl].getName)
+
+  test("security enabled - KERBEROS") {
+    assert(fe.asInstanceOf[KyuubiRestFrontendService].securityEnabled === true)
+  }
+}
+
+class NoneKyuubiRestFrontendServiceSuite extends RestFrontendTestHelper {
+
+  override protected lazy val conf: KyuubiConf = KyuubiConf()
+    .set(AUTHENTICATION_METHOD, Seq("NONE"))
+    .set(AUTHENTICATION_CUSTOM_CLASS, classOf[AnonymousAuthenticationProviderImpl].getName)
+
+  test("security enabled - NONE") {
+    assert(fe.asInstanceOf[KyuubiRestFrontendService].securityEnabled === false)
+  }
+}
+
+class KerberosAndCustomKyuubiRestFrontendServiceSuite extends RestFrontendTestHelper {
+
+  override protected lazy val conf: KyuubiConf = KyuubiConf()
+    .set(AUTHENTICATION_METHOD, Seq("KERBEROS,CUSTOM"))
+    .set(AUTHENTICATION_CUSTOM_CLASS, classOf[AnonymousAuthenticationProviderImpl].getName)
+
+  test("security enabled - KERBEROS,CUSTOM") {
+    assert(fe.asInstanceOf[KyuubiRestFrontendService].securityEnabled === true)
   }
 }

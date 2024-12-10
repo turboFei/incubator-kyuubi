@@ -20,29 +20,28 @@ package org.apache.kyuubi.service.authentication
 import java.security.Security
 import javax.security.auth.login.LoginException
 
-import org.apache.thrift.transport.TSaslServerTransport
-
 import org.apache.kyuubi.{KyuubiFunSuite, KyuubiSQLException}
 import org.apache.kyuubi.config.KyuubiConf
 import org.apache.kyuubi.service.authentication.PlainSASLServer.SaslPlainProvider
+import org.apache.kyuubi.shaded.thrift.transport.TSaslServerTransport
+import org.apache.kyuubi.util.AssertionUtils._
 import org.apache.kyuubi.util.KyuubiHadoopUtils
 
 class KyuubiAuthenticationFactorySuite extends KyuubiFunSuite {
-  import KyuubiAuthenticationFactory._
 
   test("verify proxy access") {
     val kyuubiConf = KyuubiConf()
     val hadoopConf = KyuubiHadoopUtils.newHadoopConf(kyuubiConf)
 
     val e1 = intercept[KyuubiSQLException] {
-      verifyProxyAccess("kent", "yao", "localhost", hadoopConf)
+      AuthUtils.verifyProxyAccess("kent", "yao", "localhost", hadoopConf)
     }
     assert(e1.getMessage === "Failed to validate proxy privilege of kent for yao")
 
     kyuubiConf.set("hadoop.proxyuser.kent.groups", "*")
     kyuubiConf.set("hadoop.proxyuser.kent.hosts", "*")
     val hadoopConf2 = KyuubiHadoopUtils.newHadoopConf(kyuubiConf)
-    verifyProxyAccess("kent", "yao", "localhost", hadoopConf2)
+    AuthUtils.verifyProxyAccess("kent", "yao", "localhost", hadoopConf2)
   }
 
   test("AuthType NONE") {
@@ -57,9 +56,9 @@ class KyuubiAuthenticationFactorySuite extends KyuubiFunSuite {
 
   test("AuthType Other") {
     val conf = KyuubiConf().set(KyuubiConf.AUTHENTICATION_METHOD, Seq("INVALID"))
-    val e = intercept[IllegalArgumentException](new KyuubiAuthenticationFactory(conf))
-    assert(e.getMessage contains "the authentication type should be one or more of" +
-      " NOSASL,NONE,LDAP,JDBC,KERBEROS,CUSTOM")
+    interceptEquals[IllegalArgumentException] { new KyuubiAuthenticationFactory(conf) }(
+      "The value of kyuubi.authentication should be one of" +
+        " NOSASL, NONE, LDAP, JDBC, KERBEROS, CUSTOM, but was INVALID")
   }
 
   test("AuthType LDAP") {

@@ -53,7 +53,7 @@ class LaunchEngine(session: KyuubiSessionImpl, override val shouldRunAsync: Bool
     OperationLog.removeCurrentOperationLog()
   }
 
-  override protected def runInternal(): Unit = session.handleSessionException {
+  override protected def runInternal(): Unit = {
     val asyncOperation: Runnable = () => {
       setState(OperationState.RUNNING)
       try {
@@ -70,7 +70,7 @@ class LaunchEngine(session: KyuubiSessionImpl, override val shouldRunAsync: Bool
   }
 
   override protected def applicationInfoMap: Option[Map[String, String]] = {
-    super.applicationInfoMap.map { _ + ("refId" -> session.engine.getEngineRefId()) }
+    super.applicationInfoMap.map { _ + ("refId" -> session.engine.getEngineRefId) }
   }
 
 }

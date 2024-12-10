@@ -19,54 +19,57 @@ package org.apache.kyuubi.engine.hive
 
 import java.io.File
 import java.nio.file.{Files, Paths}
-import java.util
 
-import scala.collection.JavaConverters._
-import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable
 
 import com.google.common.annotations.VisibleForTesting
+import org.apache.commons.lang3.StringUtils
+import org.apache.hadoop.security.UserGroupInformation
 
 import org.apache.kyuubi._
 import org.apache.kyuubi.config.KyuubiConf
-import org.apache.kyuubi.config.KyuubiConf.{ENGINE_HIVE_EXTRA_CLASSPATH, ENGINE_HIVE_JAVA_OPTIONS, ENGINE_HIVE_MEMORY}
-import org.apache.kyuubi.config.KyuubiReservedKeys.KYUUBI_SESSION_USER_KEY
+import org.apache.kyuubi.config.KyuubiConf.{ENGINE_DEPLOY_YARN_MODE_APP_NAME, ENGINE_HIVE_DEPLOY_MODE, ENGINE_HIVE_EXTRA_CLASSPATH, ENGINE_HIVE_JAVA_OPTIONS, ENGINE_HIVE_MEMORY, ENGINE_KEYTAB, ENGINE_PRINCIPAL}
+import org.apache.kyuubi.config.KyuubiReservedKeys.{KYUUBI_ENGINE_ID, KYUUBI_SESSION_USER_KEY}
 import org.apache.kyuubi.engine.{KyuubiApplicationManager, ProcBuilder}
-import org.apache.kyuubi.engine.hive.HiveProcessBuilder._
+import org.apache.kyuubi.engine.deploy.DeployMode
+import org.apache.kyuubi.engine.deploy.DeployMode.{LOCAL, YARN}
+import org.apache.kyuubi.engine.hive.HiveProcessBuilder.HIVE_HADOOP_CLASSPATH_KEY
 import org.apache.kyuubi.operation.log.OperationLog
+import org.apache.kyuubi.util.command.CommandLineUtils._
 
 class HiveProcessBuilder(
     override val proxyUser: String,
+    override val doAsEnabled: Boolean,
     override val conf: KyuubiConf,
     val engineRefId: String,
     val extraEngineLog: Option[OperationLog] = None)
   extends ProcBuilder with Logging {
 
   @VisibleForTesting
-  def this(proxyUser: String, conf: KyuubiConf) {
-    this(proxyUser, conf, "")
+  def this(proxyUser: String, doAsEnabled: Boolean, conf: KyuubiConf) {
+    this(proxyUser, doAsEnabled, conf, "")
   }
 
-  private val hiveHome: String = getEngineHome(shortName)
+  protected val hiveHome: String = getEngineHome(shortName)
 
   override protected def module: String = "kyuubi-hive-sql-engine"
 
   override protected def mainClass: String = "org.apache.kyuubi.engine.hive.HiveSQLEngine"
 
-  override protected val commands: Array[String] = {
+  override protected val commands: Iterable[String] = {
     KyuubiApplicationManager.tagApplication(engineRefId, shortName, clusterManager(), conf)
-    val buffer = new ArrayBuffer[String]()
+    val buffer = new mutable.ListBuffer[String]()
     buffer += executable
 
     val memory = conf.get(ENGINE_HIVE_MEMORY)
     buffer += s"-Xmx$memory"
-    val javaOptions = conf.get(ENGINE_HIVE_JAVA_OPTIONS)
+    val javaOptions = conf.get(ENGINE_HIVE_JAVA_OPTIONS).filter(StringUtils.isNotBlank(_))
     if (javaOptions.isDefined) {
-      buffer += javaOptions.get
+      buffer ++= parseOptionString(javaOptions.get)
     }
     // -Xmx5g
     // java options
-    buffer += "-cp"
-    val classpathEntries = new util.LinkedHashSet[String]
+    val classpathEntries = new mutable.LinkedHashSet[String]
     // hive engine runtime jar
     mainResource.foreach(classpathEntries.add)
     // classpath contains hive configurations, default to hive.home/conf
@@ -101,24 +104,68 @@ class HiveProcessBuilder(
         classpathEntries.add(s"$devHadoopJars${File.separator}*")
       }
     }
-    buffer += classpathEntries.asScala.mkString(File.pathSeparator)
+    buffer ++= genClasspathOption(classpathEntries)
     buffer += mainClass
 
-    buffer += "--conf"
-    buffer += s"$KYUUBI_SESSION_USER_KEY=$proxyUser"
+    buffer ++= confKeyValue(KYUUBI_SESSION_USER_KEY, proxyUser)
+    buffer ++= confKeyValue(KYUUBI_ENGINE_ID, engineRefId)
 
-    for ((k, v) <- conf.getAll) {
-      buffer += "--conf"
-      buffer += s"$k=$v"
-    }
-    buffer.toArray
+    buffer ++= confKeyValues(conf.getAll)
+
+    buffer
   }
-
-  override def toString: String = Utils.redactCommandLineArgs(conf, commands).mkString("\n")
 
   override def shortName: String = "hive"
 }
 
-object HiveProcessBuilder {
+object HiveProcessBuilder extends Logging {
   final val HIVE_HADOOP_CLASSPATH_KEY = "HIVE_HADOOP_CLASSPATH"
+  final val HIVE_ENGINE_NAME = "hive.engine.name"
+
+  def apply(
+      proxyUser: String,
+      doAsEnabled: Boolean,
+      conf: KyuubiConf,
+      engineRefId: String,
+      extraEngineLog: Option[OperationLog],
+      defaultEngineName: String): HiveProcessBuilder = {
+    checkKeytab(proxyUser, conf)
+    DeployMode.withName(conf.get(ENGINE_HIVE_DEPLOY_MODE)) match {
+      case LOCAL =>
+        new HiveProcessBuilder(proxyUser, doAsEnabled, conf, engineRefId, extraEngineLog)
+      case YARN =>
+        warn(s"Hive on YARN model is experimental.")
+        conf.setIfMissing(ENGINE_DEPLOY_YARN_MODE_APP_NAME, Some(defaultEngineName))
+        new HiveYarnModeProcessBuilder(proxyUser, doAsEnabled, conf, engineRefId, extraEngineLog)
+      case other => throw new KyuubiException(s"Unsupported deploy mode: $other")
+    }
+  }
+
+  private def checkKeytab(proxyUser: String, conf: KyuubiConf): Unit = {
+    val principal = conf.get(ENGINE_PRINCIPAL)
+    val keytab = conf.get(ENGINE_KEYTAB)
+    if (!UserGroupInformation.isSecurityEnabled) {
+      if (principal.isDefined || keytab.isDefined) {
+        warn("Principal and keytab takes no effect when hadoop security is not enabled.")
+      }
+      return
+    }
+
+    require(
+      principal.isDefined == keytab.isDefined,
+      s"Both principal and keytab must be defined, or neither.")
+    if (principal.isDefined && keytab.isDefined) {
+      val ugi = UserGroupInformation
+        .loginUserFromKeytabAndReturnUGI(principal.get, keytab.get)
+      require(
+        ugi.getShortUserName == proxyUser,
+        s"Proxy user: $proxyUser is not same with " +
+          s"engine principal: ${ugi.getShortUserName}.")
+    }
+
+    val deployMode = DeployMode.withName(conf.get(ENGINE_HIVE_DEPLOY_MODE))
+    if (principal.isEmpty && keytab.isEmpty && deployMode == YARN) {
+      warn("Hive on YARN can not work properly without principal and keytab.")
+    }
+  }
 }

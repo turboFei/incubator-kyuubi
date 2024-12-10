@@ -45,14 +45,14 @@ The lineage of this SQL:
 
 ```json
 {
-   "inputTables": ["default.test_table0"],
+   "inputTables": ["spark_catalog.default.test_table0"],
    "outputTables": [],
    "columnLineage": [{
       "column": "col0",
-      "originalColumns": ["default.test_table0.a"]
+      "originalColumns": ["spark_catalog.default.test_table0.a"]
    }, {
       "column": "col1",
-      "originalColumns": ["default.test_table0.b"]
+      "originalColumns": ["spark_catalog.default.test_table0.b"]
    }]
 }
 ```
@@ -117,7 +117,7 @@ Sometimes, it may be incompatible with other Spark distributions, then you may n
 For example,
 
 ```shell
-build/mvn clean package -pl :kyuubi-spark-lineage_2.12 -am -DskipTests -Dspark.version=3.1.2
+build/mvn clean package -pl :kyuubi-spark-lineage_2.12 -am -DskipTests -Dspark.version=3.5.2
 ```
 
 The available `spark.version`s are shown in the following table.
@@ -125,10 +125,12 @@ The available `spark.version`s are shown in the following table.
 | Spark Version | Supported | Remark |
 |:-------------:|:---------:|:------:|
 |    master     |     √     |   -    |
+|     3.5.x     |     √     |   -    |
+|     3.4.x     |     √     |   -    |
 |     3.3.x     |     √     |   -    |
 |     3.2.x     |     √     |   -    |
-|     3.1.x     |     √     |   -    |
-|     3.0.x     |     √     |   -    |
+|     3.1.x     |     x     |   -    |
+|     3.0.x     |     x     |   -    |
 |     2.4.x     |     x     |   -    |
 
 Currently, Spark released with Scala 2.12 are supported.
