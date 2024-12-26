@@ -289,7 +289,7 @@
           "datasource": "${DS_PROMETHEUS}",
           "editorMode": "code",
           "exemplar": false,
-          "expr": "min(kyuubi_thrift_ssl_cert_expiration{$baseFilter,instance=~\"$instance\"})",
+          "expr": "kyuubi_thrift_ssl_cert_expiration{$baseFilter,instance=~\"$instance\"}",
           "format": "time_series",
           "instant": true,
           "legendFormat": "${baseLegend}",
