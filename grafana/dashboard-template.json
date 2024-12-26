@@ -7137,16 +7137,17 @@
       "type": "row"
     }
   ],
+  "preload": false,
   "refresh": "30s",
-  "schemaVersion": 39,
+  "schemaVersion": 40,
   "tags": [],
   "templating": {
     "list": [
       {
         "current": {
           "selected": false,
-          "text": "_namespace_=\"hadoopmaster\"",
-          "value": "_namespace_=\"hadoopmaster\""
+          "text": "job=~\"kyuubi\"",
+          "value": "job=~\"kyuubi\""
         },
         "description": "The base filter to apply for all metrics",
         "hide": 0,
@@ -7157,11 +7158,11 @@
         "options": [
           {
             "selected": true,
-            "text": "_namespace_=\"hadoopmaster\"",
-            "value": "_namespace_=\"hadoopmaster\""
+            "text": "job=~\"kyuubi\"",
+            "value": "job=~\"kyuubi\""
           }
         ],
-        "query": "_namespace_=\"hadoopmaster\"",
+        "query": "job=~\"kyuubi\"",
         "queryValue": "",
         "skipUrlSync": false,
         "type": "custom"
@@ -7169,8 +7170,8 @@
       {
         "current": {
           "selected": false,
-          "text": "{{pod}}",
-          "value": "{{pod}}"
+          "text": "{{instance}}",
+          "value": "{{instance}}"
         },
         "description": "The base legend format to apply for all metrics",
         "hide": 0,
@@ -7181,25 +7182,17 @@
         "options": [
           {
             "selected": true,
-            "text": "{{pod}}",
-            "value": "{{pod}}"
+            "text": "{{instance}}",
+            "value": "{{instance}}"
           }
         ],
-        "query": "{{pod}}",
+        "query": "{{instance}}",
         "queryValue": "",
         "skipUrlSync": false,
         "type": "custom"
       },
       {
-        "current": {
-          "selected": true,
-          "text": [
-            "All"
-          ],
-          "value": [
-            "$__all"
-          ]
-        },
+        "current": {},
         "datasource": {
           "type": "prometheus",
           "uid": "${DS_PROMETHEUS}"
@@ -7225,7 +7218,7 @@
       },
       {
         "current": {
-          "selected": true,
+          "selected": false,
           "text": "thrift_binary_connection",
           "value": "thrift_binary_connection"
         },
@@ -7236,6 +7229,11 @@
         "multi": false,
         "name": "connType",
         "options": [
+          {
+            "selected": false,
+            "text": "All",
+            "value": "$__all"
+          },
           {
             "selected": true,
             "text": "thrift_binary_connection",
@@ -7264,7 +7262,7 @@
       },
       {
         "current": {
-          "selected": true,
+          "selected": false,
           "text": "ExecuteStatement",
           "value": "ExecuteStatement"
         },
@@ -7275,6 +7273,11 @@
         "multi": false,
         "name": "opType",
         "options": [
+          {
+            "selected": false,
+            "text": "All",
+            "value": "$__all"
+          },
           {
             "selected": true,
             "text": "ExecuteStatement",
@@ -7298,7 +7301,7 @@
       },
       {
         "current": {
-          "selected": true,
+          "selected": false,
           "text": "5m",
           "value": "5m"
         },
@@ -7363,7 +7366,7 @@
     ]
   },
   "time": {
-    "from": "now-1h",
+    "from": "now-2h",
     "to": "now"
   },
   "timepicker": {
